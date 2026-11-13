@@ -82,8 +82,8 @@ details.grp > summary::-webkit-details-marker { display: none; }
 details.grp > summary .n { color: var(--muted); font-weight: 500; font-size: 13.5px; white-space: nowrap; }
 details.grp > summary::after { content: "▾"; color: var(--primary); }
 details.grp[open] > summary::after { content: "▴"; }
-.vers { display: grid; gap: 10px; margin: 8px 0 0; padding: 0; list-style: none; }
-.ver { padding: 16px; border-radius: var(--radius); background: var(--card); }
+.vers { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin: 8px 0 0; padding: 0; list-style: none; }
+.ver { min-width: 0; padding: 16px; border-radius: var(--radius); background: var(--card); }
 .ver[hidden] { display: none; }
 .vh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .vb { font-size: 1.45rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.15; }
@@ -95,7 +95,7 @@ details.grp[open] > summary::after { content: "▴"; }
 .items li::marker { color: var(--primary); }
 .items li[hidden] { display: none; }
 .more { margin: 8px 0 0; min-height: 40px; padding: 0 4px; border: 0; background: none; color: var(--primary); font-weight: 700; font-size: 14px; cursor: pointer; }
-.shots { display: flex; gap: 10px; overflow-x: auto; margin: 12px 0 0; padding-bottom: 4px; }
+.shots { display: flex; gap: 10px; overflow-x: auto; max-width: 100%; min-width: 0; margin: 12px 0 0; padding-bottom: 4px; }
 .shots figure { margin: 0; flex: none; width: 150px; }
 .shots img { width: 150px; height: auto; border-radius: 12px; display: block; border: 1px solid var(--line); }
 .shots figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; }
