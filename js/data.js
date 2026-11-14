@@ -1,7 +1,7 @@
 // Данные сайта «Мое_сайты»: программы, версии, журналы. Архивы лежат в ветке archives этого же репозитория (кнопки «Скачать» ведут туда).
 window.HUB = {
  "title": "Мое_сайты",
- "version": "2.6.6",
+ "version": "2.6.7",
  "date": "2026-11-14",
  "driveFolder": {
   "name": "МайМани",
@@ -24,7 +24,7 @@ window.HUB = {
    "groups": {
     "site": "Сайт My Money, версии 3.0–4.x",
     "other": "Прототипы и виджет, 1 ноября 2026",
-    "early": "Ранние сборки, 27 октября 2026"
+    "early": "Ранние сборки, 27–29 октября 2026"
    },
    "versions": [
     {
@@ -1054,6 +1054,235 @@ window.HUB = {
      "missing": true
     },
     {
+     "v": "2.0.0",
+     "name": "Money 2.0 Pro — Desktop Slide & SEMVER",
+     "date": "2026-10-29",
+     "time": "04:24",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Номер версии по правилам SEMVER (Major.Minor.Patch): приложение называется «Money 2.0 Pro».",
+      "Ползунок «разблокируйте» на ПК: достаточно щёлкнуть по полосе — ползунок сам доедет до конца и откроет приложение.",
+      "При перетаскивании ползунка мышью больше не выделяется текст (user-select: none).",
+      "Известная ошибка, как и в 1.7 Ultimate: в script.js блок try без catch (около строки 690) — браузер не запускает скрипт целиком."
+     ],
+     "shots": [],
+     "file": "Money_v2.0.0_Desktop_Slide_SEMVER.zip",
+     "size": 23070,
+     "sha256": "c3d64adf2c35ba6ba0d8492e21d334cb104705ee3fa34fc8bc50fa4e0b26480a",
+     "path": "money/Money_v2.0.0_Desktop_Slide_SEMVER.zip"
+    },
+    {
+     "v": "Архив 2",
+     "name": "Money Pro — мастер-архив v2 (SEMVER)",
+     "date": "2026-10-29",
+     "time": "04:24",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Страница Versions_History.html с историей версий по SEMVER: v2.0.0, v1.9.0, v1.8.1, v1.8.0, v1.7.2, v1.7.1, v1.7.0, v1.6.0, v1.4.0, v1.2.0 и кнопками «Скачать».",
+      "Внутри папка versions: настоящие только v2.0.0 и v1.9.0 (= 1.8 Ultimate Slide); остальные восемь файлов — одна и та же копия «1.7 Ultimate Fixed» под разными именами.",
+      "Повторная выгрузка Money_Pro_Master_Archive_v2_1.zip совпадает с этим архивом байт в байт — отдельно не выкладывается."
+     ],
+     "shots": [],
+     "file": "Money_Pro_Master_Archive_v2.zip",
+     "size": 226051,
+     "sha256": "27ae23214834770ac58eeef215b2ad27e87ff04f4976c6780451bf53818ecc5a",
+     "path": "money/Money_Pro_Master_Archive_v2.zip"
+    },
+    {
+     "v": "1.8",
+     "name": "Money 1.8 Ultimate Slide",
+     "date": "2026-10-29",
+     "time": "04:08",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Вместо кнопки входа на заставке — «Slide to unlock» в стиле старого iPhone: ползунок нужно сдвинуть вправо, надпись «разблокируйте» переливается.",
+      "Основа — 1.7 Ultimate Fixed (исправления для ПК и погоды). Известная ошибка try без catch в script.js осталась."
+     ],
+     "shots": [],
+     "file": "Money_v1.8_Ultimate_Slide.zip",
+     "size": 22884,
+     "sha256": "5e172f69b65050770b3a6ec1766cf31457259dbfec68cbd8c66e744b85d56016",
+     "path": "money/Money_v1.8_Ultimate_Slide.zip"
+    },
+    {
+     "v": "Архив 1",
+     "name": "Money Pro — мастер-архив",
+     "date": "2026-10-29",
+     "time": "04:08",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Первый «мастер-архив»: страница Versions_History.html с описанием версий 1.0–1.8 (Initial, UI Update, Features, Tenge & Export, Cloud, Salary, Final Fix, Ultimate, Ultimate Fixed, Ultimate Slide).",
+      "В папке versions настоящие только 1.8 Ultimate Slide и «1.7 Ultimate Fixed»; остальные восемь файлов — копии «1.7 Ultimate Fixed». Других отдельных архивов «1.7 Ultimate Fixed» нет — это единственная его копия.",
+      "«1.7 Ultimate Fixed» по журналу: хотфикс для ПК (невидимые буквы, некликабельная кнопка заставки), погода без кеша и с понятной ошибкой."
+     ],
+     "shots": [],
+     "file": "Money_Pro_Master_Archive.zip",
+     "size": 224171,
+     "sha256": "cea5b57dc3f65df95df0ba324d3fd82dfee115c2ea0ac48c31532301b36877e2",
+     "path": "money/Money_Pro_Master_Archive.zip"
+    },
+    {
+     "v": "1.7",
+     "name": "Money 1.7 Ultimate",
+     "date": "2026-10-29",
+     "time": "04:01",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Заставка (Splash Screen): приветствие по времени суток, часы и погода в Алматы (open-meteo).",
+      "4-значный ПИН-код на вход и вход по отпечатку пальца (WebAuthn); настройки ПИН в «Настройках».",
+      "Оформление: полные темы (Матрица, Синтвейв, Минимализм), выбор шрифта приложения и цвета текста.",
+      "Вкладка «Зарплата» из меню убрана (код остался).",
+      "Известная ошибка: в script.js блок try без catch (около строки 690) — в браузере скрипт не запускается целиком; в следующих версиях она тоже есть."
+     ],
+     "shots": [],
+     "file": "Money_1.7_Ultimate.zip",
+     "size": 21941,
+     "sha256": "12f739c114bd167c5262e6f9bc2608b8579fbbc29fe951f228dec23cde9f9d04",
+     "path": "money/Money_1.7_Ultimate.zip"
+    },
+    {
+     "v": "2.6",
+     "name": "My money 2.6 (Android)",
+     "date": "2026-10-29",
+     "time": "03:51",
+     "group": "early",
+     "kind": "apk",
+     "items": [
+      "Android-сборка 2.6 (WebIntoApp, пакет com.mycompany.mymoney): APK и AAB. Внутри — веб-версия Money 1.7 Salary Update байт в байт.",
+      "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.6.zip — на Google Диске, в папке «МайМани»."
+     ],
+     "shots": [],
+     "file": "My_money_2.6_APK.zip",
+     "size": 2108212,
+     "sha256": "6ced97cb515e14776b5e44cf9a7825bb855ff434b315c0b51167af17689df514",
+     "path": "money/My_money_2.6_APK.zip"
+    },
+    {
+     "v": "1.7",
+     "name": "Money 1.7 Salary Update",
+     "date": "2026-10-29",
+     "time": "03:49",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Новая вкладка «Зарплата»: «Внести зарплату» (сумма уходит в доходы) и «История выплат».",
+      "Исправлена загрузка файла Excel."
+     ],
+     "shots": [],
+     "file": "Money_1.7_Salary_Update.zip",
+     "size": 17179,
+     "sha256": "6ba8e80bad5b7bfb4bd5ccbd0b172e0c1d8c8d85d9c638659fe826a5e28b2ec6",
+     "path": "money/Money_1.7_Salary_Update.zip"
+    },
+    {
+     "v": "2.5",
+     "name": "My money 2.5 (Android)",
+     "date": "2026-10-28",
+     "time": "03:03",
+     "group": "early",
+     "kind": "apk",
+     "items": [
+      "Android-сборка 2.5: внутри — веб-версия Money 1.7 Ready байт в байт (облако Firebase, вход и регистрация).",
+      "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.5.zip — на Google Диске, в папке «МайМани»."
+     ],
+     "shots": [],
+     "file": "My_money_2.5_APK.zip",
+     "size": 2105997,
+     "sha256": "1dbc12ba1656be1c606496391ef29e6082b388d4be9e4121e495678b8e62e46c",
+     "path": "money/My_money_2.5_APK.zip"
+    },
+    {
+     "v": "1.7",
+     "name": "Money 1.7 Ready (Cloud)",
+     "date": "2026-10-28",
+     "time": "03:00",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Облако Firebase (проект money99774): вход и регистрация по почте и паролю прямо в «Настройках» вместо ручного «URL базы» и «Секретного ID».",
+      "Данные синхронизируются с аккаунтом; кнопка «Выйти».",
+      "Экспорт для Apple Pages (тот же Excel-файл)."
+     ],
+     "shots": [],
+     "file": "Money_1.7_Ready.zip",
+     "size": 15991,
+     "sha256": "70de9fc37fbf3d5e7cdcc3b6e45ff95f5144e9c07cfb2658ca18c0131f7af3ab",
+     "path": "money/Money_1.7_Ready.zip"
+    },
+    {
+     "v": "2.4",
+     "name": "My money 2.4 (Android)",
+     "date": "2026-10-28",
+     "time": "02:46",
+     "group": "early",
+     "kind": "apk",
+     "items": [
+      "Android-сборка 2.4: внутри — веб-версия Money 1.7 Excel Styled байт в байт.",
+      "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.4.zip — на Google Диске, в папке «МайМани»."
+     ],
+     "shots": [],
+     "file": "My_money_2.4_APK.zip",
+     "size": 2102586,
+     "sha256": "5b545313988c28b86618b0f100affe602bf7e1547b168f7cce1401e9e81c6d06",
+     "path": "money/My_money_2.4_APK.zip"
+    },
+    {
+     "v": "1.7",
+     "name": "Money 1.7 Excel Styled",
+     "date": "2026-10-28",
+     "time": "02:42",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Выгрузка в Excel через библиотеку ExcelJS вместо SheetJS: лист «Записи» с шириной столбцов и оформленной шапкой.",
+      "Строки «ИТОГО ЗА ДЕНЬ» оформлены отдельно (addTotalRow)."
+     ],
+     "shots": [],
+     "file": "Money_1.7_Excel_Styled.zip",
+     "size": 14550,
+     "sha256": "39212a389fde9a7d0834f16e1ba62c32a726ebb6e11541bf2c0b76fe511cc6b5",
+     "path": "money/Money_1.7_Excel_Styled.zip"
+    },
+    {
+     "v": "1.7",
+     "name": "Money 1.7 Excel Summary",
+     "date": "2026-10-28",
+     "time": "02:38",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Excel: записи отсортированы по времени, после каждого дня — строка «ИТОГО ЗА ДЕНЬ» (доходы минус расходы за день)."
+     ],
+     "shots": [],
+     "file": "Money_1.7_Excel_Summary.zip",
+     "size": 14126,
+     "sha256": "b0bdd6b15971d6e71af1e4fa70e66198defb0a334f34479880405619e273ff19",
+     "path": "money/Money_1.7_Excel_Summary.zip"
+    },
+    {
+     "v": "1.7",
+     "name": "Money 1.7 Material Stats",
+     "date": "2026-10-28",
+     "time": "02:35",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Название «Money 1.7 Pro», в шапке «Money Pro».",
+      "Новая вкладка «Статистика»: «Потрачено сегодня», график за последние 7 дней (renderStatistics).",
+      "Вкладка подписок называется «Регулярные подписки» с подсказкой «Добавьте постоянные расходы…»."
+     ],
+     "shots": [],
+     "file": "Money_1.7_Material_Stats.zip",
+     "size": 13774,
+     "sha256": "dc931586f83e836796045f0e760ec1c09a19068ae1545b473beb81b20b761f0b",
+     "path": "money/Money_1.7_Material_Stats.zip"
+    },
+    {
      "v": "Мои Финансы",
      "name": "Мои Финансы (один файл)",
      "date": "2026-10-27",
@@ -1071,6 +1300,41 @@ window.HUB = {
      "size": 9903,
      "sha256": "7a394065ff839bdfd257973d04c2a776652ac1e742ac98a77b42e075158fe74b",
      "path": "money/financeapp.zip"
+    },
+    {
+     "v": "2.2",
+     "name": "My money 2.2 (Android)",
+     "date": "2026-10-27",
+     "time": "02:41",
+     "group": "early",
+     "kind": "apk",
+     "items": [
+      "Android-сборка 2.2 (пакет com.mycompany.mymoney): внутри — веб-версия Money 1.6 Working Buttons байт в байт.",
+      "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.2.zip — на Google Диске, в папке «МайМани»."
+     ],
+     "shots": [],
+     "file": "My_money_2.2_APK.zip",
+     "size": 2096776,
+     "sha256": "83c01a22c3f624e53c22b6c94864e8839dfa1ba95fdf77c2809c8eb8d5583baa",
+     "path": "money/My_money_2.2_APK.zip"
+    },
+    {
+     "v": "1.6",
+     "name": "Money 1.6 Working Buttons",
+     "date": "2026-10-27",
+     "time": "02:38",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Исправлена синтаксическая ошибка Money 1.6 Subscriptions — скрипт снова запускается.",
+      "Работают кнопки выбора значка цели (selectGoalIcon); запуск через window.onload.",
+      "Пустая цель не сохраняется: сообщение «Заполните название и сумму цели!»."
+     ],
+     "shots": [],
+     "file": "Money_1.6_Working_Buttons.zip",
+     "size": 11849,
+     "sha256": "a24c58a2ab708256567463b3fca2d69092b1d2b21955acad41fde35bfd1c686f",
+     "path": "money/Money_1.6_Working_Buttons.zip"
     },
     {
      "v": "1.6",
