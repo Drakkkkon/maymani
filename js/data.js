@@ -1,7 +1,7 @@
 // Данные сайта «Мое_сайты»: программы, версии, журналы. Архивы лежат в ветке archives этого же репозитория (кнопки «Скачать» ведут туда).
 window.HUB = {
  "title": "Мое_сайты",
- "version": "2.6.9",
+ "version": "2.7.0",
  "date": "2026-11-14",
  "driveFolder": {
   "name": "МайМани",
@@ -318,7 +318,7 @@ window.HUB = {
      "file": "Money_v4.6.0_Site.zip",
      "size": 644386,
      "sha256": "1b2a90c63cce6a3adf9e5c986b994bb35347b845cafc53041de37a0c36b63b88",
-     "missing": true
+     "path": "money/Money_v4.6.0_Site.zip"
     },
     {
      "v": "4.5.0",
@@ -347,7 +347,7 @@ window.HUB = {
      "file": "Money_v4.5.0_Site.zip",
      "size": 623924,
      "sha256": "ff456e39c8f6f7521390200030ff889dcdd97ca26ae0f0eced3f9fbad41765c2",
-     "missing": true
+     "path": "money/Money_v4.5.0_Site.zip"
     },
     {
      "v": "4.4.0",
@@ -375,7 +375,7 @@ window.HUB = {
      "file": "Money_v4.4.0_Site.zip",
      "size": 604204,
      "sha256": "143a6345fecc05eeec081e057ecd12f326f4b52a53b6ffc84b8061cbad3c198a",
-     "missing": true
+     "path": "money/Money_v4.4.0_Site.zip"
     },
     {
      "v": "4.3.0",
@@ -404,7 +404,7 @@ window.HUB = {
      "file": "Money_v4.3.0_Site.zip",
      "size": 617224,
      "sha256": "59edb78b1873450b2de7f4a7c5a73e2c2337c656b610f882f1893edaf3ecaba3",
-     "missing": true
+     "path": "money/Money_v4.3.0_Site.zip"
     },
     {
      "v": "4.2.0",
@@ -2726,7 +2726,7 @@ window.HUB = {
      "file": "iLife_v1.1.0.zip",
      "size": 405052,
      "sha256": "5007bf186f23dc153d9904356c26860de0fefadb780c667ec60c5eb9c7ac8ed3",
-     "missing": true
+     "path": "ilife/iLife_v1.1.0.zip"
     },
     {
      "v": "1.0.0",
@@ -2754,7 +2754,7 @@ window.HUB = {
      "file": "iLife_v1.0.0.zip",
      "size": 385667,
      "sha256": "d31c12709cf9fdf3268e9718e8c0d3f559b20284ada525e5a3d3e770fb3ee338",
-     "missing": true
+     "path": "ilife/iLife_v1.0.0.zip"
     },
     {
      "v": "Win95",
@@ -3436,9 +3436,9 @@ window.HUB = {
      "group": "main",
      "kind": "web",
      "shots": [],
-     "size": null,
-     "sha256": null,
-     "missing": true
+     "size": 91611,
+     "sha256": "11add123b13ac41c2588651d67141f1d2d3cee47c5cf7cd6d415e9f6c40770e8",
+     "path": "topsecret/My_topsecret_v0.2.0.zip"
     },
     {
      "v": "0.1.0",
@@ -3455,9 +3455,9 @@ window.HUB = {
      "group": "main",
      "kind": "web",
      "shots": [],
-     "size": null,
-     "sha256": null,
-     "missing": true
+     "size": 66665,
+     "sha256": "9ce7a798765618d94fa9276298b5e60cabc3991c898f8a1bd51f9662cdbe260d",
+     "path": "topsecret/My_topsecret_v0.1.0.zip"
     }
    ]
   },
@@ -3482,14 +3482,14 @@ window.HUB = {
      "kind": "web",
      "shots": [],
      "file": "Oldbook95.zip",
-     "size": null,
-     "sha256": null,
+     "size": 47385,
+     "sha256": "3c6401085406c64d415486ac5b2b11fbd6fe78c516f983683b80fb978c44ef91",
      "items": [
       "Отдельное приложение в стиле Windows 95, выделенное из My Money 4.3: рабочий стол с окнами (перетаскивание, размер), меню «Пуск», панель задач с часами Алматы.",
       "Четыре вкладки: «Ввод» с цифровой клавиатурой, «История» с сортировкой, «Статистика» (три диаграммы и список главных трат) и «Обмен» книгами.",
       "Работает без интернета, данные хранятся в браузере; обмен через файл JSON и системное «Поделиться»; умеет подхватывать старые записи Oldbook из My Money."
      ],
-     "missing": true
+     "path": "other/Oldbook95.zip"
     }
    ]
   },
@@ -3802,6 +3802,88 @@ window.HUB = {
      "size": 7223,
      "sha256": "f16d8d470e922a85aa164204b8f3848ac369342b47e7f987f372011f3b04f7db",
      "path": "cows/Moe_korovy_v0.0.1.zip"
+    }
+   ]
+  },
+  {
+   "id": "hub",
+   "name": "Мое_сайты (МайМани)",
+   "page": "hub.html",
+   "icon": "icons/hub.svg",
+   "site": null,
+   "blurb": "Этот сайт: все версии моих программ с журналами изменений и архивами. Здесь — его ранние версии «МайМани», которые открывались на компьютере из папки.",
+   "siteBlurb": null,
+   "groups": {
+    "main": "Ранние версии «МайМани» (для компьютера), 5 ноября 2026"
+   },
+   "versions": [
+    {
+     "v": "1.2",
+     "name": "МайМани 1.2: Money 4.8.1 + iLife 1.1.0",
+     "date": "2026-11-05",
+     "time": "15:21",
+     "group": "main",
+     "kind": "web",
+     "items": [
+      "Новая страница ilife.html: последняя версия iLife, архивы 1.0.0 и 1.1.0, журнал со скриншотами; на главной — раздел «Другие приложения».",
+      "Шесть Android-архивов с ключом подписи убраны из папки archives/ — они в отдельном MayMani_PRIVATE_Android_keys.zip (только на Google Диске).",
+      "Инструкция, как выложить хаб на GitHub Pages (.nojekyll, .gitignore). Повторная выгрузка с «_1» в имени совпадает байт в байт."
+     ],
+     "shots": [],
+     "file": "MayMani_Hub_v1.2_Money4.8.1_iLife1.1.0.zip",
+     "size": 11161512,
+     "sha256": "f587af2762950a0a52dfa70a4501586492c732a947c44c217604c58b3109e488",
+     "path": "hub/MayMani_Hub_v1.2_Money4.8.1_iLife1.1.0.zip"
+    },
+    {
+     "v": "1.1",
+     "name": "МайМани 1.1: архив под Money 4.8.1",
+     "date": "2026-11-05",
+     "time": "14:00",
+     "group": "main",
+     "kind": "web",
+     "items": [
+      "Журнал из 53 записей с поиском и 58 скриншотами важных обновлений; 35 архивов: сайт 3.0.0–4.8.1, ранние сборки 1.0–2.12, прототипы Win95, виджет.",
+      "В этой копии на GitHub нет шести Android-архивов с ключом подписи и паролем (репозиторий публичный); полный архив — на Google Диске."
+     ],
+     "shots": [],
+     "file": "MayMani_Hub_v1.1_Money4.8.1.zip",
+     "size": 11181936,
+     "sha256": "97292b6a6afb91b6f82169b6dc6d1ec5193666b41968a84dbb972e2012a8098f",
+     "path": "hub/MayMani_Hub_v1.1_Money4.8.1.zip"
+    },
+    {
+     "v": "Скриншоты 1.0",
+     "name": "МайМани: скриншоты версий",
+     "date": "2026-11-05",
+     "time": "13:59",
+     "group": "main",
+     "kind": "web",
+     "items": [
+      "Отдельный архив скриншотов по папкам «версия__архив» (по два на версию) и список INDEX.txt с подписями."
+     ],
+     "shots": [],
+     "file": "MayMani_Screenshots_v1.0_Money4.8.1.zip",
+     "size": 4414028,
+     "sha256": "048283e865123ff26cface497715bd597d696aac9e0d496948621feb188e342b",
+     "path": "hub/MayMani_Screenshots_v1.0_Money4.8.1.zip"
+    },
+    {
+     "v": "1.0",
+     "name": "МайМани 1.0: первая страница",
+     "date": "2026-11-05",
+     "time": "13:44",
+     "group": "main",
+     "kind": "web",
+     "items": [
+      "Первая страница «МайМани» для запуска на компьютере: большая надпись, список архивов, журнал изменений с поиском (до My Money 4.8.1).",
+      "20 архивов: сайт My Money 4.7.0–4.8.1 и ранние веб-версии Money 1.x. Пять Android-архивов с ключом подписи в эту копию на GitHub не вошли — полный архив на Google Диске."
+     ],
+     "shots": [],
+     "file": "MayMani_Hub_v1.0_Money4.8.1.zip",
+     "size": 2204060,
+     "sha256": "51d8aff4790cb36611d2400347a473436f309a232613a9923d12545e90d1a53f",
+     "path": "hub/MayMani_Hub_v1.0_Money4.8.1.zip"
     }
    ]
   }
