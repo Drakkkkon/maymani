@@ -1,11 +1,8 @@
-// Данные сайта «Мое_сайты»: программы, версии, журналы. Архивы здесь НЕ лежат — только на Google Диске.
+// Данные сайта «Мое_сайты»: программы, версии, журналы. Архивы лежат в ветке archives этого же репозитория (кнопки «Скачать» ведут туда).
 window.HUB = {
  "title": "Мое_сайты",
- "version": "2.5.0",
- "date": "2026-11-13",
- "clientId": "228310046677-qmpsno422tsi7bdsfd8tmmqqd0749s25.apps.googleusercontent.com",
- "scope": "https://www.googleapis.com/auth/drive.readonly",
- "origin": "https://drakkkkon.github.io",
+ "version": "2.6.0",
+ "date": "2026-11-14",
  "driveFolder": {
   "name": "МайМани",
   "url": "https://drive.google.com/drive/folders/1_d8Jh8lwrvkQAbSxkxoCZcSa16lGcpkn"
@@ -31,6 +28,118 @@ window.HUB = {
    },
    "versions": [
     {
+     "v": "4.14.0",
+     "date": "2026-11-14",
+     "time": "10:38",
+     "group": "site",
+     "kind": "web",
+     "items": [
+      "Меню «Категории» с подкатегориями, системные эмодзи, шрифты и иконка в «Темах», экран приветствия",
+      "Настройки → «Категории»: одно меню вместо трёх, изменить/удалить, подкатегории (Семья → Отец, Мать, Коты)",
+      "у новых пользователей категорий нет; администратору прежние — один раз после синхронизации",
+      "эмодзи категорий — системные, без окраски",
+      "«Шрифты» и «Иконка приложения» внутри «Тем оформления»; блок «Текущий баланс» убран из Настроек",
+      "новый пункт «Экран приветствия»: как было / приветствие с картинкой или анимацией / без экрана"
+     ],
+     "file": "Money_v4.14.0_Site.zip",
+     "shots": [],
+     "path": "money/Money_v4.14.0_Site.zip",
+     "size": 757816,
+     "sha256": "378bf8cbc166960e77a29239446c13f7d773f3036e77a3243958ca3444378f42"
+    },
+    {
+     "v": "4.13.0",
+     "date": "2026-11-13",
+     "time": "17:19",
+     "group": "site",
+     "kind": "web",
+     "items": [
+      "Регистрация для любого пользователя — «Аккаунт My Money» (почта и пароль, облако Firebase)"
+     ],
+     "file": "Money_v4.13.0_Site.zip",
+     "shots": [],
+     "path": "money/Money_v4.13.0_Site.zip",
+     "size": 739565,
+     "sha256": "19943a506bafe62714be3ab5a01ccd72d43d5269a74c985f2d1db9890ba142a7"
+    },
+    {
+     "v": "4.12.3",
+     "date": "2026-11-13",
+     "time": "17:09",
+     "group": "site",
+     "kind": "web",
+     "items": [
+      "Тема «Doom 1993» удалена полностью (тема, звуки, шрифты, файлы)"
+     ],
+     "file": "Money_v4.12.3_Site.zip",
+     "shots": [],
+     "path": "money/Money_v4.12.3_Site.zip",
+     "size": 724248,
+     "sha256": "e06e4a22a2209cc7c4e140b05a6c7ca4c55dbe4e7f157d46d11f2f3207c07b9d"
+    },
+    {
+     "v": "4.12.2",
+     "date": "2026-11-08",
+     "time": "16:16",
+     "group": "site",
+     "kind": "web",
+     "items": [
+      "Тема «Doom 1993» — ровная буква «О» и без обрезки надписей AmazDooM",
+      "Из запасных шрифтов кнопок и вкладок убран «Press Start 2P»: он подставлялся на буквы о/п и они выглядели крупнее остальных.",
+      "Левое меню и заголовок страницы: подпись AmazDooM больше не обрезается сверху (виден значок над «Й»).",
+      "Образец «AmazDooM» в Настройки → Шрифты уменьшен и не режется.",
+      "sw.js: my-money-v30."
+     ],
+     "file": "Money_v4.12.2_Site.zip",
+     "src": "44f3561",
+     "shots": [],
+     "path": "money/Money_v4.12.2_Site.zip",
+     "size": 748648,
+     "sha256": "daf65199fb8af7db9e89924341be9dc4e1ea38009ddd5d989a47ea5e129e4e2b"
+    },
+    {
+     "v": "4.12.1",
+     "date": "2026-11-08",
+     "time": "16:00",
+     "group": "site",
+     "kind": "web",
+     "items": [
+      "Шрифт AmazDooM в теме «Doom 1993» (только с русскими буквами)",
+      "Добавлен fonts/AmazDooMLeft.ttf (автор Amazingmax, личное использование): полная кириллица, включая Ё.",
+      "css/doom.css: заголовки окон, меню и крупные надписи темы набраны AmazDooM; цифры остаются в Press Start 2P.",
+      "js/fonts.js: карточка «AmazDooM» в Настройки → Шрифты (группа «Doom 1993»).",
+      "sw.js: шрифт добавлен в кэш (my-money-v29).",
+      "Второй присланный шрифт DooM.ttf не добавлен: в нём нет русских букв."
+     ],
+     "file": "Money_v4.12.1_Site.zip",
+     "src": "fdb8f5c",
+     "shots": [],
+     "path": "money/Money_v4.12.1_Site.zip",
+     "size": 747576,
+     "sha256": "80a1efd57036bb4dce531edd451a11333daf7773a3b9a8a50b028f1965ef0125"
+    },
+    {
+     "v": "4.12.0",
+     "date": "2026-11-08",
+     "time": "15:51",
+     "group": "site",
+     "kind": "web",
+     "items": [
+      "Тема «Doom 1993» (только русский язык) и звуки «убитых монстров»",
+      "css/doom.css: тёмный металл, кирпичная стена, красные заголовки и «цифры на панели»",
+      "js/themes.js: тема doom, langs: ['ru'], скрытие при других языках",
+      "js/sound.js: набор звуков 'doom' (синтез Web Audio)",
+      "js/fonts.js: группа шрифтов «Doom 1993»",
+      "index.html, README_FIX_RU.txt, js/admin.js, sw.js: версия 4.12.0, история версий"
+     ],
+     "file": "Money_v4.12.0_Site.zip",
+     "src": "25f415e",
+     "shots": [],
+     "path": "money/Money_v4.12.0_Site.zip",
+     "size": 738472,
+     "sha256": "7c0c0efbf4e50020e243d9549d8a897bc032b5227e87e85b7274d989aa4b5968"
+    },
+    {
      "v": "4.11.0",
      "name": "Экстра",
      "date": "2026-11-08",
@@ -46,9 +155,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v4.11.0_Site.zip",
-     "size": 723646,
-     "sha256": "b7bda23b8925999e0cfc1468568dcbe6266d62dd4f9b9a771fc78e545ca7e797",
-     "src": "414f258"
+     "size": 726065,
+     "sha256": "c56a56aeaf8192d168c18ed88b6a72dfaa7f61469bfb87505c263c97311cb123",
+     "src": "414f258",
+     "path": "money/Money_v4.11.0_Site.zip"
     },
     {
      "v": "4.10.0",
@@ -66,9 +176,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v4.10.0_Site.zip",
-     "size": 715892,
-     "sha256": "0cf28e54f723f26ab844f3aa25a984b4e15ea51053625b12685dc0ea80071075",
-     "src": "437eb80"
+     "size": 718311,
+     "sha256": "3fafc497f5a86c37863df637506f6ad92d2413a13e0b64c2e1dbb007abfd54bb",
+     "src": "437eb80",
+     "path": "money/Money_v4.10.0_Site.zip"
     },
     {
      "v": "4.9.0",
@@ -85,9 +196,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v4.9.0_Site.zip",
-     "size": 705056,
-     "sha256": "f73b84ee18f14ec52cf50c8b3271041058ed3c7dd2db25dc57d84707ff3f6af1",
-     "src": "254013a"
+     "size": 707475,
+     "sha256": "ddd3ecc8ac13f4e4a2748036e95fc67b4d02186e314ff354339ba07f62eefa8d",
+     "src": "254013a",
+     "path": "money/Money_v4.9.0_Site.zip"
     },
     {
      "v": "4.8.1",
@@ -115,7 +227,7 @@ window.HUB = {
      "file": "Money_v4.8.1_Site.zip",
      "size": 686042,
      "sha256": "618687819837646985017026b08769315a856dc1243a8ae537dfe348fcbeef58",
-     "driveId": "1VkenDj1Eyig6Let6CUuro_bxV0IfNSbn"
+     "path": "money/Money_v4.8.1_Site.zip"
     },
     {
      "v": "4.8.0",
@@ -144,7 +256,7 @@ window.HUB = {
      "file": "Money_v4.8.0_Site.zip",
      "size": 682049,
      "sha256": "bbbd202f98e3ef9cb9b85fc36abc7f72195ad949de5f8f2d29a876c8919175cf",
-     "driveId": "1kO_KlizvfViarC74pSnjC15kmVlVhzJc"
+     "path": "money/Money_v4.8.0_Site.zip"
     },
     {
      "v": "4.7.0",
@@ -175,7 +287,7 @@ window.HUB = {
      "file": "Money_v4.7.0_Site.zip",
      "size": 671486,
      "sha256": "b24be58bc78c8428f65b24495d2965fc84b78cd7ab731aa8d3f899e17ffa0c2a",
-     "driveId": "19uN9eTeZIiOOUIPVTQPSQkDZIPtz8kqt"
+     "path": "money/Money_v4.7.0_Site.zip"
     },
     {
      "v": "4.6.0",
@@ -205,7 +317,8 @@ window.HUB = {
      ],
      "file": "Money_v4.6.0_Site.zip",
      "size": 644386,
-     "sha256": "1b2a90c63cce6a3adf9e5c986b994bb35347b845cafc53041de37a0c36b63b88"
+     "sha256": "1b2a90c63cce6a3adf9e5c986b994bb35347b845cafc53041de37a0c36b63b88",
+     "missing": true
     },
     {
      "v": "4.5.0",
@@ -233,7 +346,8 @@ window.HUB = {
      ],
      "file": "Money_v4.5.0_Site.zip",
      "size": 623924,
-     "sha256": "ff456e39c8f6f7521390200030ff889dcdd97ca26ae0f0eced3f9fbad41765c2"
+     "sha256": "ff456e39c8f6f7521390200030ff889dcdd97ca26ae0f0eced3f9fbad41765c2",
+     "missing": true
     },
     {
      "v": "4.4.0",
@@ -260,7 +374,8 @@ window.HUB = {
      ],
      "file": "Money_v4.4.0_Site.zip",
      "size": 604204,
-     "sha256": "143a6345fecc05eeec081e057ecd12f326f4b52a53b6ffc84b8061cbad3c198a"
+     "sha256": "143a6345fecc05eeec081e057ecd12f326f4b52a53b6ffc84b8061cbad3c198a",
+     "missing": true
     },
     {
      "v": "4.3.0",
@@ -288,7 +403,8 @@ window.HUB = {
      ],
      "file": "Money_v4.3.0_Site.zip",
      "size": 617224,
-     "sha256": "59edb78b1873450b2de7f4a7c5a73e2c2337c656b610f882f1893edaf3ecaba3"
+     "sha256": "59edb78b1873450b2de7f4a7c5a73e2c2337c656b610f882f1893edaf3ecaba3",
+     "missing": true
     },
     {
      "v": "4.2.0",
@@ -313,7 +429,8 @@ window.HUB = {
      ],
      "file": "Money_v4.2.0_Site.zip",
      "size": 578872,
-     "sha256": "13f18597bfe9b3bfc740d623547d417a1e26906b2c2e410fdcc9527e4ed96864"
+     "sha256": "13f18597bfe9b3bfc740d623547d417a1e26906b2c2e410fdcc9527e4ed96864",
+     "missing": true
     },
     {
      "v": "4.1.2",
@@ -338,7 +455,8 @@ window.HUB = {
      ],
      "file": "Money_v4.1.2_Site.zip",
      "size": 575378,
-     "sha256": "0e6c0831204fc7e51e02214b13feb35693555e357499af0f781bec594779a49b"
+     "sha256": "0e6c0831204fc7e51e02214b13feb35693555e357499af0f781bec594779a49b",
+     "missing": true
     },
     {
      "v": "4.1.1",
@@ -363,7 +481,8 @@ window.HUB = {
      ],
      "file": "Money_v4.1.1_Site.zip",
      "size": 574269,
-     "sha256": "47e0874bcaea546f3275f393d8c127dda6d459760ebb20255288d27da83604f5"
+     "sha256": "47e0874bcaea546f3275f393d8c127dda6d459760ebb20255288d27da83604f5",
+     "missing": true
     },
     {
      "v": "4.1.0",
@@ -391,7 +510,8 @@ window.HUB = {
      ],
      "file": "Money_v4.1.0_Site.zip",
      "size": 573563,
-     "sha256": "d2abdd85b3469444449531c0a037c8bf1b0ac1e90a233247eb3afc594291b1b7"
+     "sha256": "d2abdd85b3469444449531c0a037c8bf1b0ac1e90a233247eb3afc594291b1b7",
+     "missing": true
     },
     {
      "v": "4.0.0",
@@ -409,9 +529,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v4.0.0_Site.zip",
-     "size": 538724,
-     "sha256": "093adf227ac82818ade1c71e433895a0583d08c43ce551031559885b57248240",
-     "src": "cdffe46"
+     "size": 540645,
+     "sha256": "d8922dacea935daff1461f563b3bd7da1de834b46c3e3c43f06913c90d4d4fdb",
+     "src": "cdffe46",
+     "path": "money/Money_v4.0.0_Site.zip"
     },
     {
      "v": "3.11.0",
@@ -430,9 +551,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v3.11.0_Site.zip",
-     "size": 490458,
-     "sha256": "b0b36cba5c1cfda8b9af66ec45d421d2683935f03a2f5b012d2b9265b4e14533",
-     "src": "3177713"
+     "size": 492307,
+     "sha256": "05f2e7d889e73f1a3422332c34de750cb97a8cbc7c2b40c70d4d501d66e8edd3",
+     "src": "3177713",
+     "path": "money/Money_v3.11.0_Site.zip"
     },
     {
      "v": "3.10.0",
@@ -448,9 +570,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v3.10.0_Site.zip",
-     "size": 279036,
-     "sha256": "629352c7cc469745077432e03b2c4917f83efcf39148f2eae03e4e684d80a018",
-     "src": "95e141d"
+     "size": 280631,
+     "sha256": "1f7f691c5d6142b6665551479b487b6be22a317014c411236618ca6a17e7845e",
+     "src": "95e141d",
+     "path": "money/Money_v3.10.0_Site.zip"
     },
     {
      "v": "3.9.0",
@@ -469,9 +592,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v3.9.0_Site.zip",
-     "size": 268979,
-     "sha256": "14c200e051c0eab69cbb29275e630ebab69f11a192dce490dea6997f6b5adffc",
-     "src": "423c96d"
+     "size": 270556,
+     "sha256": "29f88221c5e6a7801a81714cb859225fd8bffaccfa0d7fa3f4fefc8db3b5612a",
+     "src": "423c96d",
+     "path": "money/Money_v3.9.0_Site.zip"
     },
     {
      "v": "3.8.0",
@@ -492,9 +616,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v3.8.0_Site.zip",
-     "size": 238211,
-     "sha256": "7db83dcddf0af4c49d364cfce90b3dbcdf195f986aca545a5d2d5e4008824765",
-     "src": "6836ab2"
+     "size": 239716,
+     "sha256": "a45371d7d316ed87c6529362280618d0f11457e903206d7fcdce2b89b51bf195",
+     "src": "6836ab2",
+     "path": "money/Money_v3.8.0_Site.zip"
     },
     {
      "v": "3.7.0",
@@ -515,9 +640,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v3.7.0_Site.zip",
-     "size": 193968,
-     "sha256": "ec611bff0f95059f7a63e6308aa9f3695afbad46739ec43b464e5f0ea3deecf6",
-     "src": "5381d9b"
+     "size": 195365,
+     "sha256": "e34c7ef0c87d6c1bfa3086616376577e7e441f1b5c45843e4c046e578a8c789d",
+     "src": "5381d9b",
+     "path": "money/Money_v3.7.0_Site.zip"
     },
     {
      "v": "3.6.0",
@@ -531,9 +657,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v3.6.0_Site.zip",
-     "size": 157427,
-     "sha256": "5ba59624dd06f28254ef5e8ba3d207f51d07230ac5d46b6f278ec02d24b23975",
-     "src": "377dfe9"
+     "size": 158734,
+     "sha256": "565b3b47f110f8de2a8855d66ff0d9e725d633f716eda4e6d8aaa8df8d91a532",
+     "src": "377dfe9",
+     "path": "money/Money_v3.6.0_Site.zip"
     },
     {
      "v": "3.5.0",
@@ -547,9 +674,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v3.5.0_Site.zip",
-     "size": 150883,
-     "sha256": "45768a88f53319db21d9bbef8c864f62c82801b9ad987f5d62e9a6651b1b6e90",
-     "src": "2f804e7"
+     "size": 152172,
+     "sha256": "31cd0ab4dc1abd1f0c7cbc1bce4e0bc2827915d300ddb7aadb505a1aa8b57df4",
+     "src": "2f804e7",
+     "path": "money/Money_v3.5.0_Site.zip"
     },
     {
      "v": "3.4.0",
@@ -566,9 +694,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v3.4.0_Site.zip",
-     "size": 142916,
-     "sha256": "6407796f4a9cd9593f296ac7b1247788a60355b9670a226f27d9567018906f3d",
-     "src": "fa7831a"
+     "size": 144187,
+     "sha256": "49eeafaa3d557c68de4bbce77b64d6ac11687460979d89fde3492e0dc99b1da6",
+     "src": "fa7831a",
+     "path": "money/Money_v3.4.0_Site.zip"
     },
     {
      "v": "3.3.0",
@@ -606,9 +735,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v3.2.0_Site.zip",
-     "size": 119157,
-     "sha256": "e4281dfba89c9292d942707575a81af5aba7b1bf14cbd17b65598782004bd1d6",
-     "src": "8c40bb5"
+     "size": 120362,
+     "sha256": "2defbcc594ae933521b52be951de41dfec4e694a5f0728195a2f3a1c1087bbf2",
+     "src": "8c40bb5",
+     "path": "money/Money_v3.2.0_Site.zip"
     },
     {
      "v": "3.1.0",
@@ -625,9 +755,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Money_v3.1.0_Site.zip",
-     "size": 101071,
-     "sha256": "bcc5cd8357caa383726fdf14eaacc5c2dc45d0ff480b601863313689d6e539b4",
-     "src": "07c2645"
+     "size": 102240,
+     "sha256": "ea55c16ed4d2e1c33cca93389b4196283e48791b5a14154fefe5a198286fda55",
+     "src": "07c2645",
+     "path": "money/Money_v3.1.0_Site.zip"
     },
     {
      "v": "3.0.0",
@@ -655,7 +786,8 @@ window.HUB = {
      ],
      "file": "Money_v3.0.0_Site.zip",
      "size": 95500,
-     "sha256": "ad8d6798414d0ade7425aa88f0450a41c969ec4ca65d4072ba785660850912b6"
+     "sha256": "ad8d6798414d0ade7425aa88f0450a41c969ec4ca65d4072ba785660850912b6",
+     "missing": true
     },
     {
      "v": "2.12.0",
@@ -809,7 +941,8 @@ window.HUB = {
      "shots": [],
      "file": "MyMoney_Widget_GitHub.zip",
      "size": 24390,
-     "sha256": "39663b236f2434b88271e0a8697260eb5dcb9825aed5d938ae92a085854fed5b"
+     "sha256": "39663b236f2434b88271e0a8697260eb5dcb9825aed5d938ae92a085854fed5b",
+     "missing": true
     },
     {
      "v": "W95-3",
@@ -836,7 +969,8 @@ window.HUB = {
      ],
      "file": "MyMoney_Win95_Full_Menu.zip",
      "size": 22528,
-     "sha256": "7ba564027dd5a1f6dded1b4cc9ebb6675047b1caac27dbebbb74ec4f294357a1"
+     "sha256": "7ba564027dd5a1f6dded1b4cc9ebb6675047b1caac27dbebbb74ec4f294357a1",
+     "missing": true
     },
     {
      "v": "W95-2",
@@ -862,7 +996,8 @@ window.HUB = {
      ],
      "file": "MyMoney_Win95_Fixed.zip",
      "size": 17299,
-     "sha256": "aa2bfc763308373a71a1bda1e132a8cf0fde64769f18c85890afbe4d2a90d8c5"
+     "sha256": "aa2bfc763308373a71a1bda1e132a8cf0fde64769f18c85890afbe4d2a90d8c5",
+     "missing": true
     },
     {
      "v": "W95-1",
@@ -888,7 +1023,8 @@ window.HUB = {
      ],
      "file": "MyMoney_Win95.zip",
      "size": 15651,
-     "sha256": "89afa7a9c0716ac4972a9671fce6bb99682bb0f12e4fbc21665e5596ca08f0c4"
+     "sha256": "89afa7a9c0716ac4972a9671fce6bb99682bb0f12e4fbc21665e5596ca08f0c4",
+     "missing": true
     },
     {
      "v": "2.11.0",
@@ -914,7 +1050,8 @@ window.HUB = {
      ],
      "file": "Money_v2.11.0_Win95.zip",
      "size": 193490,
-     "sha256": "f3951ec834611d245e7a9e3c376d4fc59956bf0acef6b1733bd6a7d762cc1aee"
+     "sha256": "f3951ec834611d245e7a9e3c376d4fc59956bf0acef6b1733bd6a7d762cc1aee",
+     "missing": true
     },
     {
      "v": "1.6",
@@ -942,7 +1079,7 @@ window.HUB = {
      "file": "Money_1.6_With_Logo_And_Subscriptions.zip",
      "size": 11954,
      "sha256": "dfb475e332f4fa3f4bbfaf49b4600b2c55fd4d13761f1f4d2427e4c0e432788a",
-     "driveId": "13xCgeE3bwLHYElLM-DGARLgPG8-GtW7O"
+     "path": "money/Money_1.6_With_Logo_And_Subscriptions.zip"
     },
     {
      "v": "1.6",
@@ -970,7 +1107,7 @@ window.HUB = {
      "file": "Money_1.6_Fixed.zip",
      "size": 11989,
      "sha256": "6eaf4c680471c89052139752266055dba1eb7adc82918486d4267aa23750f8f0",
-     "driveId": "1SoosByWDEVhdzZ3N6d5c9nqi4c-U6lIb"
+     "path": "money/Money_1.6_Fixed.zip"
     },
     {
      "v": "1.6",
@@ -999,7 +1136,7 @@ window.HUB = {
      "file": "Money_1.6_Subscriptions.zip",
      "size": 11273,
      "sha256": "a88b4da95d233a0e516a52fc30daee30d06409d64c65310aa22ec16501ddafed",
-     "driveId": "1QSAfYwYe4HgWf68rZ5WGlbzXjfU-29Kp"
+     "path": "money/Money_1.6_Subscriptions.zip"
     },
     {
      "v": "1.7",
@@ -1028,7 +1165,7 @@ window.HUB = {
      "file": "Money_1.7_App.zip",
      "size": 10173,
      "sha256": "d86c2489f59c0e5149fb6dcbcc0abdfa2292f9f72996c956ca05a108c939a072",
-     "driveId": "10WOmFFtLLhYb-2Rtnka333cqm70M8EUY"
+     "path": "money/Money_1.7_App.zip"
     },
     {
      "v": "1.7",
@@ -1053,7 +1190,7 @@ window.HUB = {
      "file": "Finance_App_V1_7_Final.zip",
      "size": 13496,
      "sha256": "65c6ccb2d7874d020fa29c8f3b66c1f64101cbf8990d2090b2cc84c9c4109d2d",
-     "driveId": "1pcp3D7j-vnNFmMyW7MIFEJuScSVSuc70"
+     "path": "money/Finance_App_V1_7_Final.zip"
     },
     {
      "v": "1.7",
@@ -1081,7 +1218,7 @@ window.HUB = {
      "file": "Finance_App_V1_7_Subscriptions.zip",
      "size": 13496,
      "sha256": "89b2b5ed7ae4b39e3d11fe0358de2c8d32da555fee12d0f9ea758c3c1e89e2bd",
-     "driveId": "1aIEDvXPZY2jRb6pQumaNaxWFOT7U2cqG"
+     "path": "money/Finance_App_V1_7_Subscriptions.zip"
     },
     {
      "v": "2.1",
@@ -1136,7 +1273,7 @@ window.HUB = {
      "file": "Finance_App_V1_6_Fixed.zip",
      "size": 12236,
      "sha256": "f24af4aed9e2b16164f3d506b57895287e455fcfb8f8327596f22ebaf5ed45cc",
-     "driveId": "1uBq9Ic82bXc68BIXcmA3uNDgJNWUqowE"
+     "path": "money/Finance_App_V1_6_Fixed.zip"
     },
     {
      "v": "1.5",
@@ -1164,7 +1301,7 @@ window.HUB = {
      "file": "Finance_App_V1_5_Pro.zip",
      "size": 13279,
      "sha256": "b760d2f92e22aad8499bf3c0b53595bfb0eedbc04201dd9dd218e7d7b172f9d2",
-     "driveId": "1LwBV0Opyxax4-w85vQUF5v5EYEHbnxjY"
+     "path": "money/Finance_App_V1_5_Pro.zip"
     },
     {
      "v": "2.0",
@@ -1218,7 +1355,7 @@ window.HUB = {
      "file": "Finance_App_V1_4_AutoSync.zip",
      "size": 12153,
      "sha256": "de569072fe3b053f4adbec99d97218d703a8386d61f5ac30979b12601b8bc1fd",
-     "driveId": "1TQYaq5FCxx2QHBO1AXLYVgoiBD1NBCDe"
+     "path": "money/Finance_App_V1_4_AutoSync.zip"
     },
     {
      "v": "1.2",
@@ -1273,7 +1410,7 @@ window.HUB = {
      "file": "Finance_App_V1_3_Universal.zip",
      "size": 11482,
      "sha256": "6e0b582f87c4874bfee790d96486d7ae2a07e26611dcdeb9e7e09d1ac650741f",
-     "driveId": "1vfaU7t-hA515rBQcR0NWCSxNIuebOzLi"
+     "path": "money/Finance_App_V1_3_Universal.zip"
     },
     {
      "v": "1.2",
@@ -1302,7 +1439,7 @@ window.HUB = {
      "file": "Finance_App_V1_2.zip",
      "size": 9860,
      "sha256": "151d8e5c9697053f3bfadb0b71ed7e6e6d357327b673f2cead4b9d6211a09517",
-     "driveId": "1xz8MTSsH8gxwQR6wH1ckiFLdo8FWp4z3"
+     "path": "money/Finance_App_V1_2.zip"
     },
     {
      "v": "1.1",
@@ -1361,7 +1498,7 @@ window.HUB = {
      "file": "Finance_App_V2_KZT.zip",
      "size": 8336,
      "sha256": "6cb95e40416883d2dc8333db6f63a34d7783221b5f3e41f5196ffa6c8ebbdf5a",
-     "driveId": "1ppkFHBxtK6h9H4rH0pOf2cCNcdIv9tKa"
+     "path": "money/Finance_App_V2_KZT.zip"
     },
     {
      "v": "1.0",
@@ -1408,104 +1545,104 @@ window.HUB = {
     "main": "Версии iLife"
    },
    "versions": [
-   {
-    "v": "2.7.0",
-    "name": "Меню «Заметки», «Медиа», «Дневник»; план на день",
-    "date": "2026-11-13",
-    "time": "14:28",
-    "group": "main",
-    "kind": "web",
-    "items": [
-     "Новое главное меню из шести разделов: «Заметки» (Идеи и Дела), «Медиа» (Кино, Музыка, Сценарии, Мое_совсек), «Дневник», «ДНД», «Лекарства», «Настройки». Раздел открывает своё меню; «Назад» возвращает главное меню, а открытая страница остаётся. На телефоне меню теперь в один ряд и занимает меньше места.",
-     "«Идеи»: кнопки вложений (картинки, музыка, диктофон, файлы, песня, Spotify, YouTube) — только значками, в одну строку (подпись — при наведении и для экранного диктора). «Сохранить» — во всю ширину, сразу под полем ввода.",
-     "«Дела» → «План на день»: список дел на выбранный день вручную — время (по желанию), галочка «сделано», колокольчик; напоминания на устройство в время дела, как у лекарств (кнопка «Сделано» прямо в уведомлении), и файл для календаря телефона — напомнит и при закрытом iLife. «Лист в PDF» — страница на день с квадратиками для галочек и пустыми строками; «Перенести невыполненное на завтра».",
-     "Новый раздел «Дневник»: «Запись дня» — большое поле с оформлением (жирный, курсив, подчёркнутый, зачёркнутый, маркер, заголовки, цитата, списки, отмена), записи по дням, фото и видео дня; сохраняется само. «Полка» — каждый день с записью — книга, каждый месяц — стеллаж в стиле «Геометрии Полки» (рамка, сетка, размерная линия, пять цветов корешков); толщина книги — длина записи, нажатие открывает день; поиск по дневнику. Записи месяца — в PDF.",
-     "«План на день» и «Дневник» (с фото и видео до 50 МБ) синхронизируются через Google Диск и входят в резервную копию."
-    ],
-    "shots": [
-     {
-      "src": "shots/ilife-2.7.0-1.jpg",
-      "cap": "Дневник: полка — месяц, книга — день"
-     },
-     {
-      "src": "shots/ilife-2.7.0-2.jpg",
-      "cap": "Запись дня с оформлением и фото"
-     },
-     {
-      "src": "shots/ilife-2.7.0-3.jpg",
-      "cap": "План на день с напоминаниями"
-     },
-     {
-      "src": "shots/ilife-2.7.0-4.jpg",
-      "cap": "Новое меню и кнопки «Идей» в одну строку"
-     }
-    ],
-    "file": "iLife_v2.7.0.zip",
-    "size": 2178547,
-    "sha256": "e39d15da490682a12c41a66f82b7b9a1ef06b446898058e5cfc74589ba2ad803",
-    "driveId": "1rhPX-syamZEv_YPMShPFImmb5J9u6mCL",
-    "src": "5e2207c"
-   },
-   {
-    "v": "2.6.3",
-    "name": "ИИ: запасная модель, если Gemini завис",
-    "date": "2026-11-13",
-    "time": "13:49",
-    "group": "main",
-    "kind": "web",
-    "items": [
-     "Найдена причина «Gemini: нет ответа». Основная модель gemini-3.8-flash (и 3.7-flash) сейчас зависает и не отвечает вовсе, а gemini-3.6-flash отвечает за пару секунд. Раньше на запасную модель приложение переходило только при явной ошибке сервиса — теперь и когда модель молчит 45 секунд. Зависшая модель 15 минут пробуется последней, так что следующие запросы сразу идут к работающей. Это помогает и «Кино», и разбору Telegram.",
-     "Проверено на настоящем Gemini: консультация врача и рукописный рецепт вместе читаются примерно за 40 секунд — врач, клиника, дата, диагноз, оба лекарства со схемой приёма, анализы и рекомендации, повторный приём.",
-     "Если на документе не дописан год, ИИ теперь берёт ближайший прошедший (раньше на рецепте с «20__ г.» получался 2023 год). В окне «Распознать» видно, какая модель сейчас читает.",
-     "Запасные модели Gemini: gemini-3.6-flash, gemini-3.5-flash, gemini-3.5-flash-lite."
-    ],
-    "shots": [],
-    "file": "iLife_v2.6.3.zip",
-    "size": 2135485,
-    "sha256": "5d775192f7d249922c8f7bd86cc1b7232a0bc889ef1e0bb30dff70aad17de43c",
-    "driveId": "1KYN06JIpo5VE-_FZ_XyOBMzH4r3Kn1Ng",
-    "src": "d046126"
-   },
-   {
-    "v": "2.6.2",
-    "name": "Лекарства: Gemini отвечает быстрее",
-    "date": "2026-11-13",
-    "time": "13:34",
-    "group": "main",
-    "kind": "web",
-    "items": [
-     "Исправлено «Gemini: нет ответа (время вышло)» при распознавании рецепта. Ответ Gemini теперь приходит по частям: приложение видит, что Gemini работает, и не обрывает его. Ошибка — только если Gemini молчит 2 минуты подряд (общий предел — 5 минут).",
-     "Gemini просят «думать» меньше (низкий уровень размышлений) — ответ приходит в разы быстрее. Если модель такую настройку не знает, запрос сам повторяется без неё.",
-     "В окне «Распознать» видно, сколько секунд идёт чтение и сколько знаков ответа уже пришло. Фото отправляются по два за раз и чуть меньшего размера, а прочитанный текст ИИ пишет кратко — так ответ короче и быстрее."
-    ],
-    "shots": [],
-    "file": "iLife_v2.6.2.zip",
-    "size": 2134044,
-    "sha256": "8329072934e2c8cc3ff1714048328867151bbe7c9721251a8e263a43ce8fa5b4",
-    "driveId": "1U9-gq1om5mrWBVPrr7xu6nyWAYF_JGFE",
-    "src": "1980adc"
-   },
-   {
-    "v": "2.6.1",
-    "name": "Лекарства: Gemini читает рецепты",
-    "date": "2026-11-13",
-    "time": "13:25",
-    "group": "main",
-    "kind": "web",
-    "items": [
-     "Исправлено распознавание рецептов через Gemini. Новые модели Gemini «думают» перед ответом и тратили на это весь лимит ответа, поэтому ответ приходил пустым или обрывался, и приложение молча переходило на чтение на устройстве. Лимит ответа увеличен, оборванный ответ дочитывается, время ожидания — до 3 минут, медицинские фото не режутся фильтрами Gemini.",
-     "Если несколько фото за раз не прочитались, приложение само повторяет по одному фото.",
-     "Причина ошибки теперь видна: в окне «Распознать» (красная строка) и в форме назначения («ИИ не смог прочитать рецепт» и почему). Ответ ИИ, который не удалось разобрать, лежит в блоке «Распознанный текст».",
-     "Фото в формате HEIC (iPhone) отправляются в Gemini как есть, если браузер не умеет их открыть."
-    ],
-    "shots": [],
-    "file": "iLife_v2.6.1.zip",
-    "size": 2131354,
-    "sha256": "8ef5056f2dd59a14252965e8f691ea8638660b92dcaf9e963e47c102d66fafbd",
-    "driveId": "1Bc9ArWNoIEIGeDdzKVPFfI7aQxuZLu6t",
-    "src": "91d5f76"
-   },
-   {
+    {
+     "v": "2.7.0",
+     "name": "Меню «Заметки», «Медиа», «Дневник»; план на день",
+     "date": "2026-11-13",
+     "time": "14:28",
+     "group": "main",
+     "kind": "web",
+     "items": [
+      "Новое главное меню из шести разделов: «Заметки» (Идеи и Дела), «Медиа» (Кино, Музыка, Сценарии, Мое_совсек), «Дневник», «ДНД», «Лекарства», «Настройки». Раздел открывает своё меню; «Назад» возвращает главное меню, а открытая страница остаётся. На телефоне меню теперь в один ряд и занимает меньше места.",
+      "«Идеи»: кнопки вложений (картинки, музыка, диктофон, файлы, песня, Spotify, YouTube) — только значками, в одну строку (подпись — при наведении и для экранного диктора). «Сохранить» — во всю ширину, сразу под полем ввода.",
+      "«Дела» → «План на день»: список дел на выбранный день вручную — время (по желанию), галочка «сделано», колокольчик; напоминания на устройство в время дела, как у лекарств (кнопка «Сделано» прямо в уведомлении), и файл для календаря телефона — напомнит и при закрытом iLife. «Лист в PDF» — страница на день с квадратиками для галочек и пустыми строками; «Перенести невыполненное на завтра».",
+      "Новый раздел «Дневник»: «Запись дня» — большое поле с оформлением (жирный, курсив, подчёркнутый, зачёркнутый, маркер, заголовки, цитата, списки, отмена), записи по дням, фото и видео дня; сохраняется само. «Полка» — каждый день с записью — книга, каждый месяц — стеллаж в стиле «Геометрии Полки» (рамка, сетка, размерная линия, пять цветов корешков); толщина книги — длина записи, нажатие открывает день; поиск по дневнику. Записи месяца — в PDF.",
+      "«План на день» и «Дневник» (с фото и видео до 50 МБ) синхронизируются через Google Диск и входят в резервную копию."
+     ],
+     "shots": [
+      {
+       "src": "shots/ilife-2.7.0-1.jpg",
+       "cap": "Дневник: полка — месяц, книга — день"
+      },
+      {
+       "src": "shots/ilife-2.7.0-2.jpg",
+       "cap": "Запись дня с оформлением и фото"
+      },
+      {
+       "src": "shots/ilife-2.7.0-3.jpg",
+       "cap": "План на день с напоминаниями"
+      },
+      {
+       "src": "shots/ilife-2.7.0-4.jpg",
+       "cap": "Новое меню и кнопки «Идей» в одну строку"
+      }
+     ],
+     "file": "iLife_v2.7.0.zip",
+     "size": 2178547,
+     "sha256": "e39d15da490682a12c41a66f82b7b9a1ef06b446898058e5cfc74589ba2ad803",
+     "src": "5e2207c",
+     "path": "ilife/iLife_v2.7.0.zip"
+    },
+    {
+     "v": "2.6.3",
+     "name": "ИИ: запасная модель, если Gemini завис",
+     "date": "2026-11-13",
+     "time": "13:49",
+     "group": "main",
+     "kind": "web",
+     "items": [
+      "Найдена причина «Gemini: нет ответа». Основная модель gemini-3.8-flash (и 3.7-flash) сейчас зависает и не отвечает вовсе, а gemini-3.6-flash отвечает за пару секунд. Раньше на запасную модель приложение переходило только при явной ошибке сервиса — теперь и когда модель молчит 45 секунд. Зависшая модель 15 минут пробуется последней, так что следующие запросы сразу идут к работающей. Это помогает и «Кино», и разбору Telegram.",
+      "Проверено на настоящем Gemini: консультация врача и рукописный рецепт вместе читаются примерно за 40 секунд — врач, клиника, дата, диагноз, оба лекарства со схемой приёма, анализы и рекомендации, повторный приём.",
+      "Если на документе не дописан год, ИИ теперь берёт ближайший прошедший (раньше на рецепте с «20__ г.» получался 2023 год). В окне «Распознать» видно, какая модель сейчас читает.",
+      "Запасные модели Gemini: gemini-3.6-flash, gemini-3.5-flash, gemini-3.5-flash-lite."
+     ],
+     "shots": [],
+     "file": "iLife_v2.6.3.zip",
+     "size": 2135485,
+     "sha256": "5d775192f7d249922c8f7bd86cc1b7232a0bc889ef1e0bb30dff70aad17de43c",
+     "src": "d046126",
+     "path": "ilife/iLife_v2.6.3.zip"
+    },
+    {
+     "v": "2.6.2",
+     "name": "Лекарства: Gemini отвечает быстрее",
+     "date": "2026-11-13",
+     "time": "13:34",
+     "group": "main",
+     "kind": "web",
+     "items": [
+      "Исправлено «Gemini: нет ответа (время вышло)» при распознавании рецепта. Ответ Gemini теперь приходит по частям: приложение видит, что Gemini работает, и не обрывает его. Ошибка — только если Gemini молчит 2 минуты подряд (общий предел — 5 минут).",
+      "Gemini просят «думать» меньше (низкий уровень размышлений) — ответ приходит в разы быстрее. Если модель такую настройку не знает, запрос сам повторяется без неё.",
+      "В окне «Распознать» видно, сколько секунд идёт чтение и сколько знаков ответа уже пришло. Фото отправляются по два за раз и чуть меньшего размера, а прочитанный текст ИИ пишет кратко — так ответ короче и быстрее."
+     ],
+     "shots": [],
+     "file": "iLife_v2.6.2.zip",
+     "size": 2134044,
+     "sha256": "8329072934e2c8cc3ff1714048328867151bbe7c9721251a8e263a43ce8fa5b4",
+     "src": "1980adc",
+     "path": "ilife/iLife_v2.6.2.zip"
+    },
+    {
+     "v": "2.6.1",
+     "name": "Лекарства: Gemini читает рецепты",
+     "date": "2026-11-13",
+     "time": "13:25",
+     "group": "main",
+     "kind": "web",
+     "items": [
+      "Исправлено распознавание рецептов через Gemini. Новые модели Gemini «думают» перед ответом и тратили на это весь лимит ответа, поэтому ответ приходил пустым или обрывался, и приложение молча переходило на чтение на устройстве. Лимит ответа увеличен, оборванный ответ дочитывается, время ожидания — до 3 минут, медицинские фото не режутся фильтрами Gemini.",
+      "Если несколько фото за раз не прочитались, приложение само повторяет по одному фото.",
+      "Причина ошибки теперь видна: в окне «Распознать» (красная строка) и в форме назначения («ИИ не смог прочитать рецепт» и почему). Ответ ИИ, который не удалось разобрать, лежит в блоке «Распознанный текст».",
+      "Фото в формате HEIC (iPhone) отправляются в Gemini как есть, если браузер не умеет их открыть."
+     ],
+     "shots": [],
+     "file": "iLife_v2.6.1.zip",
+     "size": 2131354,
+     "sha256": "8ef5056f2dd59a14252965e8f691ea8638660b92dcaf9e963e47c102d66fafbd",
+     "src": "91d5f76",
+     "path": "ilife/iLife_v2.6.1.zip"
+    },
+    {
      "v": "2.6.0",
      "name": "Лекарства: распознавание рецептов",
      "date": "2026-11-13",
@@ -1535,8 +1672,8 @@ window.HUB = {
      "file": "iLife_v2.6.0.zip",
      "size": 2114791,
      "sha256": "9f445714cf66f555a58a6999bb96803eef40232bacd76f1d4ba102f9fba4b090",
-     "driveId": "19XNGdQyWDqIfHc4W0o3oDa1wGb7HEfSI",
-     "src": "f36567a"
+     "src": "f36567a",
+     "path": "ilife/iLife_v2.6.0.zip"
     },
     {
      "v": "2.5.0",
@@ -1555,8 +1692,9 @@ window.HUB = {
      "shots": [],
      "file": "iLife_v2.5.0.zip",
      "size": 2069931,
-     "driveId": "1fiBVb_IByI3CZSgy_k7ACPZT_Lcg9ETI",
-     "src": "5904f3c"
+     "src": "5904f3c",
+     "path": "ilife/iLife_v2.5.0.zip",
+     "sha256": "4c4c823df60ba9d4a75f93ccef461dfe07413c60e9f86fdc6ee388882fa99ee0"
     },
     {
      "v": "2.4.0",
@@ -1577,8 +1715,8 @@ window.HUB = {
      "file": "iLife_v2.4.0.zip",
      "size": 2047927,
      "sha256": "36f82d1ff72bb02b95784822d73fa7aac6326f494893995cf8bb377ba0b6337b",
-     "driveId": "1UwRAuISJiQXrLOoH8zHlELM2DZ6UQKTs",
-     "src": "71fa61d"
+     "src": "71fa61d",
+     "path": "ilife/iLife_v2.4.0.zip"
     },
     {
      "v": "2.3.0",
@@ -1599,8 +1737,8 @@ window.HUB = {
      "file": "iLife_v2.3.0.zip",
      "size": 1653031,
      "sha256": "6942f485055a362bb2824913c04e42f51f8eafca500966f20d300fa242653561",
-     "driveId": "1aR885jwL9Hk1FcJBX2l64IgoPl-tobaM",
-     "src": "b2cb21a"
+     "src": "b2cb21a",
+     "path": "ilife/iLife_v2.3.0.zip"
     },
     {
      "v": "2.2.1",
@@ -1617,8 +1755,8 @@ window.HUB = {
      "file": "iLife_v2.2.1.zip",
      "size": 1636829,
      "sha256": "41a14fd0f855ed5848375d78b0579eae73e16ef887a10070929e9b45fdeef657",
-     "driveId": "1q6B_9QOdvFQAmLs6uKz69cMVy0PGSkzM",
-     "src": "bd19046"
+     "src": "bd19046",
+     "path": "ilife/iLife_v2.2.1.zip"
     },
     {
      "v": "2.2.0",
@@ -1641,8 +1779,8 @@ window.HUB = {
      "file": "iLife_v2.2.0.zip",
      "size": 1129517,
      "sha256": "9d147c2e51bb44a92dd5a0cbb628e5a4a3f32839815c225384d6508f7c2e922f",
-     "driveId": "1hPYfJvrX7FRrn88pglQDWBlZuW96-YfU",
-     "src": "9ef05bb"
+     "src": "9ef05bb",
+     "path": "ilife/iLife_v2.2.0.zip"
     },
     {
      "v": "2.1.0",
@@ -1666,8 +1804,8 @@ window.HUB = {
      "file": "iLife_v2.1.0.zip",
      "size": 1096684,
      "sha256": "43bd95b11f95c48f6abf7738e7dc5e511544493a83f7456f04a230c82ad4ec7c",
-     "driveId": "1giKn1lNn09GZlKovAVPlbMiMZUWppXTi",
-     "src": "478254b"
+     "src": "478254b",
+     "path": "ilife/iLife_v2.1.0.zip"
     },
     {
      "v": "2.0.0",
@@ -1690,9 +1828,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "iLife_v2.0.0.zip",
-     "size": 1019733,
-     "sha256": "3c9529da396a1315d62eac3d55cc3f009f3fb7322227d2101b1625a11b98d488",
-     "src": "48629e9"
+     "size": 1021475,
+     "sha256": "a5e28e56b73db23b966ef43a9d53347391fb613343989ced49ea7437ac99aba7",
+     "src": "48629e9",
+     "path": "ilife/iLife_v2.0.0.zip"
     },
     {
      "v": "1.9.0",
@@ -1711,9 +1850,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "iLife_v1.9.0.zip",
-     "size": 935452,
-     "sha256": "58c0c1d420c7490a4d042e80a5a426198ad7a4f80854cfa44e228a4e4b2fe34c",
-     "src": "340d905"
+     "size": 937034,
+     "sha256": "bd0956d0ce44736bcb8d965d8732877590dee7e91ddd060ee31d57fde8cb4948",
+     "src": "340d905",
+     "path": "ilife/iLife_v1.9.0.zip"
     },
     {
      "v": "1.8.0",
@@ -1733,9 +1873,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "iLife_v1.8.0.zip",
-     "size": 906570,
-     "sha256": "5c89b102a05282e4797363e74751518255e8166245661ab9b074dfde179135ce",
-     "src": "0501e14"
+     "size": 908134,
+     "sha256": "4b274d045937ade502d5bba5210076a0ca3e002ff0b7bb6e6b956c3539527b8d",
+     "src": "0501e14",
+     "path": "ilife/iLife_v1.8.0.zip"
     },
     {
      "v": "1.7.1",
@@ -1750,9 +1891,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "iLife_v1.7.1.zip",
-     "size": 845781,
-     "sha256": "62766012975f34c21ee717ec2440884168861d6dfc0ebdb1fde52f5094d27413",
-     "src": "14de356"
+     "size": 847273,
+     "sha256": "1423ccfdc53edbb4b91eb400b2ceec6a76cebf218e6f04cac0aa7638514aee28",
+     "src": "14de356",
+     "path": "ilife/iLife_v1.7.1.zip"
     },
     {
      "v": "1.7.0",
@@ -1773,9 +1915,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "iLife_v1.7.0.zip",
-     "size": 842475,
-     "sha256": "bae692ec7140d59b8770933ace5d34231dafb2a9a59469f0f092f12ce521f32d",
-     "src": "6e46589"
+     "size": 843967,
+     "sha256": "a50ce2266f6c76be7a6282d67bf0a0f236684483b75e11bf8d79c93bdc1615c0",
+     "src": "6e46589",
+     "path": "ilife/iLife_v1.7.0.zip"
     },
     {
      "v": "1.6.0",
@@ -1794,9 +1937,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "iLife_v1.6.0.zip",
-     "size": 775898,
-     "sha256": "91088c52d81b03a012c9ba37510266bb6494d66fb4c0c4ae50509a198924365c",
-     "src": "1415647"
+     "size": 777354,
+     "sha256": "66e4805254ecae869eb6e15f6e0346edb1a68fa01c8edfbfa5370ad3a3984d38",
+     "src": "1415647",
+     "path": "ilife/iLife_v1.6.0.zip"
     },
     {
      "v": "1.5.0",
@@ -1816,9 +1960,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "iLife_v1.5.0.zip",
-     "size": 746944,
-     "sha256": "77f813fdd65ee6b41425b67a580199b08a83bae9cb0caeb46be1e88fc7305383",
-     "src": "bd3872e"
+     "size": 748382,
+     "sha256": "7ae4c79a92f308f17a4a659bf27c6f770692d50b8752d6220de4ddc8b877cfb6",
+     "src": "bd3872e",
+     "path": "ilife/iLife_v1.5.0.zip"
     },
     {
      "v": "1.4.0",
@@ -1836,9 +1981,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "iLife_v1.4.0.zip",
-     "size": 719029,
-     "sha256": "61c048499aa30bffb63f61fc343221b0c4c687a7f99f8757b49ff414b41aaad0",
-     "src": "8db8eeb"
+     "size": 720449,
+     "sha256": "96d8fa8ee530ad2ad79750995e0b1d7d891d7274b51e97511c91e7fe50a94402",
+     "src": "8db8eeb",
+     "path": "ilife/iLife_v1.4.0.zip"
     },
     {
      "v": "1.3.1",
@@ -1853,9 +1999,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "iLife_v1.3.1.zip",
-     "size": 454676,
-     "sha256": "7412512fedaffdfeed19cbec724e5f8c6d0863903b6883d4ce1f7cabc4637a4e",
-     "src": "5c10431"
+     "size": 456013,
+     "sha256": "868bbc3e55f63be915f1a3af8d3ee2cf56d2ea5d3a34826dfda58e185829c3c2",
+     "src": "5c10431",
+     "path": "ilife/iLife_v1.3.1.zip"
     },
     {
      "v": "1.3.0",
@@ -1870,9 +2017,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "iLife_v1.3.0.zip",
-     "size": 453324,
-     "sha256": "bdcbaa3e5b5756d8f73c38e9684af477909390ac759ae597fed06ceafd493acf",
-     "src": "d43053a"
+     "size": 454661,
+     "sha256": "9ec5ba0f219b920079fa7ddfeb7c2de56e36801e2533e16ba5d73dcec021d199",
+     "src": "d43053a",
+     "path": "ilife/iLife_v1.3.0.zip"
     },
     {
      "v": "1.2.1",
@@ -1886,9 +2034,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "iLife_v1.2.1.zip",
-     "size": 450353,
-     "sha256": "99de2c40bfa012a09dbd17c5e428b710e3b589c4ee1041bb12eabb8eca71a1ae",
-     "src": "9019495"
+     "size": 451243,
+     "sha256": "6b59aee767bd0433720dfe10697dd22b21e5513b94594fb7f688f8b479735b57",
+     "src": "9019495",
+     "path": "ilife/iLife_v1.2.1.zip"
     },
     {
      "v": "1.2.0",
@@ -1904,9 +2053,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "iLife_v1.2.0.zip",
-     "size": 448916,
-     "sha256": "f2967b89eeeca2ab3282ea9772d04085ea00f89649d0ed4b68c6b1bfda48bfb6",
-     "src": "5652419"
+     "size": 449806,
+     "sha256": "c50d9d63fb1a55b9e264ade09e06358ab97f70582b2a8d7eb478b504ee48d70e",
+     "src": "5652419",
+     "path": "ilife/iLife_v1.2.0.zip"
     },
     {
      "v": "1.1.0",
@@ -1937,7 +2087,8 @@ window.HUB = {
      ],
      "file": "iLife_v1.1.0.zip",
      "size": 405052,
-     "sha256": "5007bf186f23dc153d9904356c26860de0fefadb780c667ec60c5eb9c7ac8ed3"
+     "sha256": "5007bf186f23dc153d9904356c26860de0fefadb780c667ec60c5eb9c7ac8ed3",
+     "missing": true
     },
     {
      "v": "1.0.0",
@@ -1964,7 +2115,8 @@ window.HUB = {
      ],
      "file": "iLife_v1.0.0.zip",
      "size": 385667,
-     "sha256": "d31c12709cf9fdf3268e9718e8c0d3f559b20284ada525e5a3d3e770fb3ee338"
+     "sha256": "d31c12709cf9fdf3268e9718e8c0d3f559b20284ada525e5a3d3e770fb3ee338",
+     "missing": true
     }
    ]
   },
@@ -1980,6 +2132,258 @@ window.HUB = {
     "main": "Версии «Геометрии Полки»"
    },
    "versions": [
+    {
+     "v": "1.12.0",
+     "date": "2026-11-14",
+     "time": "11:07",
+     "kind": "web",
+     "items": [
+      "Новая страница «Личный кабинет» (меню «Страницы» → «Личный кабинет», адрес …/index.html#kabinet)",
+      "Три стеллажа посередине экрана, над каждым вывеска: слева «Корзина», посередине «Ваши книги», справа «Новинки».",
+      "Корзина: на средней полке зелёная книга «Мой аккаунт». Внутри два разворота: профиль (имя, город), контакты (почта, телефон), пароль (задать или сменить, не короче 6 знаков) и настройки (сообщать о новинках, показывать «Рекомендуем», удалить данные). Сервера пока нет: данные хранятся только в этом браузере, пароль — только в виде отпечатка SHA-256 (не сам пароль). Смена пароля работает на сайте по https (на GitHub Pages работает, из файла на компьютере — нет).",
+      "Ваши книги: те же 100 книг (15201–15300), расставлены так же, как на странице «Стеллажи».",
+      "Новинки: 10 книг с oldbook.kz, артикулы 14991–15000, с фото обложки, задней стороны и страниц внутри. Корешки обёрнуты голубовато-синей лентой с золотой надписью «НОВИНКА» (лента заходит и на край обложки). Над полкой с новинками слева латунная табличка «Новинки», на полке ниже — пустая полка с табличкой «Ваш запрос».",
+      "Во всех книгах (и на этой странице, и на «Стеллажах») рядом со страницей с ценой появился лист «Рекомендуем»: 4 книги-новинки с oldbook.kz, похожие на эту (тот же автор, жанр или раздел каталога, тот же язык), с обложкой, автором, ценой и ссылкой на магазин. Подобраны из 500 самых новых книг магазина (артикулы 14701–15200), только те, что в наличии."
+     ],
+     "file": "Geometriya_Polki_v1.12.0.zip",
+     "src": "b248ea6",
+     "group": "main",
+     "shots": [],
+     "path": "polka/Geometriya_Polki_v1.12.0.zip",
+     "size": 41189432,
+     "sha256": "72bb309372809c38f7535fb15e4819dee7e83662c847bdb2e4042c6f0820bc53"
+    },
+    {
+     "v": "1.11.1",
+     "date": "2026-11-14",
+     "time": "01:06",
+     "kind": "web",
+     "items": [
+      "Исправлено: в 1.11.0 на стеллажах не было ни одной книги, а стеллажи были без текстуры дерева. Браузер брал из памяти устройства старый файл книг от прошлой версии, а в нём не было мест на полках. Теперь файл книг называется books3d/books100.js и всегда берётся свежим из сети (без сети — из памяти). Старый файл без мест на полках программа больше не принимает.",
+      "Исправлено: если книг на стеллаже нет, текстура дерева теперь всё равно рисуется."
+     ],
+     "file": "Geometriya_Polki_v1.11.1.zip",
+     "src": "cd43d22",
+     "group": "main",
+     "shots": [],
+     "path": "polka/Geometriya_Polki_v1.11.1.zip",
+     "size": 37208291,
+     "sha256": "3770b2563650cda8c37b38029365a5818dd1e919586e1aebd1b132ce00cf2b76"
+    },
+    {
+     "v": "1.11.0",
+     "date": "2026-11-14",
+     "time": "01:01",
+     "kind": "web",
+     "items": [
+      "Страница «Стеллажи»: 100 настоящих книг с oldbook.kz на центральном стеллаже",
+      "Придуманные учебные книги убраны со всех стеллажей.",
+      "На центральном стеллаже стоят 100 книг с oldbook.kz, артикулы 15201–15300: название, автор, издательство, год, переплёт, размеры, состояние, цена и описание взяты из карточек магазина.",
+      "Расстановка: книги стоят на трёх нижних полках, самые высокие внизу, ниже к верху. Каждая книга в своих настоящих размерах. Книги стоят вплотную от левой стенки, поэтому мягкие книги всегда опираются на соседей; последней в каждом ряду стоит книга в твёрдом переплёте. Тонкие брошюры «Огонька» и «Вечер» Ахматовой (мягкие, им не на что опереться) и большой альбом «Сыр — Алаштың анасы» (340 мм, выше полки) лежат стопками справа.",
+      "У всех книг фото обложки, у большинства фото задней стороны и корешка. Где корешок на фото не получилось вырезать чисто, корешок нарисован в цвете обложки с названием книги.",
+      "У всех книг кнопка «Открыть» и фото страниц (обычно 5: титул, оборот и страницы внутри), обрезанные по тексту и выровненные. У «Гравити Фолз. Дневник» в карточке магазина всего одно фото внутри, у «Чьи это голоса?» — два.",
+      "Фото лежат отдельными файлами (books3d/img и books3d/pages, около 36 МБ) и грузятся только когда нужны."
+     ],
+     "file": "Geometriya_Polki_v1.11.0.zip",
+     "src": "d660012",
+     "group": "main",
+     "shots": [],
+     "path": "polka/Geometriya_Polki_v1.11.0.zip",
+     "size": 37207843,
+     "sha256": "df44622c5ab91f2b21885d986a1f3ea166a3e286c60fbe6f4135a1311bd52add"
+    },
+    {
+     "v": "1.10.2",
+     "date": "2026-11-14",
+     "time": "00:05",
+     "kind": "web",
+     "items": [
+      "Фото страниц обрезаны по самому тексту: на странице остаются текст и небольшие поля, без краёв соседних страниц, тени у корешка, фона и обложки.",
+      "Фото выровнены: строки текста стоят ровно по горизонтали (наклон снимка от −1° до +1° убран у каждой из 50 страниц).",
+      "Фото страниц теперь сразу в пропорциях страницы книги, поэтому в раскрытой книге не растягиваются."
+     ],
+     "file": "Geometriya_Polki_v1.10.2.zip",
+     "src": "5374c89",
+     "group": "main",
+     "shots": [],
+     "path": "polka/Geometriya_Polki_v1.10.2.zip",
+     "size": 5293266,
+     "sha256": "702e7a8e625b2683a425c41d8b87c28565a53a9edfed57d07a8298cea6f57d85"
+    },
+    {
+     "v": "1.10.1",
+     "date": "2026-11-13",
+     "time": "23:42",
+     "kind": "web",
+     "items": [
+      "Фото страниц в раскрытой книге обрезаны аккуратно: каждый из 50 кадров проверен глазами, остались только сама страница, без соседних страниц, загибов, фона стола и прищепок. Фото теперь заполняют страницу целиком, без отрезанных строк сверху и снизу.",
+      "Журнал полки: окно ограничено по высоте (на широком экране не выше полки, на телефоне 300 точек), длинный список прокручивается внутри, у списка заметная полоса прокрутки. Страница больше не растягивается от длинного журнала."
+     ],
+     "file": "Geometriya_Polki_v1.10.1.zip",
+     "src": "954e34d",
+     "group": "main",
+     "shots": [],
+     "path": "polka/Geometriya_Polki_v1.10.1.zip",
+     "size": 5603837,
+     "sha256": "c515ef3d965ac3a4dcd04466d577af7a46b3284ced7fb1fdbc6bf92875bbd235"
+    },
+    {
+     "v": "1.10.0",
+     "date": "2026-11-13",
+     "time": "23:34",
+     "kind": "web",
+     "items": [
+      "Страница «Стеллажи»: книгу можно открыть и полистать",
+      "Когда настоящая книга с oldbook.kz в руках и повёрнута обложкой к вам, у правого края обложки появляется кнопка «Открыть» (клавиша O).",
+      "Книга поворачивается обложкой прямо, поднимается в середину экрана, обложка раскрывается, и вы видите разворот: форзац и титульный лист.",
+      "Листать: кнопки «Назад» и «Дальше», стрелки на клавиатуре, щелчок по правой или левой странице, на телефоне — провести пальцем. Лист переворачивается вокруг корешка с перспективой и тенью.",
+      "Страницы — настоящие фото из карточек тех же 10 книг на oldbook.kz: титул и ещё четыре страницы (оборот титула, начало первой главы и следующий разворот). Всего 4 разворота, на последнем — цена и ссылка на книгу в магазине.",
+      "Закрыть: «Закрыть книгу», Esc или щелчок мимо книги. Книга долистывается назад, обложка захлопывается, и книга ложится обратно в руку. «Поставить на место» при открытой книге сначала закрывает её.",
+      "Фото страниц лежат в books3d/pages (50 файлов, около 2,5 МБ), грузятся при первом открытии книги и сохраняются для работы без интернета.",
+      "Проверено в Chrome на компьютере (1280×800) и в режиме телефона (390×780) на всех шагах: открыть, листать вперёд и назад, закрыть."
+     ],
+     "file": "Geometriya_Polki_v1.10.0.zip",
+     "src": "b047204",
+     "group": "main",
+     "shots": [],
+     "path": "polka/Geometriya_Polki_v1.10.0.zip",
+     "size": 5147667,
+     "sha256": "9d3ef0f64de5fa531fbd19b2b038ce0a2d39e6582e0a2a0a59b9506146376386"
+    },
+    {
+     "v": "1.9.0",
+     "date": "2026-11-13",
+     "time": "22:39",
+     "kind": "web",
+     "items": [
+      "Страница «Стеллажи» переписана на другой 3D-движок: теперь её рисует Three.js (самая распространённая библиотека 3D для браузера)",
+      "Что осталось прежним: стеллажи, книги, настоящие книги с oldbook.kz, окошко с описанием, кнопки, управление мышью, пальцами и клавишами. Я сверил картинку по скриншотам со старой версией: на общем виде и на ровном виде средняя разница меньше 0,1 из 255, то есть не видна глазом (на ближнем плане новая даже чётче: 1.8.1 при движении снижала разрешение).",
+      "Зачем. В 1.8.1 у вас книги перестали показываться. Причину я на своём стенде воспроизвести не смог: там нет настоящей видеокарты, всё считает процессор. Поэтому я убрал всё, что в собственном движке ПолкаGL (он писался и проверялся только у меня) могло зависеть от видеокарты, и отдал это Three.js, который работает на тысячах разных устройств: * создание контекста WebGL, сборку шейдеров, загрузку текстур и состояние видеокарты теперь ведёт Three.js, а не мои ручные вызовы; * числа в шейдере теперь с полной точностью: раньше на части телефонов и планшетов точность была урезана (mediump), а текстура-атлас у нас большая (4096 точек), и рисунок на корешках мог «плыть» или попадать не на ту книгу; * цикл рисования больше не может остановиться молча: если кадр упал с ошибкой, на странице написана причина.",
+      "Если 3D не включится, вместо пустого экрана страница теперь пишет причину (например «не загрузился движок», «не удалось включить WebGL 2» или «шейдер не собрался» с кодом ошибки). По этой надписи (хватит скриншота) можно понять, что не так на устройстве.",
+      "Экономный режим для компьютеров без видеокарты. Если в браузере выключено аппаратное ускорение или видеокарта в «чёрном списке», WebGL считает процессор и рисует в несколько раз медленнее. Страница сама это определяет при запуске и тогда: рисует без сглаживания краёв, с ограничением числа точек (около 0,6 млн), а пока книга в руках, сцена за ней рисуется один раз в картинку. Руками режим можно задать в адресе сайта: добавьте ?soft=1 (включить экономный) или ?soft=0 (выключить), например https://…/index.html?soft=1#shkaf. В моей проверке без видеокарты кадр при доставании книги стал 19 мс вместо 41 мс в 1.8.1, облёт камеры 90 мс вместо 265 мс.",
+      "Что ещё: в 1.8.1 правка зависания (каждый кадр ставил в очередь два следующих) уже была, она осталась. Подготовка текстуры книги при наведении курсора, кеш фона, плавное снижение чёткости на слабой видеокарте (до 45%), возврат через 0,7 с покоя остались.",
+      "Теперь нужен WebGL 2. Он есть в Chrome и Edge с 2017 года, в Firefox с 2017, в Safari с версии 15 (iPhone с iOS 15 и новее), то есть почти на любом устройстве. Если браузер старый, страница «Стеллажи» напишет об этом, остальное (полка-конструктор) работает как раньше.",
+      "В папке vendor теперь два файла: jszip.min.js (Excel) и three.min.js (3D, около 0,5 МБ). Файл three.min.js грузится только когда открыта страница «Стеллажи». Он собран из исходников three.js r187 (лицензия MIT, текст в vendor/three.LICENSE.txt).",
+      "Честно: скорость на настоящей видеокарте я измерить не могу, она в моей проверке не участвует. Всё перечисленное проверено на программной графике (самый медленный случай) и по числу перерисовок за кадр: одна на кадр."
+     ],
+     "file": "Geometriya_Polki_v1.9.0.zip",
+     "src": "e8c6068",
+     "group": "main",
+     "shots": [],
+     "path": "polka/Geometriya_Polki_v1.9.0.zip",
+     "size": 2678234,
+     "sha256": "5d4fe47eca977e791e303e160a69777811e05e17e394229a7b494151ffdb5324"
+    },
+    {
+     "v": "1.8.1",
+     "date": "2026-11-13",
+     "time": "21:49",
+     "kind": "web",
+     "items": [
+      "Только одно: доставание книги больше не лагает (правка к 1.8.0, остальное без изменений)",
+      "Подготовка книги целиком вынесена из момента щелчка. Картинки и текстура в видеокарте готовятся, пока курсор стоит на книге (на телефоне при касании). Если щёлкнули сразу, полёт начинается через доли секунды, когда всё готово, а не рывками посреди движения.",
+      "Сцена за книгой рисуется один раз до начала полёта. Раньше первые кадры полёта рисовали все стеллажи заново, теперь с первого кадра рисуется только сама книга поверх готовой затемнённой картинки. Время полёта считается от первого нарисованного кадра, поэтому тяжёлый первый кадр не съедает начало движения.",
+      "Автоматическое снижение чёткости на слабых видеокартах больше не работает во время просмотра книги: смена размера холста пересоздавала буферы и сама давала рывки. Ступени стали реже (100%, 75%, 60%), возврат к полной чёткости через 0,7 секунды покоя.",
+      "Второй шейдер (показ готовой картинки) прогревается при запуске страницы, а не при первом доставании книги: драйверы собирают шейдер лениво, и на Windows это могло дать паузу в сотни миллисекунд при первом щелчке."
+     ],
+     "file": "Geometriya_Polki_v1.8.1.zip",
+     "src": "abf4e42",
+     "group": "main",
+     "shots": [],
+     "path": "polka/Geometriya_Polki_v1.8.1.zip",
+     "size": 2478594,
+     "sha256": "75b755b591a01d944719cabbfaa1a99e0bd4a6e044e08c2e5e11c32e70e3e868"
+    },
+    {
+     "v": "1.8.0",
+     "date": "2026-11-13",
+     "time": "21:23",
+     "kind": "web",
+     "items": [
+      "Страница «Стеллажи»: книга выезжает без лагов, кнопка «Ровный вид», 10 настоящих книг с oldbook.kz",
+      "Лаги при доставании книги. Раньше в каждом кадре полёта заново рисовались все пять стеллажей и больше девятисот книг, плюс каждое движение мыши пересобирало подсказку. Теперь: * стеллажи на время просмотра один раз рисуются в отдельную картинку и затем только затемняются, в каждом кадре рисуется одна книга; * если видеокарта слабая и кадры идут реже 40 в секунду, пока что-то движется, сцена рисуется в уменьшенном разрешении (не ниже 60%), а когда всё остановилось, чёткость возвращается сама; верхняя граница числа точек на очень плотных экранах снижена; * картинки книги (обложка, корешок, задняя сторона) готовятся заранее, пока курсор стоит на книге (на телефоне при касании), и в видеокарту загружаются один раз; * подсказка над книгой не пересобирается при каждом движении мыши, значок осей меняет только числа, а не всю разметку. Честно: скорость на настоящей видеокарте я измерить не мог (проверка шла на программной графике без видеокарты), поэтому ускорение подтверждено по числу и стоимости операций в кадре, а не секундомером на вашем устройстве. Если лаги останутся, напишите модель устройства и браузер.",
+      "Кнопка «Ровный вид» слева внизу (над точками стеллажей; клавиша L или Д). Ставит угол обзора строго прямо: без поворота и наклона. Место и приближение остаются. Пока вид ровный, кнопка тёмная. «Общий вид» (клавиша 0) возвращает обычный лёгкий наклон.",
+      "Десять настоящих книг с сайта oldbook.kz стоят на средней полке среднего (третьего) стеллажа, посередине полки, вплотную друг к другу: «Хоббит», «Божественная комедия», «Спеши любить», «Корона из звезд», «Опал», «Любовь без репетиции», «Повелители стихий. Книга 3. Когти ифрита», «Архипелаг ГУЛАГ», «Большая книга афоризмов», «Коварная красота». Размеры книг взяты с сайта (миллиметры пересчитаны в размеры на полке), поэтому «Архипелаг ГУЛАГ» толстый, а «Спеши любить» тонкая. Остальные полки по-прежнему заняты придуманными учебными книгами.",
+      "Окошко слева при доставании книги: название, автор, издательство, год, переплёт, страницы, описание (оно укорочено до двух-трёх предложений), размеры в мм, состояние, цена и ссылка на страницу книги на oldbook.kz. Длинное описание прокручивается. На телефоне окошко компактное: название, автор, две строки описания, цена и ссылка. Книга подбирается под свободное место справа от окошка.",
+      "Фотографии на 3D-книге: обложка, корешок и задняя сторона настоящих книг сделаны из фотографий с сайта (фон убран, перспектива выправлена, края подрезаны). Корешок с фотографии виден и на самой полке. Обрез страниц и верх книги рисуются кодом. Если файл books3d/oldbook.js не загрузился, на средней полке стоят придуманные книги, остальное работает как раньше.",
+      "Права на фото и описания принадлежат магазину oldbook.kz. Они взяты для показа в этом проекте. Если будете открывать сайт публично, получите согласие магазина или замените их своими."
+     ],
+     "file": "Geometriya_Polki_v1.8.0.zip",
+     "src": "42cf5e2",
+     "group": "main",
+     "shots": [],
+     "path": "polka/Geometriya_Polki_v1.8.0.zip",
+     "size": 2476782,
+     "sha256": "2f1f08eef051a40c16720e29d7fe8a9721fb8cb018df98a7494c0e6566b82863"
+    },
+    {
+     "v": "1.7.0",
+     "date": "2026-11-13",
+     "time": "19:25",
+     "kind": "web",
+     "items": [
+      "Страница «Стеллажи» переделана в настоящую 3D-сцену",
+      "Стеллажи теперь объёмные: цоколь, две боковые стойки, семь досок, задние стенки, карниз. Текстура дерева вырезана из присланной картинки стеллажа (доска сверху, лицевая кромка, задняя стенка, стойка, карниз с узором), поэтому дерево такое же, как на картинке. Сама картинка теперь встроена в программу, отдельный файл wall/stellazh.jpg больше не нужен (и страница работает, даже если index.html открыт прямо из папки).",
+      "Книги тоже объёмные: каждая стоит на доске коробкой с корешком, боковыми обложками и обрезом страниц, наклонённые и лежащие стопкой книги настоящие. Под книгами и под стеллажами мягкие тени, в отсеках чуть темнее у потолка и у доски.",
+      "Вид можно наклонять. Правая кнопка мыши (или кнопка с кольцом справа внизу, клавиша O; на телефоне кнопка с кольцом, затем палец) поворачивает вид влево-вправо и вверх-вниз, чтобы увидеть полки сбоку и сверху. Обычное перетаскивание по-прежнему двигает вид, колесо и щипок приближают, но только до уровня полки. Кнопка «Общий вид» (клавиша 0) возвращает вид.",
+      "Просмотр книги исправлен. Раньше книга была отдельным слоем поверх экрана: она могла уйти за край, налезть на кнопки, сквозь неё проступала сетка (муар), на гранях были швы. Теперь книга — такой же объект в той же сцене. Она выезжает вперёд на длину своего размера (поэтому не задевает полку и соседей), камера при необходимости чуть отодвигается, и книга всегда лежит по размеру в свободной части экрана: её целиком видно в любом положении, она не заходит под подпись, кнопку «Поставить на место», значок осей и нижние кнопки. Кнопки страницы (стрелки, точки, масштаб) на время просмотра прячутся. Гладкость краёв и отсутствие муара даёт сглаживание видеокарты (MSAA) и уменьшенные копии текстур (mip-карты), швов нет, потому что грани настоящие.",
+      "Колесо мыши в просмотре книги приближает её, но не дальше 2,4 раза от размера «вся книга на экране».",
+      "Для 3D нужен WebGL. Он есть во всех современных браузерах (Chrome, Edge, Firefox, Safari, телефоны). Если браузер его не включил, на странице появится сообщение, а страница «Полка — конструктор» работает как раньше.",
+      "Движок. Для сцены написан свой маленький движок ПолкаGL (около 230 строк, без библиотек и сборки, работает без интернета). Подробности и сравнение с three.js и Babylon.js в ENGINE.md."
+     ],
+     "file": "Geometriya_Polki_v1.7.0.zip",
+     "src": "e6da804",
+     "group": "main",
+     "shots": [],
+     "path": "polka/Geometriya_Polki_v1.7.0.zip",
+     "size": 963712,
+     "sha256": "985e6ae2e88e9004b2bc10bd314baaada2a2817534a8816e9a16d79c8f88aadd"
+    },
+    {
+     "v": "1.6.0",
+     "date": "2026-11-13",
+     "time": "18:25",
+     "kind": "web",
+     "items": [
+      "Страница «Стеллажи» (заменила страницу «Шкаф» из 1.5.0)",
+      "В меню «Страницы» теперь «Стеллажи — 3D-книги». Вместо прежней фотографии шкафа используется присланная картинка высокого стеллажа (wall/stellazh.jpg). Он размножен: пять стеллажей стоят в ряд, на экране помещаются три, каждый второй отражён зеркально, чтобы рисунок дерева не повторялся. В каждом стеллаже семь полок.",
+      "Кнопки со стрелками по краям экрана (и клавиши ← →) сдвигают ряд на один стеллаж. Левее и правее видимых стоит ещё по одному стеллажу: ряд показывает 1–3, 2–4 или 3–5. Точки в левом нижнем углу и подпись «Стеллажи 2–4 из 5» показывают, какие видны. Если экран узкий (телефон стоймя), на экране один стеллаж, а три показываются, если отдалить или повернуть телефон.",
+      "На всех полках стоят придуманные книги: разные цвета, толщина и высота, тома одной серии рядом, наклонённая книга, у части полок стопка книг лежа. Настоящие данные на эту страницу не подключены. Книги сделаны только для показа, их названия и авторы вымышленные.",
+      "Нажмите на книгу: она выезжает из полки на середину экрана и поворачивается обложкой. Это настоящая 3D-модель с обложкой, корешком, задней стороной, обрезом страниц, верхом и низом. Вращение по всем трём осям: тяните мышью или пальцем (вправо-влево и вверх-вниз), Shift или правая кнопка мыши (на телефоне два пальца) крутят в плоскости экрана. Колесо мыши или щипок меняют размер. Кнопки внизу: «Обложка», «Корешок», «Задняя», «Сверху» разворачивают книгу сами, стрелки по кругу крутят в плоскости, «+» и «−» размер. Клавиши: стрелки, Q и E (крутить в плоскости), + и −, 0 (обложка). Esc или «Поставить на место» возвращают книгу на полку. Справа вверху маленькая подсказка с осями X, Y, Z показывает, как повёрнута книга.",
+      "Приближение колесом плавное. Нижний предел: весь стеллаж по высоте (на обычном экране при этом видно три-четыре стеллажа). Верхний предел: уровень полки, то есть одна полка на всю ширину экрана; дальше колесо не приближает. Двойной щелчок по полке приближает к ней, ещё один возвращает общий вид. Кнопки справа внизу: «+», «−», «К полке», «Общий вид» (клавиша 0).",
+      "Страница «Полка — конструктор» не менялась. Книги полки 227 из вашей таблицы остаются на ней."
+     ],
+     "file": "Geometriya_Polki_v1.6.0.zip",
+     "src": "f46fbfa",
+     "group": "main",
+     "shots": [],
+     "path": "polka/Geometriya_Polki_v1.6.0.zip",
+     "size": 1012802,
+     "sha256": "a99234075cbbbe078ab89d96e98efd253bdb49e6e31236572e13638b0ab016f5"
+    },
+    {
+     "v": "1.5.0",
+     "date": "2026-11-13",
+     "time": "17:53",
+     "kind": "web",
+     "items": [
+      "Страница «Шкаф»",
+      "В меню сверху появился пункт «Страницы»: «Полка — конструктор» (как раньше) и «Шкаф — фото стеллажа». Страница запоминается при перезагрузке; адрес с #shkaf открывает сразу шкаф. Пункты меню «Файл», «Правка», «Вид», «Фото» сами возвращают на страницу «Полка», потому что относятся к ней.",
+      "На странице «Шкаф» показано фото шкафа (wall/shkaf.jpg), а на средней полке (в центральном проёме под стеклянной витриной) стоят книги полки 227. Книги рисуются поверх фото в масштабе: 1000 мм полки равны ширине проёма, расстановка та же, что на странице «Полка» (стоящие и лежащие стопкой, фото корешков, если они есть).",
+      "Приближение колесом мыши плавное, без ступеней. Нижний предел: весь шкаф на экране. Верхний предел: уровень полки, то есть средняя полка во весь экран по ширине; дальше колесо не приближает. Если остановить колесо на уровне полки рядом с ней, полка плавно встаёт по центру. Двойной щелчок по полке приближает к ней, по любому другому месту приближает в 2,2 раза, на максимуме возвращает весь шкаф. Фото двигается перетаскиванием, на телефоне работает щипок двумя пальцами. Кнопки справа внизу: «+», «−», «К средней полке», «Весь шкаф». Клавиши: + − 0 (весь шкаф), F или Enter (к полке), стрелки.",
+      "Наведите курсор (или нажмите пальцем) на книгу: название, автор, номер в каталоге и размеры. «Открыть полку 227» (внизу слева и на табличке над полкой) переходит на страницу «Полка» с этой полкой.",
+      "Другие полки шкафа пока пустые: книги добавятся, когда вы пришлёте данные по ним. Полка 227 с настоящими книгами",
+      "В программу встроены 11 книг из вашей таблицы: лист «Генеральная», у которых «Место хр новое» равно 227. Теперь полка 227 настоящая (без пометки «тест»), её можно открыть и на странице «Полка», расставлять и выгружать в Excel. Как только вы загрузите из Google Таблицы лист этой полки, он заменит встроенные книги. Тестовыми остаются полки 225, 226 и 229–236.",
+      "Отдельного листа «227» в присланном файле не было. В листе «Склад_база» напротив 227 записано ещё около 40 кодов, но в «Генеральной» у них другое или пустое место, поэтому они не взяты."
+     ],
+     "file": "Geometriya_Polki_v1.5.0.zip",
+     "src": "324edd6",
+     "group": "main",
+     "shots": [],
+     "path": "polka/Geometriya_Polki_v1.5.0.zip",
+     "size": 1608754,
+     "sha256": "79b70ff957d41cdd034e47757a6c3c259bf70f586bb2486beb4c13a43863ed7b"
+    },
     {
      "v": "1.4.0",
      "name": "Общий вид стеллажей",
@@ -2008,9 +2412,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Geometriya_Polki_v1.4.0.zip",
-     "size": 873276,
-     "sha256": "6c4253fb0d8104732db7ede314c4015b69ea3c60d06dafceeb6ae42c9fab19cc",
-     "src": "5fb99cb"
+     "size": 874844,
+     "sha256": "2f86f399b9a18fb13ee48bc457cb0b4bd743386c6f77d51c13358e4b31638ca0",
+     "src": "5fb99cb",
+     "path": "polka/Geometriya_Polki_v1.4.0.zip"
     },
     {
      "v": "1.3.0",
@@ -2033,9 +2438,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Geometriya_Polki_v1.3.0.zip",
-     "size": 847933,
-     "sha256": "2f44ee428dff798bbda0defef21107adc1fb407965a51100748ad903324a8211",
-     "src": "bcb2c63"
+     "size": 849501,
+     "sha256": "d4339595beaf9ea1cb3cc22dd37421e14ef8c25e9890bd8a6907a397d0c42125",
+     "src": "bcb2c63",
+     "path": "polka/Geometriya_Polki_v1.3.0.zip"
     },
     {
      "v": "1.2.0",
@@ -2063,9 +2469,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Geometriya_Polki_v1.2.0.zip",
-     "size": 821184,
-     "sha256": "7e1b219e9ad6eae5554605bbdaf7f66e552075cbb8a35a88577e750ac055d778",
-     "src": "d2acea4"
+     "size": 822734,
+     "sha256": "6dce4eb0e7e9df53daac4bf8a750037cfa539f726bcccc1362a881d8fe15f57a",
+     "src": "d2acea4",
+     "path": "polka/Geometriya_Polki_v1.2.0.zip"
     },
     {
      "v": "1.1.0",
@@ -2105,9 +2512,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Geometriya_Polki_v1.1.0.zip",
-     "size": 545980,
-     "sha256": "39258eca79e473969f8befd7cb500586a53baeca5687a68846f5d9e8ccb13055",
-     "src": "1d95e21"
+     "size": 546848,
+     "sha256": "6ab64ed09e4fb608230104b5698ac07609afb87b4f488fdfc9a670d203bf6ac7",
+     "src": "1d95e21",
+     "path": "polka/Geometriya_Polki_v1.1.0.zip"
     },
     {
      "v": "1.0.0",
@@ -2121,9 +2529,10 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Geometriya_Polki_v1.0.0.zip",
-     "size": 63476,
-     "sha256": "7e988164074769dee33fd8fc2869e04a20bcf05c40ce434541632d42e9c11c68",
-     "src": "f130012"
+     "size": 63714,
+     "sha256": "a96da7e1e4755d1feb2051c150960940d13ddbe22afe50e5708f4c62e0b81615",
+     "src": "f130012",
+     "path": "polka/Geometriya_Polki_v1.0.0.zip"
     }
    ]
   },
@@ -2155,7 +2564,8 @@ window.HUB = {
      "kind": "web",
      "shots": [],
      "size": null,
-     "sha256": null
+     "sha256": null,
+     "missing": true
     },
     {
      "v": "0.2.1",
@@ -2170,7 +2580,8 @@ window.HUB = {
      "kind": "web",
      "shots": [],
      "size": null,
-     "sha256": null
+     "sha256": null,
+     "missing": true
     },
     {
      "v": "0.2.0",
@@ -2188,7 +2599,8 @@ window.HUB = {
      "kind": "web",
      "shots": [],
      "size": null,
-     "sha256": null
+     "sha256": null,
+     "missing": true
     },
     {
      "v": "0.1.0",
@@ -2206,7 +2618,8 @@ window.HUB = {
      "kind": "web",
      "shots": [],
      "size": null,
-     "sha256": null
+     "sha256": null,
+     "missing": true
     }
    ]
   },
@@ -2237,7 +2650,8 @@ window.HUB = {
       "Отдельное приложение в стиле Windows 95, выделенное из My Money 4.3: рабочий стол с окнами (перетаскивание, размер), меню «Пуск», панель задач с часами Алматы.",
       "Четыре вкладки: «Ввод» с цифровой клавиатурой, «История» с сортировкой, «Статистика» (три диаграммы и список главных трат) и «Обмен» книгами.",
       "Работает без интернета, данные хранятся в браузере; обмен через файл JSON и системное «Поделиться»; умеет подхватывать старые записи Oldbook из My Money."
-     ]
+     ],
+     "missing": true
     }
    ]
   },
@@ -2254,6 +2668,28 @@ window.HUB = {
    },
    "versions": [
     {
+     "v": "0.3.0",
+     "date": "2026-11-12",
+     "time": "16:31",
+     "kind": "web",
+     "items": [
+      "Ярмарка, сыроварня, погода, редкие коровы",
+      "Сайт теперь собирается из проекта Godot (тот же код, что и игра для Windows).",
+      "«Пока вас не было»: ферма работает без игрока 2 часа, «Пастушья собака» добавляет по часу",
+      "Редкие коровы: по три на каждое окно, альбом на странице Игра+, вечный бонус",
+      "Погода в окне: дождь, солнце, ветер, радуга, гроза с разлетевшимися коровами",
+      "Новая страница «Ярмарка»: заказы покупателей и сыроварня (творог, сыр, лунный сыр)",
+      "Встроенные шрифты и эмодзи; старое сохранение сайта подхватывается"
+     ],
+     "file": "Moe_korovy_v0.3.0.zip",
+     "src": "69b0c1e",
+     "group": "main",
+     "shots": [],
+     "path": "cows/Moe_korovy_v0.3.0.zip",
+     "size": 63131105,
+     "sha256": "9457d25d82bbb19cf48a3444beedb102d8b114cab91f9f0c2304a5672d609479"
+    },
+    {
      "v": "0.1.7",
      "name": "Циклы добычи",
      "date": "2026-11-11",
@@ -2269,7 +2705,8 @@ window.HUB = {
      "shots": [],
      "file": "Moe_korovy_v0.1.7.zip",
      "size": 41592710,
-     "sha256": "293129cc84fec0eff8b378081c33e4429328b1561f4bb3174887094343e707c3"
+     "sha256": "293129cc84fec0eff8b378081c33e4429328b1561f4bb3174887094343e707c3",
+     "path": "cows/Moe_korovy_v0.1.7.zip"
     },
     {
      "v": "0.1.6",
@@ -2286,7 +2723,8 @@ window.HUB = {
      "shots": [],
      "file": "Moe_korovy_v0.1.6.zip",
      "size": 41590178,
-     "sha256": "f4036394c1ceee5742fe937ee0d2e8d25406ecddbd52f4b736ff828cf1245343"
+     "sha256": "f4036394c1ceee5742fe937ee0d2e8d25406ecddbd52f4b736ff828cf1245343",
+     "path": "cows/Moe_korovy_v0.1.6.zip"
     },
     {
      "v": "0.1.5",
@@ -2302,7 +2740,8 @@ window.HUB = {
      "shots": [],
      "file": "Moe_korovy_v0.1.5.zip",
      "size": 41589076,
-     "sha256": "0ed4c0be69159e93e2c1e2125e236153cbe3105f1212e36b404a751059c9e6f1"
+     "sha256": "0ed4c0be69159e93e2c1e2125e236153cbe3105f1212e36b404a751059c9e6f1",
+     "path": "cows/Moe_korovy_v0.1.5.zip"
     },
     {
      "v": "0.1.4",
@@ -2319,7 +2758,8 @@ window.HUB = {
      "shots": [],
      "file": "Moe_korovy_v0.1.4.zip",
      "size": 40694661,
-     "sha256": "12b86900d29fd6bb14ea9bdee93eac59aba3b66a5ba3b9255c5af6e15ca8e674"
+     "sha256": "12b86900d29fd6bb14ea9bdee93eac59aba3b66a5ba3b9255c5af6e15ca8e674",
+     "path": "cows/Moe_korovy_v0.1.4.zip"
     },
     {
      "v": "0.1.3",
@@ -2336,7 +2776,8 @@ window.HUB = {
      "shots": [],
      "file": "Moe_korovy_v0.1.3.zip",
      "size": 40693847,
-     "sha256": "835e1840690ea574f3bb54c4b7a1ab29e4ddedd02969f86ce381a943305c980b"
+     "sha256": "835e1840690ea574f3bb54c4b7a1ab29e4ddedd02969f86ce381a943305c980b",
+     "path": "cows/Moe_korovy_v0.1.3.zip"
     },
     {
      "v": "0.1.2",
@@ -2352,7 +2793,8 @@ window.HUB = {
      "shots": [],
      "file": "Moe_korovy_v0.1.2.zip",
      "size": 40635714,
-     "sha256": "b8d7e280cc16d1a5fd60727edadd71662be2c11c28c504c38d839f149b6f8897"
+     "sha256": "b8d7e280cc16d1a5fd60727edadd71662be2c11c28c504c38d839f149b6f8897",
+     "path": "cows/Moe_korovy_v0.1.2.zip"
     },
     {
      "v": "0.1.1",
@@ -2370,8 +2812,11 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Moe_korovy_v0.1.1.zip",
-     "size": 40477622,
-     "sha256": "de8af1c3500538b89cc664d54336406c04bf7cfc842da5a56fb8e4e559b7d3e5"
+     "size": 40346063,
+     "sha256": "77fc85d02026f48d21772c43cfc87740ffbcf7b13628ae6b4d0a829b6470513c",
+     "path": "cows/Moe_korovy_v0.1.1.zip",
+     "warn": "Архив собран заново из истории репозитория Moe_korovy на GitHub: в нём только сам сайт, без папки с исходниками _source. Полный архив с исходниками лежит на Google Диске (он больше 10 МБ, и перенести его автоматически не получилось).",
+     "src": "7a947c6"
     },
     {
      "v": "0.1.0",
@@ -2389,8 +2834,11 @@ window.HUB = {
      ],
      "shots": [],
      "file": "Moe_korovy_v0.1.0.zip",
-     "size": 29141061,
-     "sha256": "22043e7aba9ae5ad1c93427a3dd93457fc3f2718dd99a6ebf1f3069fcb63874c"
+     "size": 29003026,
+     "sha256": "9ad8274eeb74d819899feec6cc53d3b873cf6d1428579f537428a1714fa14fae",
+     "path": "cows/Moe_korovy_v0.1.0.zip",
+     "warn": "Архив собран заново из истории репозитория Moe_korovy на GitHub: в нём только сам сайт, без папки с исходниками _source. Полный архив с исходниками лежит на Google Диске (он больше 10 МБ, и перенести его автоматически не получилось).",
+     "src": "dc4850f"
     },
     {
      "v": "0.0.8",
@@ -2414,7 +2862,8 @@ window.HUB = {
      "shots": [],
      "file": "Moe_korovy_v0.0.8.zip",
      "size": 3856388,
-     "sha256": "b7005eab64d4e0e74c240881f6f73ff2091415144ef07e016e9697074284ecf8"
+     "sha256": "b7005eab64d4e0e74c240881f6f73ff2091415144ef07e016e9697074284ecf8",
+     "path": "cows/Moe_korovy_v0.0.8.zip"
     },
     {
      "v": "0.0.4",
@@ -2433,7 +2882,8 @@ window.HUB = {
      "shots": [],
      "file": "Moe_korovy_v0.0.4.zip",
      "size": 457490,
-     "sha256": "28798d9809243f86d0fc16f802947fca738a914465b47753132aa3f25dcf1fda"
+     "sha256": "28798d9809243f86d0fc16f802947fca738a914465b47753132aa3f25dcf1fda",
+     "path": "cows/Moe_korovy_v0.0.4.zip"
     },
     {
      "v": "0.0.3",
@@ -2453,7 +2903,8 @@ window.HUB = {
      "shots": [],
      "file": "Moe_korovy_v0.0.3.zip",
      "size": 425295,
-     "sha256": "36dfab8a75fb6079c557c97ba42b7ac755cc4ba8785a6991ce73bc7264f5f680"
+     "sha256": "36dfab8a75fb6079c557c97ba42b7ac755cc4ba8785a6991ce73bc7264f5f680",
+     "path": "cows/Moe_korovy_v0.0.3.zip"
     },
     {
      "v": "0.0.2",
@@ -2472,7 +2923,8 @@ window.HUB = {
      "shots": [],
      "file": "Moe_korovy_v0.0.2.zip",
      "size": 419548,
-     "sha256": "fa039f9522ecdaf216a953d56810a0ef366de1d88d52cc02e32d48596cc500a2"
+     "sha256": "fa039f9522ecdaf216a953d56810a0ef366de1d88d52cc02e32d48596cc500a2",
+     "path": "cows/Moe_korovy_v0.0.2.zip"
     },
     {
      "v": "0.0.1",
@@ -2491,9 +2943,14 @@ window.HUB = {
      "shots": [],
      "file": "Moe_korovy_v0.0.1.zip",
      "size": 7223,
-     "sha256": "f16d8d470e922a85aa164204b8f3848ac369342b47e7f987f372011f3b04f7db"
+     "sha256": "f16d8d470e922a85aa164204b8f3848ac369342b47e7f987f372011f3b04f7db",
+     "path": "cows/Moe_korovy_v0.0.1.zip"
     }
    ]
   }
- ]
+ ],
+ "archives": {
+  "base": "https://github.com/Drakkkkon/maymani/raw/archives/",
+  "tree": "https://github.com/Drakkkkon/maymani/tree/archives"
+ }
 };
