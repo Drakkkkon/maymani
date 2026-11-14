@@ -1,7 +1,7 @@
 // Данные сайта «Мое_сайты»: программы, версии, журналы. Архивы лежат в ветке archives этого же репозитория (кнопки «Скачать» ведут туда).
 window.HUB = {
  "title": "Мое_сайты",
- "version": "2.6.7",
+ "version": "2.6.8",
  "date": "2026-11-14",
  "driveFolder": {
   "name": "МайМани",
@@ -907,21 +907,74 @@ window.HUB = {
      "sha256": null
     },
     {
+     "v": "2.9",
+     "name": "My money 2.9 (Android)",
+     "date": "2026-10-31",
+     "time": "03:30",
+     "group": "site",
+     "kind": "apk",
+     "items": [
+      "Android-сборка 2.9: внутри — исправленная 2.8.0 (Money_v2.8.0_App_fixed) байт в байт.",
+      "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.9.zip — на Google Диске, в папке «МайМани»."
+     ],
+     "shots": [],
+     "file": "My_money_2.9_APK.zip",
+     "size": 2130649,
+     "sha256": "f366a9ec7c98cc140d6bf464a6c725b92fc5407971931bd226b3f0ed369103b2",
+     "path": "money/My_money_2.9_APK.zip"
+    },
+    {
      "v": "2.8.0",
      "name": "",
-     "date": null,
-     "time": null,
+     "date": "2026-10-31",
+     "time": "08:21",
      "group": "site",
      "kind": "web",
      "items": [
       "Исправлена ошибка запуска скрипта (дублирование кода).",
       "Заставка: время, дата и погода Алматы с автообновлением.",
-      "Новый слайдер «разблокируйте» для сенсорных экранов."
+      "Новый слайдер «разблокируйте» для сенсорных экранов.",
+      "Слайдер на Pointer Events с захватом касания и разблокировкой клавишами Enter/Пробел; погода Open-Meteo обновляется каждые 10 минут и при возвращении в приложение. Повторная выгрузка Money_v2.8.0_App_fixed_444.zip совпадает с этой байт в байт."
      ],
      "shots": [],
-     "file": null,
-     "size": null,
-     "sha256": null
+     "file": "Money_v2.8.0_App_fixed.zip",
+     "size": 29202,
+     "sha256": "30d2d99ce0d905c47f2aad6874fd0c71c4de8eb7afc5e8b77cd24e1710b7a647",
+     "path": "money/Money_v2.8.0_App_fixed.zip"
+    },
+    {
+     "v": "2.8",
+     "name": "My money 2.8 (Android)",
+     "date": "2026-10-31",
+     "time": "03:18",
+     "group": "site",
+     "kind": "apk",
+     "items": [
+      "Android-сборка 2.8: внутри — исходная 2.8.0 с ошибкой (два экземпляра скрипта, «firebaseConfig has already been declared») — приложение в ней не запускается целиком.",
+      "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.8.zip — на Google Диске, в папке «МайМани»."
+     ],
+     "shots": [],
+     "file": "My_money_2.8_APK.zip",
+     "size": 2152643,
+     "sha256": "192eaa864849e66df7d2838e12828f995cbd0f2ece367a72b9deb29bfe5736dc",
+     "path": "money/My_money_2.8_APK.zip"
+    },
+    {
+     "v": "2.8.0",
+     "name": "My Money 2.8.0 — исходная (с ошибкой)",
+     "date": "2026-10-30",
+     "time": "04:50",
+     "group": "site",
+     "kind": "web",
+     "items": [
+      "Исходный архив 2.8.0: в script.js код приложения записан дважды, браузер останавливается на ошибке «firebaseConfig has already been declared».",
+      "Исправленная сборка — карточка 2.8.0 выше (Money_v2.8.0_App_fixed)."
+     ],
+     "shots": [],
+     "file": "Money_v2.8.0_App.zip",
+     "size": 40144,
+     "sha256": "e2dbafed632011298147c894d97494df3aae0c5f65aa6fdc7d916c04f62f125e",
+     "path": "money/Money_v2.8.0_App.zip"
     },
     {
      "v": "Виджет",
@@ -1052,6 +1105,196 @@ window.HUB = {
      "size": 193490,
      "sha256": "f3951ec834611d245e7a9e3c376d4fc59956bf0acef6b1733bd6a7d762cc1aee",
      "missing": true
+    },
+    {
+     "v": "2.7.0",
+     "name": "My Money 2.7 — вариант «updated»",
+     "date": "2026-10-29",
+     "time": "13:04",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Вариант 2.7 в папке www/ (для WebIntoApp) с тем же README, что у 2.7.0: тот же index.html и script.js.",
+      "Отличается только оформлением: нет блока «единая раскладка для ПК» (переменные цветов кнопок, ширина панели 1480 px), который есть в варианте «desktop design»."
+     ],
+     "shots": [],
+     "file": "My_Money_2.7_updated.zip",
+     "size": 28588,
+     "sha256": "3c6e7026db773b66cc0bd5c29d6cd4a374438ac43b697d1888b30b1987ef3160",
+     "path": "money/My_Money_2.7_updated.zip"
+    },
+    {
+     "v": "2.7.0",
+     "name": "My Money 2.7 — вариант «desktop design»",
+     "date": "2026-10-29",
+     "time": "13:03",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Вариант 2.7 в папке www/ (для WebIntoApp): тот же index.html и script.js, что у 2.7.0 Desktop Design.",
+      "Оформление: единая раскладка для ПК и кнопки, окрашенные цветом темы (вместо отдельного правила «тёмно-красные расходы, тёмно-зелёные доходы»)."
+     ],
+     "shots": [],
+     "file": "My_Money_2.7_desktop_design.zip",
+     "size": 29429,
+     "sha256": "658086f622b84546d9721b559097b91194b8e79710d0380bdf9c881b73dde5db",
+     "path": "money/My_Money_2.7_desktop_design.zip"
+    },
+    {
+     "v": "Архив 2.7",
+     "name": "Money Pro — мастер-архив v2.7",
+     "date": "2026-10-29",
+     "time": "10:32",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Versions_History.html с историей до v2.7.0 и папка versions с архивами v1.2.0–v2.7.0 (v2.0.0–v2.7.0 — настоящие файлы)."
+     ],
+     "shots": [],
+     "file": "Money_Pro_Master_Archive_v2_7.zip",
+     "size": 326116,
+     "sha256": "5773a9968e866d12a8ffe814d625aad5e90dc478ebadf64f75ed0710bb145a58",
+     "path": "money/Money_Pro_Master_Archive_v2_7.zip"
+    },
+    {
+     "v": "2.7.0",
+     "name": "My Money 2.7 — Desktop Design & Excel Balance",
+     "date": "2026-10-29",
+     "time": "10:32",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Исправлена синтаксическая ошибка в экспорте Excel (try без catch) — скрипт снова запускается целиком, впервые с 1.7 Ultimate.",
+      "Кнопки расходов тёмно-красные (#8b0000), доходов — тёмно-зелёные.",
+      "Excel: столбец F «ИТОГО ЗА ВСЁ ВРЕМЯ» с общим чистым балансом после последнего «ИТОГО ЗА ДЕНЬ».",
+      "ПК (16:9): меньше отступы, блок ввода и история в своих рамках, длинная история прокручивается внутри блока.",
+      "Заставка: время и приветствие по Алматы (24 часа), погода Open-Meteo для Алматы с понятной ошибкой; слайдер на Pointer Events. В архиве README_RU.txt — код взят из APK 2.7 и исправлен."
+     ],
+     "shots": [],
+     "file": "Money_v2.7.0_Desktop_Design.zip",
+     "size": 28891,
+     "sha256": "bb603fa748d68e269349df34da526430fcd60324f7677a9c9e2d57c6018a7a87",
+     "path": "money/Money_v2.7.0_Desktop_Design.zip"
+    },
+    {
+     "v": "2.7",
+     "name": "My money 2.7 (Android)",
+     "date": "2026-10-29",
+     "time": "06:46",
+     "group": "early",
+     "kind": "apk",
+     "items": [
+      "Android-сборка 2.7 (WebIntoApp, пакет com.mycompany.mymoney): внутри — веб-версия Money 2.3 Pro (2.3.0 Stability) байт в байт.",
+      "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.7.zip — на Google Диске, в папке «МайМани»."
+     ],
+     "shots": [],
+     "file": "My_money_2.7_APK.zip",
+     "size": 2120115,
+     "sha256": "e9953c7bb5fe0635c72d68f2d72867797780130358db04eb8760023149729a9f",
+     "path": "money/My_money_2.7_APK.zip"
+    },
+    {
+     "v": "Архив 2.3",
+     "name": "Money Pro — мастер-архив v2.3",
+     "date": "2026-10-29",
+     "time": "06:42",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "История версий до v2.3.0 и архивы v1.2.0–v2.3.0 в папке versions."
+     ],
+     "shots": [],
+     "file": "Money_Pro_Master_Archive_v2_3.zip",
+     "size": 296776,
+     "sha256": "5d469ee0b423057759f9ba79d0d18a18d2f4853dfb7b5116c1a808f63d86d8ed",
+     "path": "money/Money_Pro_Master_Archive_v2_3.zip"
+    },
+    {
+     "v": "2.3.0",
+     "name": "Money 2.3 Pro — Autocomplete & Stability",
+     "date": "2026-10-29",
+     "time": "06:42",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "Категория «Паковка Каспи» и выпадающий список категорий, который подсказывает при вводе текста.",
+      "Кнопки на ПК снова работают при блокировщиках рекламы и без интернета (по журналу версии).",
+      "Исправлена опечатка, из-за которой на некоторых устройствах не открывалась вкладка «Зарплата».",
+      "Известная ошибка, унаследованная с 1.7 Ultimate: в script.js блок try без catch — в браузере скрипт не запускается целиком (исправлено в 2.7.0)."
+     ],
+     "shots": [],
+     "file": "Money_v2.3.0_Stability.zip",
+     "size": 23657,
+     "sha256": "d8ffa7476acdea22a29b3d88009b7926acd06c1cf187637ee5737a177db3b57b",
+     "path": "money/Money_v2.3.0_Stability.zip"
+    },
+    {
+     "v": "Архив 2.2",
+     "name": "Money Pro — мастер-архив v2.2",
+     "date": "2026-10-29",
+     "time": "06:36",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "История версий до v2.2.0 и архивы v1.2.0–v2.2.0 в папке versions."
+     ],
+     "shots": [],
+     "file": "Money_Pro_Master_Archive_v2_2.zip",
+     "size": 272793,
+     "sha256": "c9cb04eb0c1fd8942798ad49902cc715379cc4556c1e0d493ded20e6695010af",
+     "path": "money/Money_Pro_Master_Archive_v2_2.zip"
+    },
+    {
+     "v": "2.2.0",
+     "name": "Money 2.2 Pro — Fast Boot Desktop",
+     "date": "2026-10-29",
+     "time": "06:36",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "На ПК заставка убрана: сразу открывается главный экран или ПИН-код, если он задан.",
+      "На телефоне заставка и «Slide to unlock» остаются.",
+      "Известная ошибка, унаследованная с 1.7 Ultimate: в script.js блок try без catch — в браузере скрипт не запускается целиком (исправлено в 2.7.0)."
+     ],
+     "shots": [],
+     "file": "Money_v2.2.0_Fast_Boot.zip",
+     "size": 23087,
+     "sha256": "01263202b573db74e9cf1114794c9344728612311d4bb18a0b24aadeda17d3df",
+     "path": "money/Money_v2.2.0_Fast_Boot.zip"
+    },
+    {
+     "v": "Архив 2.1",
+     "name": "Money Pro — мастер-архив v2.1",
+     "date": "2026-10-29",
+     "time": "06:20",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "История версий до v2.1.0 и архивы v1.2.0–v2.1.0 в папке versions. (Не путать с прежней выгрузкой под тем же именем — та совпадала с мастер-архивом v2.)"
+     ],
+     "shots": [],
+     "file": "Money_Pro_Master_Archive_v2_1.zip",
+     "size": 249512,
+     "sha256": "509f5739bd0fb9f9ef9c4a403ab27a877a24a897c256055d534385fddfa9cfff",
+     "path": "money/Money_Pro_Master_Archive_v2_1.zip"
+    },
+    {
+     "v": "2.1.0",
+     "name": "Money 2.1 Pro — Adaptive Desktop Login",
+     "date": "2026-10-29",
+     "time": "06:20",
+     "group": "early",
+     "kind": "web",
+     "items": [
+      "На ПК вместо ползунка — кнопка «Войти» в стиле заставки; на телефоне остаётся «Slide to unlock».",
+      "Убран временный приём из 2.0.0 (щелчок по полосе ползунка).",
+      "Известная ошибка, унаследованная с 1.7 Ultimate: в script.js блок try без catch — в браузере скрипт не запускается целиком (исправлено в 2.7.0)."
+     ],
+     "shots": [],
+     "file": "Money_v2.1.0_Adaptive_Desktop.zip",
+     "size": 23162,
+     "sha256": "3614bfb0b00e3dd5bc850a7ab22aa5cf56ddf75b5a43f58b34a82cfe1242e634",
+     "path": "money/Money_v2.1.0_Adaptive_Desktop.zip"
     },
     {
      "v": "2.0.0",
@@ -1844,7 +2087,8 @@ window.HUB = {
    "blurb": "Личное приложение: идеи, дела и покупки, кино, музыка, фото из Telegram и X, настольные игры (ДНД), лекарства, дневник с полкой, план на день, PDF, синхронизация через Google Диск.",
    "siteBlurb": "Личные заметки: идеи, дела, кино, музыка, фото и настольные игры ДНД, с синхронизацией через Google Диск.",
    "groups": {
-    "main": "Версии iLife"
+    "main": "Версии iLife",
+    "pre": "Предшественник: «Быстрые Заметки», 29 октября 2026"
    },
    "versions": [
     {
@@ -2438,6 +2682,58 @@ window.HUB = {
      "size": 385667,
      "sha256": "d31c12709cf9fdf3268e9718e8c0d3f559b20284ada525e5a3d3e770fb3ee338",
      "missing": true
+    },
+    {
+     "v": "3.0.0",
+     "name": "Быстрые Заметки Cloud",
+     "date": "2026-10-29",
+     "time": "10:53",
+     "group": "pre",
+     "kind": "web",
+     "items": [
+      "Хранение и синхронизация заметок через Google Диск между ПК и телефоном по единому ключу.",
+      "Вложения: картинки, MP3 и любые документы.",
+      "ПК: кнопки нижнего меню ближе друг к другу; телефон: вёрстка с учётом безопасных зон экрана."
+     ],
+     "shots": [],
+     "file": "quick_notes_cloud_v3.0.0.zip",
+     "size": 13909,
+     "sha256": "4db8baac6800b2d132f0487c7403b9bf51c947eee6cff8fcd78b8f84292637bb",
+     "path": "ilife/quick_notes_cloud_v3.0.0.zip"
+    },
+    {
+     "v": "2.0.1",
+     "name": "Быстрые Заметки (исправленная)",
+     "date": "2026-10-29",
+     "time": "10:48",
+     "group": "pre",
+     "kind": "web",
+     "items": [
+      "Исправленная 2.0.0 с поддержкой всех устройств (index.html, changelog.html, PWA)."
+     ],
+     "shots": [],
+     "file": "quick_notes_fixed_v2.0.1.zip",
+     "size": 11571,
+     "sha256": "b9e15e3da782f3478c74b2a67e3263fe10bd3612e0e7ddc2c662c2d1bd83a118",
+     "path": "ilife/quick_notes_fixed_v2.0.1.zip"
+    },
+    {
+     "v": "2.0.0",
+     "name": "Быстрые Заметки & Идеи",
+     "date": "2026-10-29",
+     "time": "10:45",
+     "group": "pre",
+     "kind": "web",
+     "items": [
+      "Первое приложение заметок — предшественник «Идей» iLife: кнопки быстрого ввода «ЗАМЕТКА», «ТЕКСТ», «ИДЕЯ ДРАГА», «КИНО», время, дата и хештег ставятся сами.",
+      "Папки, закрепление и поиск; 5 тем (Мягкий серый, Тёмный комфорт, Пастельная мята, Тёплый закат, Киберпанк OLED) и 5 шрифтов.",
+      "Выгрузка в .txt и резервная копия .json; ставится на телефон как приложение (PWA), работает без интернета."
+     ],
+     "shots": [],
+     "file": "quick_notes_v2.0.0_app.zip",
+     "size": 13047,
+     "sha256": "4013e58ecda7bafc9b63a0fb11cf1a8f544050c584a9d92e0626fdd0dd114b77",
+     "path": "ilife/quick_notes_v2.0.0_app.zip"
     }
    ]
   },
