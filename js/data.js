@@ -1,7 +1,7 @@
 // Данные сайта «Мое_сайты»: программы, версии, журналы. Архивы лежат в ветке archives этого же репозитория (кнопки «Скачать» ведут туда).
 window.HUB = {
  "title": "Мое_сайты",
- "version": "2.6.8",
+ "version": "2.6.9",
  "date": "2026-11-14",
  "driveFolder": {
   "name": "МайМани",
@@ -430,7 +430,7 @@ window.HUB = {
      "file": "Money_v4.2.0_Site.zip",
      "size": 578872,
      "sha256": "13f18597bfe9b3bfc740d623547d417a1e26906b2c2e410fdcc9527e4ed96864",
-     "missing": true
+     "path": "money/Money_v4.2.0_Site.zip"
     },
     {
      "v": "4.1.2",
@@ -456,7 +456,7 @@ window.HUB = {
      "file": "Money_v4.1.2_Site.zip",
      "size": 575378,
      "sha256": "0e6c0831204fc7e51e02214b13feb35693555e357499af0f781bec594779a49b",
-     "missing": true
+     "path": "money/Money_v4.1.2_Site.zip"
     },
     {
      "v": "4.1.1",
@@ -482,7 +482,7 @@ window.HUB = {
      "file": "Money_v4.1.1_Site.zip",
      "size": 574269,
      "sha256": "47e0874bcaea546f3275f393d8c127dda6d459760ebb20255288d27da83604f5",
-     "missing": true
+     "path": "money/Money_v4.1.1_Site.zip"
     },
     {
      "v": "4.1.0",
@@ -511,7 +511,25 @@ window.HUB = {
      "file": "Money_v4.1.0_Site.zip",
      "size": 573563,
      "sha256": "d2abdd85b3469444449531c0a037c8bf1b0ac1e90a233247eb3afc594291b1b7",
-     "missing": true
+     "path": "money/Money_v4.1.0_Site.zip"
+    },
+    {
+     "v": "4.0.0 для ИИ",
+     "name": "Памятка для следующего ИИ-ассистента (Handoff)",
+     "date": "2026-11-03",
+     "time": "03:43",
+     "group": "site",
+     "kind": "web",
+     "items": [
+      "HANDOFF.md — памятка для ИИ: что за приложение, правила работы (без js/config.js в архивах, новые темы не трогают старые), устройство файлов сайта 4.0.0.",
+      "Папка site/ — исходники сайта 4.0.0, tools/ — программы перевода интерфейса (en, kk, fr, de) и их словари.",
+      "Файлы полной переписки (CHAT_DIALOG.md, CHAT_FULL.md, около 1,2 МБ) в публичный архив не входят; полный архив MyMoney_v4.0.0_Handoff_for_AI.zip — на Google Диске, в папке «МайМани»."
+     ],
+     "shots": [],
+     "file": "MyMoney_v4.0.0_Handoff_noChat.zip",
+     "size": 797489,
+     "sha256": "8b354d9ae1125886ffd5963ae6bfad22e8cf0703173a5265450d57f24c524688",
+     "path": "money/MyMoney_v4.0.0_Handoff_noChat.zip"
     },
     {
      "v": "4.0.0",
@@ -787,7 +805,7 @@ window.HUB = {
      "file": "Money_v3.0.0_Site.zip",
      "size": 95500,
      "sha256": "ad8d6798414d0ade7425aa88f0450a41c969ec4ca65d4072ba785660850912b6",
-     "missing": true
+     "path": "money/Money_v3.0.0_Site.zip"
     },
     {
      "v": "2.12.0",
@@ -821,8 +839,8 @@ window.HUB = {
     {
      "v": "2.11.0",
      "name": "",
-     "date": null,
-     "time": null,
+     "date": "2026-10-31",
+     "time": "15:13",
      "group": "site",
      "kind": "web",
      "items": [
@@ -834,15 +852,16 @@ window.HUB = {
       "Статистика: сводка за период и новые диаграммы (категории расходов, источники доходов, баланс за 30 дней, по месяцам, по дням недели, по времени суток)."
      ],
      "shots": [],
-     "file": null,
-     "size": null,
-     "sha256": null
+     "file": "Money_v2.11.0_App.zip",
+     "size": 50883,
+     "sha256": "7ee15581c59a9f6dc104afec09a63dd8117113bbd52bb15a250d844ee3f592f9",
+     "path": "money/Money_v2.11.0_App.zip"
     },
     {
      "v": "2.10.0",
      "name": "",
-     "date": null,
-     "time": null,
+     "date": "2026-10-31",
+     "time": "14:28",
      "group": "site",
      "kind": "web",
      "items": [
@@ -851,9 +870,27 @@ window.HUB = {
       "Анимации нажатия кнопок и плавные переходы между разделами, каждая не дольше 0.5 секунды."
      ],
      "shots": [],
-     "file": null,
-     "size": null,
-     "sha256": null
+     "file": "Money_v2.10.0_App.zip",
+     "size": 41382,
+     "sha256": "388db7db5cb2e3e7f73caefff077fd1f7130de62c1df08cb49dede43022e5680",
+     "path": "money/Money_v2.10.0_App.zip"
+    },
+    {
+     "v": "2.11",
+     "name": "My money 2.11 (Android)",
+     "date": "2026-10-31",
+     "time": "09:49",
+     "group": "site",
+     "kind": "apk",
+     "items": [
+      "Android-сборка 2.11: внутри — код сайта 2.10 (в названии страницы «My Money 2.10»).",
+      "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.11.zip — на Google Диске, в папке «МайМани»."
+     ],
+     "shots": [],
+     "file": "My_money_2.11_APK.zip",
+     "size": 2156765,
+     "sha256": "94050ff74ee590ec5460157381d4bb22da0edf5558da3b9c286cb87b66b7cd7f",
+     "path": "money/My_money_2.11_APK.zip"
     },
     {
      "v": "2.9.0",
@@ -892,19 +929,38 @@ window.HUB = {
      "sha256": null
     },
     {
+     "v": "2.10",
+     "name": "My money 2.10 (Android)",
+     "date": "2026-10-31",
+     "time": "03:44",
+     "group": "site",
+     "kind": "apk",
+     "items": [
+      "Android-сборка 2.10: внутри — 2.8.0 без обновления свайпом (Money_v2.8.0_App_noPTR) байт в байт.",
+      "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.10.zip — на Google Диске, в папке «МайМани»."
+     ],
+     "shots": [],
+     "file": "My_money_2.10_APK.zip",
+     "size": 2134375,
+     "sha256": "290e78a1dca156265e82a8e3354dfbb3ae323bb77aa1d913ad1f51c489f203c0",
+     "path": "money/My_money_2.10_APK.zip"
+    },
+    {
      "v": "2.8.1",
      "name": "",
-     "date": null,
-     "time": null,
+     "date": "2026-10-31",
+     "time": "03:21",
      "group": "site",
      "kind": "web",
      "items": [
-      "Полностью убрано обновление свайпом сверху вниз (pull-to-refresh) на телефоне и ПК, в том числе в обёртке WebIntoApp."
+      "Полностью убрано обновление свайпом сверху вниз (pull-to-refresh) на телефоне и ПК, в том числе в обёртке WebIntoApp.",
+      "Архив Money_v2.8.0_App_noPTR: та же исправленная 2.8.0, index.html лежит прямо в корне архива (для WebIntoApp)."
      ],
      "shots": [],
-     "file": null,
-     "size": null,
-     "sha256": null
+     "file": "Money_v2.8.0_App_noPTR.zip",
+     "size": 30415,
+     "sha256": "943715b850b4334fcb4cdc6fe94e08ff2cde164c27bebab436ffe85b220fb06a",
+     "path": "money/Money_v2.8.0_App_noPTR.zip"
     },
     {
      "v": "2.9",
@@ -995,7 +1051,24 @@ window.HUB = {
      "file": "MyMoney_Widget_GitHub.zip",
      "size": 24390,
      "sha256": "39663b236f2434b88271e0a8697260eb5dcb9825aed5d938ae92a085854fed5b",
-     "missing": true
+     "path": "money/MyMoney_Widget_GitHub.zip"
+    },
+    {
+     "v": "Виджет APK",
+     "name": "My Money — виджет, готовый APK",
+     "date": "2026-11-01",
+     "time": "06:55",
+     "group": "other",
+     "kind": "apk",
+     "items": [
+      "Готовая сборка виджета главного экрана (MyMoneyWidget-3.apk), собранная из проекта «My Money — виджет для Android».",
+      "Ключ подписи виджета (SAVE-KEY-first-run.zip: ключ в base64, пароль, SHA1) на GitHub не выкладывается — он только на Google Диске, в папке «МайМани»."
+     ],
+     "shots": [],
+     "file": "MyMoneyWidget-apk.zip",
+     "size": 2526255,
+     "sha256": "bdc3c99413ef801e61ae480b1b1c0ce869a89b107a037b48225175b98343bcd4",
+     "path": "money/MyMoneyWidget-apk.zip"
     },
     {
      "v": "W95-3",
@@ -1023,7 +1096,7 @@ window.HUB = {
      "file": "MyMoney_Win95_Full_Menu.zip",
      "size": 22528,
      "sha256": "7ba564027dd5a1f6dded1b4cc9ebb6675047b1caac27dbebbb74ec4f294357a1",
-     "missing": true
+     "path": "money/MyMoney_Win95_Full_Menu.zip"
     },
     {
      "v": "W95-2",
@@ -1050,7 +1123,7 @@ window.HUB = {
      "file": "MyMoney_Win95_Fixed.zip",
      "size": 17299,
      "sha256": "aa2bfc763308373a71a1bda1e132a8cf0fde64769f18c85890afbe4d2a90d8c5",
-     "missing": true
+     "path": "money/MyMoney_Win95_Fixed.zip"
     },
     {
      "v": "W95-1",
@@ -1077,7 +1150,7 @@ window.HUB = {
      "file": "MyMoney_Win95.zip",
      "size": 15651,
      "sha256": "89afa7a9c0716ac4972a9671fce6bb99682bb0f12e4fbc21665e5596ca08f0c4",
-     "missing": true
+     "path": "money/MyMoney_Win95.zip"
     },
     {
      "v": "2.11.0",
@@ -1104,7 +1177,7 @@ window.HUB = {
      "file": "Money_v2.11.0_Win95.zip",
      "size": 193490,
      "sha256": "f3951ec834611d245e7a9e3c376d4fc59956bf0acef6b1733bd6a7d762cc1aee",
-     "missing": true
+     "path": "money/Money_v2.11.0_Win95.zip"
     },
     {
      "v": "2.7.0",
@@ -2088,7 +2161,7 @@ window.HUB = {
    "siteBlurb": "Личные заметки: идеи, дела, кино, музыка, фото и настольные игры ДНД, с синхронизацией через Google Диск.",
    "groups": {
     "main": "Версии iLife",
-    "pre": "Предшественник: «Быстрые Заметки», 29 октября 2026"
+    "pre": "Предшественник: «Быстрые Заметки», 29 октября – 1 ноября 2026"
    },
    "versions": [
     {
@@ -2682,6 +2755,22 @@ window.HUB = {
      "size": 385667,
      "sha256": "d31c12709cf9fdf3268e9718e8c0d3f559b20284ada525e5a3d3e770fb3ee338",
      "missing": true
+    },
+    {
+     "v": "Win95",
+     "name": "Quick Notes — тема Windows 95",
+     "date": "2026-11-01",
+     "time": "04:46",
+     "group": "pre",
+     "kind": "web",
+     "items": [
+      "Пробная версия «Быстрых Заметок» в оформлении Windows 95 (index.html, css, js) — в тот же день, что и первые Win95-варианты My Money."
+     ],
+     "shots": [],
+     "file": "QuickNotes_Win95_Theme.zip",
+     "size": 6816,
+     "sha256": "0efde77fd5ec889f5aaee30178bf1578f786436b6ef543d67094e51398566702",
+     "path": "ilife/QuickNotes_Win95_Theme.zip"
     },
     {
      "v": "3.0.0",
