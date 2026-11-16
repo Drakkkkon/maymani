@@ -1,0 +1,97 @@
+:root {
+  --bg: rgba(22, 32, 48, .88);
+  --bg2: rgba(36, 50, 72, .95);
+  --fg: #f2f5fa;
+  --mut: #a9b6c8;
+  --acc: #ffc94a;
+  --line: rgba(255,255,255,.12);
+  --r: 14px;
+  --safeb: env(safe-area-inset-bottom, 0px);
+  --safet: env(safe-area-inset-top, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #9fc6e8; color: var(--fg);
+  font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; user-select: none; -webkit-user-select: none; }
+#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+[hidden] { display: none !important; }
+
+.topbar { position: fixed; left: 8px; right: 8px; top: calc(8px + var(--safet)); display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px 6px 14px; background: var(--bg); border-radius: var(--r); backdrop-filter: blur(8px); z-index: 5; }
+.brand { white-space: nowrap; }
+.ver { color: var(--mut); font-size: 12px; }
+.stats { display: flex; gap: 14px; margin-left: auto; font-size: 14px; white-space: nowrap; }
+.stats b { color: var(--acc); }
+.icon-btn { width: 40px; height: 40px; border: 0; border-radius: 12px; background: var(--bg2); font-size: 20px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.icon-btn:active { transform: scale(.94); }
+
+.cam-btns { position: fixed; right: 8px; top: calc(66px + var(--safet)); display: flex; flex-direction: column; gap: 6px; z-index: 4; }
+.cam-btns .icon-btn { background: var(--bg); }
+
+.hint { position: fixed; left: 50%; top: calc(66px + var(--safet)); transform: translateX(-50%); max-width: calc(100% - 120px);
+  padding: 6px 12px; border-radius: 10px; background: var(--bg); font-size: 13px; color: var(--mut); text-align: center;
+  z-index: 4; pointer-events: none; transition: opacity .3s; }
+.hint.warn { color: #ffb4a8; }
+
+.toolbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(8px + var(--safeb)); display: flex; gap: 4px;
+  padding: 5px; background: var(--bg); border-radius: 18px; z-index: 5; width: min(560px, calc(100% - 16px)); }
+.tool { flex: 1; border: 0; background: transparent; border-radius: 13px; padding: 6px 2px 5px; display: flex; flex-direction: column;
+  align-items: center; gap: 2px; min-width: 0; }
+.tool span { font-size: 22px; line-height: 1.1; }
+.tool small { font-size: 11px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tool.on { background: var(--acc); }
+.tool.on small { color: #2a2205; font-weight: 600; }
+
+.subpanel { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(80px + var(--safeb)); z-index: 5;
+  width: min(560px, calc(100% - 16px)); padding: 8px; background: var(--bg); border-radius: var(--r); display: flex; flex-direction: column; gap: 8px; }
+.row { display: flex; gap: 6px; align-items: center; }
+.chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { border: 1px solid var(--line); background: var(--bg2); border-radius: 999px; padding: 7px 12px; white-space: nowrap; font-size: 14px; flex: none; }
+.chip.on { background: var(--acc); color: #2a2205; border-color: var(--acc); font-weight: 600; }
+.chip .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
+.chip.rot { flex: none; }
+
+.info { position: fixed; z-index: 6; background: var(--bg2); border-radius: var(--r); padding: 14px 14px 12px;
+  left: 8px; right: 8px; bottom: calc(80px + var(--safeb)); max-height: 52vh; overflow-y: auto; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+.info .close, .card .close { position: absolute; right: 8px; top: 8px; width: 34px; height: 34px; font-size: 16px; background: rgba(255,255,255,.08); }
+.info h2 { margin: 0 40px 2px 0; font-size: 18px; }
+.info .sub { color: var(--mut); font-size: 13px; margin-bottom: 10px; }
+.info .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; color: #111; margin-right: 6px; font-weight: 600; }
+.info .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 14px; margin-bottom: 10px; }
+.info .kv span:nth-child(odd) { color: var(--mut); }
+.info .fam { border-top: 1px solid var(--line); padding: 7px 0; font-size: 14px; }
+.info .fam b { display: block; margin-bottom: 2px; }
+.info .fam div { color: #d5deea; }
+.info .more { color: var(--mut); font-size: 13px; padding-top: 6px; border-top: 1px solid var(--line); }
+.info .about { font-size: 14px; color: #d5deea; margin-bottom: 10px; }
+
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 10; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.card { position: relative; background: var(--bg2); border-radius: 18px; padding: 18px; width: min(440px, 100%); max-height: 86vh; overflow-y: auto; }
+.card h2 { margin: 0 40px 12px 0; font-size: 19px; }
+.card .menu-btn { display: block; width: 100%; text-align: left; border: 0; background: rgba(255,255,255,.07); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+.card .menu-btn.danger { color: #ffb4a8; }
+.card ul { padding-left: 18px; margin: 6px 0 12px; }
+.card li { margin-bottom: 4px; }
+.card details { background: rgba(255,255,255,.05); border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
+.card summary { cursor: pointer; font-weight: 600; }
+.card p { margin: 6px 0; color: #d5deea; }
+
+/* Компьютер */
+@media (min-width: 900px) {
+  .topbar { left: 12px; right: auto; top: 12px; min-width: 460px; }
+  .cam-btns { top: 12px; right: 12px; }
+  .hint { top: 72px; left: 12px; transform: none; max-width: 460px; text-align: left; }
+  .info { left: auto; right: 64px; top: 12px; bottom: auto; width: 360px; max-height: calc(100vh - 120px); }
+  .toolbar { bottom: 12px; }
+  .subpanel { bottom: 86px; }
+  .tool small { font-size: 12px; }
+  .tool:hover:not(.on) { background: rgba(255,255,255,.08); }
+  .chip:hover:not(.on) { background: #34496a; }
+}
+@media (max-width: 420px) {
+  .brand b { font-size: 14px; }
+  .ver { display: none; }
+  .stats { gap: 9px; font-size: 13px; }
+}

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#20324a">
+<title>Мое_город</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<header class="topbar">
+  <div class="brand">🏙️ <b>Мое_город</b> <span class="ver" id="ver"></span></div>
+  <div class="stats">
+    <span title="Жители">👥 <b id="stPeople">0</b></span>
+    <span title="Рабочие места">💼 <b id="stJobs">0</b></span>
+    <span title="Здания">🏢 <b id="stBuild">0</b></span>
+  </div>
+  <button class="icon-btn" id="btnMenu" aria-label="Меню">☰</button>
+</header>
+
+<div class="cam-btns">
+  <button class="icon-btn" id="camRotL" aria-label="Повернуть камеру влево">⟲</button>
+  <button class="icon-btn" id="camRotR" aria-label="Повернуть камеру вправо">⟳</button>
+  <button class="icon-btn" id="camIn" aria-label="Приблизить">＋</button>
+  <button class="icon-btn" id="camOut" aria-label="Отдалить">－</button>
+</div>
+
+<div class="hint" id="hint"></div>
+
+<section class="subpanel" id="panelBuild" hidden>
+  <div class="row chips" id="catChips"></div>
+  <div class="row">
+    <div class="chips" id="sizeChips"></div>
+    <button class="chip rot" id="btnRotate" title="Повернуть (R)">↻ Повернуть</button>
+  </div>
+</section>
+
+<section class="subpanel" id="panelRoad" hidden>
+  <div class="row chips" id="roadChips"></div>
+</section>
+
+<nav class="toolbar" id="toolbar">
+  <button class="tool" data-tool="view"><span>👁️</span><small>Смотреть</small></button>
+  <button class="tool" data-tool="build"><span>🏠</span><small>Строить</small></button>
+  <button class="tool" data-tool="road"><span>🛣️</span><small>Дорога</small></button>
+  <button class="tool" data-tool="move"><span>✋</span><small>Перенести</small></button>
+  <button class="tool" data-tool="delete"><span>🗑️</span><small>Удалить</small></button>
+</nav>
+
+<aside class="info" id="info" hidden>
+  <button class="icon-btn close" id="infoClose" aria-label="Закрыть">✕</button>
+  <div id="infoBody"></div>
+</aside>
+
+<div class="modal" id="modal" hidden>
+  <div class="card">
+    <button class="icon-btn close" id="modalClose" aria-label="Закрыть">✕</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<script src="js/three.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
