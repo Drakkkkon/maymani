@@ -1,6 +1,6 @@
-Мое_сайты 2.9.1 (19 ноября 2026)
+Мое_сайты 2.9.2 (19 ноября 2026)
 ================================
-Главная страница с программами и их версиями: My Money, iLife (версии 1.2.1–2.9.1), Геометрия Полки, My_topsecret, Oldbook 95, Мое_коровы (альфа-версии 0.0.1–0.0.4, 0.0.8, 0.1.0–0.1.7), Мое_граббер (сайт 1.0.0–1.4.0, программа для Windows 1.4.0–1.10.0), Мое_наклейки 1.1.0 (сайт заменён на «Мое_граббер»), Мое_город 0.1.0.
+Главная страница с программами и их версиями: My Money, iLife (версии 1.2.1–2.9.1), Геометрия Полки, My_topsecret, Oldbook 95, Мое_коровы (альфа-версии 0.0.1–0.0.4, 0.0.8, 0.1.0–0.1.7), Мое_граббер (сайт 1.0.0–1.4.0, программа для Windows 1.4.0–1.10.0), Мое_наклейки 1.1.0 (сайт заменён на «Мое_граббер»), Мое_город 0.1.0, Мое_лимиты (программа для Windows 1.1.0–1.2.0).
 Адрес: https://drakkkkon.github.io/maymani/index.html
 
 Как устроено
@@ -9,7 +9,7 @@
 - Внизу главной страницы блок «Мои сайты»: иконка, ссылка и одна фраза о сайте.
 
 Где лежат архивы (с 2.6.0)
-- На GitHub, в ветке archives этого же репозитория: папки money/, ilife/, polka/, cows/, grabber/, gorod/, other/.
+- На GitHub, в ветке archives этого же репозитория: папки money/, ilife/, polka/, cows/, grabber/, gorod/, limity/, other/.
   Ссылка: https://github.com/Drakkkkon/maymani/tree/archives
 - Сайт собирается из ветки main, поэтому архивы его не утяжеляют. Кнопка «Скачать» — прямая ссылка на файл, вход в Google не нужен.
 - Новая версия любой программы: положите zip в нужную папку ветки archives (имя с номером версии, например iLife_v2.8.0.zip)
@@ -22,7 +22,7 @@
 - Шесть Android-версий My Money (1.0, 1.1, 1.2, 2.0, 2.1, 2.12) содержат ключ подписи и пароль. Их карточки ведут на ваш Google Диск, к общему закрытому архиву MayMani_PRIVATE_Android_keys.zip. Его нет на GitHub (репозиторий публичный), выкладывать его туда не нужно.
 
 Файлы сайта
-index.html, money.html, ilife.html, polka.html, topsecret.html, oldbook.html, cows.html, grabber.html, nakleyki.html, gorod.html
+index.html, money.html, ilife.html, polka.html, topsecret.html, oldbook.html, cows.html, grabber.html, nakleyki.html, gorod.html, limity.html
 gorod/ — сама игра «Мое_город» (открывается по адресу https://drakkkkon.github.io/maymani/gorod/)
 css/site.css, js/site.js (поведение страниц), js/data.js (все версии и журналы)
 icons/ (иконки), shots/ (скриншоты версий), .nojekyll, .gitignore
@@ -31,6 +31,10 @@ icons/ (иконки), shots/ (скриншоты версий), .nojekyll, .git
 - updates/grabber.json — описание последней версии программы «Мое_граббер» для Windows: номер, заметки, ссылки на архивы
   (обновление кода Moe_grabber_app_vX.zip и полный архив) с размером и SHA-256. Программа читает его при запуске и раз в 6 часов.
 - Новая версия: положить оба архива в ветку archives (grabber/) и обновить updates/grabber.json.
+- updates/limity.json — то же для «Мое_лимиты» (с 1.2.0): номер версии, заметки, ссылка на установщик
+  Moe_limity_Setup_X.exe в ветке archives (limity/), размер и SHA-256. Программа читает файл через 15 секунд
+  после запуска и раз в 6 часов, скачивает установщик, проверяет SHA-256 и ставит его тихо (/S).
+- Новая версия «Мое_лимиты»: положить установщик и архивы в ветку archives (limity/) и обновить updates/limity.json.
 
 Загрузка на GitHub
 Через сайт github.com: Add file, Upload files, перетащите содержимое этой папки (вместе с папками css, js, icons, shots), Commit. Включать Pages заново не нужно, если Pages уже работает для репозитория maymani (Settings, Pages, ветка main, папка /root).
