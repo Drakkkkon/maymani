@@ -22,16 +22,18 @@
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 
   // ---------- Состояние ----------
+  // b.prog (0…1) есть только у зданий, которые ещё строятся.
   var state, occ = new Int32Array(N * N);
   function sizeOk(n) { return typeof n === 'number' && n >= 16 && n <= 160 && (n | 0) === n; }
   function idx(x, z) { return z * N + x; }
   function inMap(x, z) { return x >= 0 && z >= 0 && x < N && z < N; }
   function key(x, z) { return x + ',' + z; }
   function foot(sz, rot) { var s = G.sizes[sz]; return rot % 2 ? { w: s.d, d: s.w } : { w: s.w, d: s.d }; }
+  function isSite(b) { return typeof b.prog === 'number' && b.prog < 1; }
 
   function demoState(n) {
     n = n || G.mapSize;
-    var s = { v: 1, size: n, nextId: 1, buildings: [], roads: {} };
+    var s = emptyState(n);
     var x, z, o = Math.floor((n - 48) / 2); // пример нарисован для 48×48 — ставим его в центр
     function rd(x, z, t) { x += o; z += o; if (x >= 0 && z >= 0 && x < n && z < n) s.roads[key(x, z)] = t; }
     for (x = 12; x <= 36; x++) rd(x, 24, 'asphalt');
@@ -52,21 +54,30 @@
     });
     return s;
   }
-  function emptyState(n) { return { v: 1, size: n || G.mapSize, nextId: 1, buildings: [], roads: {} }; }
+  function emptyState(n) { return { v: 1, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0 }; }
+  function fixState(s) {
+    if (!sizeOk(s.size)) s.size = 48;
+    if (!Array.isArray(s.brigades)) s.brigades = [];
+    s.nextBr = s.nextBr || s.brigades.length + 1;
+    s.spent = s.spent || 0;
+    return s;
+  }
 
   function load() {
     try {
       var s = JSON.parse(localStorage.getItem(SAVE_KEY));
-      if (s && s.v === 1 && Array.isArray(s.buildings) && s.roads) { if (!sizeOk(s.size)) s.size = 48; return s; }
+      if (s && s.v === 1 && Array.isArray(s.buildings) && s.roads) return fixState(s);
     } catch (e) {}
     return null;
   }
   var saveTimer = 0;
   function save() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(function () {
-      try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {}
-    }, 250);
+    saveTimer = setTimeout(saveNow, 250);
+  }
+  function saveNow() {
+    clearTimeout(saveTimer);
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {}
   }
   function rebuildOcc() {
     occ.fill(0);
@@ -87,6 +98,15 @@
     }
     return true;
   }
+
+  // ---------- Доллары ----------
+  function money() { return isFinite(G.money) ? G.money - state.spent : Infinity; }
+  function canPay(x) { return money() >= x; }
+  function pay(x) { state.spent += x; updateMoney(); }
+  function usd(n) { return isFinite(n) ? '$' + Math.round(n).toLocaleString('ru-RU') : '∞'; }
+  function costOf(cat, size) { return Math.round(G.costs[size] * (G.costK[cat] || 1) / 1000) * 1000; }
+  function buildTime(b) { return G.buildTime[b.size] || 20; }
+  function updateMoney() { var m = money(); $('stMoney').textContent = isFinite(m) ? Math.round(m).toLocaleString('ru-RU') : '∞'; }
 
   // ---------- Three.js ----------
   var canvas = $('scene');
@@ -130,7 +150,7 @@
     var ground = new THREE.Mesh(new THREE.PlaneGeometry(N, N), groundMat);
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; mapGroup.add(ground);
     var outer = new THREE.Mesh(new THREE.PlaneGeometry(N * 6, N * 6), outerMat);
-    outer.rotation.x = -Math.PI / 2; outer.position.y = -0.03; mapGroup.add(outer);
+    outer.rotation.x = -Math.PI / 2; outer.position.y = -0.03; outer.receiveShadow = true; mapGroup.add(outer);
     var grid = new THREE.GridHelper(N, N, '#2d4a22', '#2d4a22');
     grid.material.transparent = true; grid.material.opacity = N > 80 ? 0.16 : 0.22; grid.position.y = 0.006; mapGroup.add(grid);
     var t = 0.25, h = 0.12; // рамка карты
@@ -139,9 +159,9 @@
     });
   }
 
-  var buildGroup = new THREE.Group(), roadGroup = new THREE.Group();
-  scene.add(roadGroup); scene.add(buildGroup);
-  var bMeshes = {}, rMeshes = {};
+  var buildGroup = new THREE.Group(), roadGroup = new THREE.Group(), truckGroup = new THREE.Group();
+  scene.add(roadGroup); scene.add(buildGroup); scene.add(truckGroup);
+  var bMeshes = {}, rMeshes = {}, tMeshes = {};
 
   function cellCenter(x, z) { return { x: x - N / 2 + 0.5, z: z - N / 2 + 0.5 }; }
 
@@ -332,16 +352,95 @@
     return g;
   }
 
+  // ---------- Грузовик «Бригада» (зелёный, в стиле 60-х). Смотрит вперёд по +z ----------
+  function truckModel() {
+    var g = new THREE.Group();
+    var GREEN = '#4f8f3e', DARK = '#3b6e2e', CREAM = '#ece4c8', CHROME = '#d9dcd2', TIRE = '#1c1c1c', WOOD = '#a8844f', GLASS = '#9cc3dd';
+    function add(geo, color, x, y, z) { var o = new THREE.Mesh(geo, mat(color)); o.position.set(x, y, z); o.castShadow = true; o.receiveShadow = true; g.add(o); return o; }
+    function box(w, h, d, color, x, y, z) { return add(new THREE.BoxGeometry(w, h, d), color, x, y, z); }
+    // рама
+    box(0.26, 0.05, 0.86, '#2c2c2a', 0, 0.12, -0.02);
+    // колёса с белыми колпаками
+    [[0.15, 0.27], [-0.15, 0.27], [0.15, -0.25], [-0.15, -0.25]].forEach(function (p) {
+      var w = new THREE.CylinderGeometry(0.075, 0.075, 0.06, 14); w.rotateZ(Math.PI / 2); add(w, TIRE, p[0], 0.075, p[1]);
+      var h = new THREE.CylinderGeometry(0.035, 0.035, 0.064, 10); h.rotateZ(Math.PI / 2); add(h, CHROME, p[0], 0.075, p[1]);
+    });
+    // круглые крылья над передними колёсами
+    [0.15, -0.15].forEach(function (x) {
+      var f = new THREE.CylinderGeometry(0.095, 0.095, 0.08, 14, 1, false, 0, Math.PI); f.rotateZ(Math.PI / 2); add(f, DARK, x, 0.1, 0.27);
+    });
+    // капот с округлой крышкой
+    box(0.22, 0.1, 0.22, GREEN, 0, 0.2, 0.33);
+    var hood = new THREE.CylinderGeometry(0.11, 0.11, 0.22, 14, 1, false, Math.PI / 2, Math.PI); hood.rotateX(Math.PI / 2);
+    var hm = add(hood, GREEN, 0, 0.25, 0.33); hm.scale.set(1, 0.5, 1);
+    // хромированная решётка, бампер, круглые фары
+    box(0.15, 0.08, 0.012, CHROME, 0, 0.2, 0.445);
+    for (var i = 0; i < 3; i++) box(0.15, 0.008, 0.016, '#7b7e78', 0, 0.175 + i * 0.025, 0.446);
+    box(0.32, 0.03, 0.035, CHROME, 0, 0.12, 0.46);
+    [0.085, -0.085].forEach(function (x) {
+      var l = new THREE.CylinderGeometry(0.028, 0.028, 0.02, 12); l.rotateX(Math.PI / 2); add(l, '#fff4c2', x, 0.245, 0.447);
+    });
+    // кабина: зелёная, крыша кремовая (двухцветная окраска 60-х)
+    box(0.3, 0.2, 0.2, GREEN, 0, 0.3, 0.12);
+    box(0.31, 0.035, 0.21, CREAM, 0, 0.418, 0.12);
+    box(0.24, 0.085, 0.012, GLASS, 0, 0.345, 0.222);             // лобовое
+    box(0.304, 0.075, 0.12, GLASS, 0, 0.345, 0.125);             // боковые окна
+    box(0.302, 0.02, 0.202, CREAM, 0, 0.27, 0.12);               // молдинг
+    // кузов: деревянные борта, внутри кирпич и доски
+    box(0.32, 0.03, 0.42, WOOD, 0, 0.17, -0.21);
+    box(0.02, 0.1, 0.42, WOOD, 0.15, 0.23, -0.21); box(0.02, 0.1, 0.42, WOOD, -0.15, 0.23, -0.21);
+    box(0.32, 0.1, 0.02, WOOD, 0, 0.23, -0.41); box(0.32, 0.13, 0.02, DARK, 0, 0.245, 0.0);
+    box(0.322, 0.012, 0.422, '#7d6136', 0, 0.255, -0.21);
+    box(0.18, 0.07, 0.14, '#b5563c', -0.04, 0.22, -0.13);
+    box(0.08, 0.04, 0.33, '#e0c48a', 0.08, 0.205, -0.22);
+    // лесенка-стремянка на кузове
+    box(0.04, 0.02, 0.3, '#f0b23c', -0.07, 0.28, -0.26);
+    return g;
+  }
+  var truckTpl = null;
+  function newTruckMesh() { if (!truckTpl) truckTpl = truckModel(); var m = truckTpl.clone(); m.scale.setScalar(0.78); return m; }
+
+  // ---------- Здания и стройплощадки на сцене ----------
   function placeMesh(obj, b) {
     var f = foot(b.size, b.rot);
     obj.position.set(b.x + f.w / 2 - N / 2, 0, b.z + f.d / 2 - N / 2);
     obj.rotation.y = -b.rot * Math.PI / 2;
   }
+  function addSiteParts(g, b) {
+    var s = G.sizes[b.size], W = s.w, D = s.d, site = new THREE.Group();
+    var box = new THREE.Box3().setFromObject(g.userData.model);
+    g.userData.h = Math.max(0.45, box.max.y);
+    function bx(w, h, d, color, x, y, z, shadow) { var o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color)); o.position.set(x, y, z); o.castShadow = !!shadow; o.receiveShadow = true; site.add(o); return o; }
+    bx(W - 0.1, 0.04, D - 0.1, '#a39d92', 0, 0.02, 0);                // фундамент
+    var e = 0.03;                                                     // ограждение
+    bx(W - 0.02, 0.05, e, '#ff8a1f', 0, 0.13, -D / 2 + e); bx(W - 0.02, 0.05, e, '#ff8a1f', 0, 0.13, D / 2 - e);
+    bx(e, 0.05, D - 0.02, '#ff8a1f', -W / 2 + e, 0.13, 0); bx(e, 0.05, D - 0.02, '#ff8a1f', W / 2 - e, 0.13, 0);
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (c) { bx(0.04, 0.18, 0.04, '#f2f2ea', c[0] * (W / 2 - e), 0.09, c[1] * (D / 2 - e), true); });
+    // полоска прогресса над стройкой
+    var bar = new THREE.Group(), bw = Math.min(W, 2.4) * 0.8;
+    var bg = new THREE.Mesh(new THREE.BoxGeometry(bw + 0.08, 0.11, 0.11), mat('#26303d'));
+    var fg = new THREE.BoxGeometry(bw, 0.075, 0.13); fg.translate(bw / 2, 0, 0);
+    var fill = new THREE.Mesh(fg, mat('#5fd35a')); fill.position.x = -bw / 2;
+    bar.add(bg); bar.add(fill); site.add(bar);
+    g.add(site);
+    g.userData.site = site; g.userData.fill = fill; g.userData.bar = bar;
+  }
+  function updateSiteMesh(b) {
+    var g = bMeshes[b.id]; if (!g || !g.userData.site) return;
+    var p = clamp(b.prog, 0, 1), sy = Math.max(0.04, p);
+    g.userData.model.scale.y = sy;
+    g.userData.fill.scale.x = Math.max(0.001, p);
+    g.userData.bar.position.y = g.userData.h * sy + 0.35;
+    dirty();
+  }
   function addBuildingMesh(b) {
-    var g = buildModel(b.cat, b.size, b.seed);
+    var g = new THREE.Group(), m = buildModel(b.cat, b.size, b.seed);
+    g.add(m); g.userData.model = m;
+    if (isSite(b)) addSiteParts(g, b);
     g.traverse(function (o) { o.userData.bid = b.id; });
     placeMesh(g, b);
     buildGroup.add(g); bMeshes[b.id] = g;
+    if (isSite(b)) updateSiteMesh(b);
   }
   function removeBuildingMesh(id) {
     var g = bMeshes[id]; if (!g) return;
@@ -404,6 +503,125 @@
     DIRS.forEach(function (d) { if (inMap(x + d[0], z + d[1])) buildRoadCell(x + d[0], z + d[1]); });
   }
 
+  // ---------- Бригады ----------
+  function parkSpot(i, n) { n = n || N; return { x: ((i % 6) - 2.5) * 0.9, z: n / 2 - 0.9 - Math.floor(i / 6) * 0.9 }; }
+  function siteCenter(b) { var f = foot(b.size, b.rot); return { x: b.x + f.w / 2 - N / 2, z: b.z + f.d / 2 - N / 2 }; }
+  // k-я машина на объекте встаёт вдоль сторон участка
+  function slotPos(b, k) {
+    var f = foot(b.size, b.rot), c = siteCenter(b);
+    var sides = [[0, 1, f.w, f.d], [1, 0, f.d, f.w], [0, -1, f.w, f.d], [-1, 0, f.d, f.w]];
+    for (var lap = 0; lap < 30; lap++) for (var s = 0; s < 4; s++) {
+      var sd = sides[s], len = sd[2], cap = Math.max(1, Math.floor(len / 0.75));
+      if (k < cap) {
+        var t = -len / 2 + (k + 0.5) * len / cap, out = sd[3] / 2 + 0.38 + lap * 0.62;
+        return { x: c.x + sd[0] * out + (sd[1] !== 0 ? t : 0), z: c.z + sd[1] * out + (sd[0] !== 0 ? t : 0), yaw: sd[0] !== 0 ? 0 : Math.PI / 2 };
+      }
+      k -= cap;
+    }
+    return { x: c.x, z: c.z, yaw: 0 };
+  }
+  // Бригады делятся между стройками поровну; уже работающие остаются на своём объекте.
+  function assignBrigades() {
+    var S = state.buildings.filter(isSite), n = state.brigades.length;
+    if (!S.length) { state.brigades.forEach(function (br) { if (br.site) { br.park = { x: br.x, z: br.z }; } br.site = 0; }); return; }
+    var want = {}, have = {};
+    S.forEach(function (s, i) { want[s.id] = Math.floor(n / S.length) + (i < n % S.length ? 1 : 0); have[s.id] = 0; });
+    var free = [];
+    state.brigades.forEach(function (br) {
+      if (br.site && want[br.site] !== undefined && have[br.site] < want[br.site]) have[br.site]++;
+      else free.push(br);
+    });
+    free.forEach(function (br) {
+      var best = 0, bd = 1e9;
+      S.forEach(function (s) {
+        if (have[s.id] >= want[s.id]) return;
+        var c = siteCenter(s), d = Math.hypot(c.x - br.x, c.z - br.z);
+        if (d < bd) { bd = d; best = s.id; }
+      });
+      br.site = best; if (best) have[best]++;
+    });
+  }
+  function siteCrew(id) {
+    var all = 0, here = 0;
+    state.brigades.forEach(function (br) { if (br.site === id) { all++; if (br.work) here++; } });
+    return { all: all, here: here };
+  }
+  function rebuildTrucks() {
+    Object.keys(tMeshes).forEach(function (id) { truckGroup.remove(tMeshes[id]); delete tMeshes[id]; });
+    state.brigades.forEach(addTruck);
+  }
+  function addTruck(br) {
+    var m = newTruckMesh(); m.position.set(br.x, 0, br.z); m.rotation.y = br.yaw || 0;
+    truckGroup.add(m); tMeshes[br.id] = m; dirty();
+  }
+  function buyBrigade() {
+    var u = G.units.brigade;
+    if (!canPay(u.price)) { hint('Не хватает долларов на бригаду', true); return; }
+    pay(u.price);
+    var i = state.brigades.length, p = parkSpot(i);
+    var br = { id: state.nextBr++, x: p.x, z: N / 2 + 1.6, yaw: Math.PI, park: p, site: 0 };
+    state.brigades.push(br); addTruck(br);
+    assignBrigades(); save(); refreshNeed(); renderMech();
+    hint(state.buildings.some(isSite) ? '🚚 Бригада выехала на стройку' : '🚚 Бригада куплена — теперь можно строить');
+  }
+  function sellBrigade() {
+    if (!state.brigades.length) return;
+    var j = state.brigades.length - 1;
+    for (var i = state.brigades.length - 1; i >= 0; i--) if (!state.brigades[i].site) { j = i; break; } // сначала свободную
+    var br = state.brigades.splice(j, 1)[0];
+    if (tMeshes[br.id]) { truckGroup.remove(tMeshes[br.id]); delete tMeshes[br.id]; }
+    state.spent -= Math.round(G.units.brigade.price / 2); updateMoney();
+    assignBrigades(); save(); refreshNeed(); renderMech(); dirty();
+    hint('Бригада продана, вернули ' + usd(G.units.brigade.price / 2));
+  }
+  function angTo(a, b, k) { return a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k; }
+  // Шаг анимации: машины едут к объектам, стройка растёт. Возвращает true, если что-то двигалось.
+  function tickBrigades(dt, t) {
+    if (!state.brigades.length) return false;
+    var any = false, perSite = {}, arrived = {}, u = G.units.brigade;
+    state.brigades.forEach(function (br) {
+      var b = br.site ? getB(br.site) : null, tgt = null, atSite = false;
+      if (b && isSite(b)) { var k = perSite[b.id] || 0; perSite[b.id] = k + 1; tgt = slotPos(b, k); atSite = true; }
+      else if (br.park) tgt = { x: br.park.x, z: br.park.z, yaw: br.yaw };
+      br.work = false;
+      if (tgt) {
+        var dx = tgt.x - br.x, dz = tgt.z - br.z, d = Math.hypot(dx, dz);
+        if (d > 0.02) {
+          var v = Math.max(u.speed, d / 3), st = Math.min(d, v * dt);
+          br.x += dx / d * st; br.z += dz / d * st;
+          br.yaw = angTo(br.yaw || 0, Math.atan2(dx, dz), Math.min(1, dt * 10)); any = true;
+        } else {
+          br.x = tgt.x; br.z = tgt.z;
+          if (Math.abs(Math.atan2(Math.sin(tgt.yaw - br.yaw), Math.cos(tgt.yaw - br.yaw))) > 0.01) { br.yaw = angTo(br.yaw, tgt.yaw, Math.min(1, dt * 8)); any = true; }
+          if (atSite) { br.work = true; arrived[b.id] = (arrived[b.id] || 0) + 1; any = true; }
+        }
+      }
+      var m = tMeshes[br.id];
+      if (m) {
+        m.position.set(br.x, br.work ? Math.abs(Math.sin(t * 0.012 + br.id * 1.7)) * 0.012 : 0, br.z);
+        m.rotation.y = br.yaw || 0; m.rotation.z = br.work ? Math.sin(t * 0.02 + br.id) * 0.02 : 0;
+      }
+    });
+    var done = [];
+    state.buildings.forEach(function (b) {
+      var a = arrived[b.id]; if (!a || !isSite(b)) return;
+      b.prog = Math.min(1, b.prog + dt * a * u.power / buildTime(b));
+      updateSiteMesh(b);
+      if (b.prog >= 1) done.push(b);
+    });
+    done.forEach(finishSite);
+    if (any) dirty();
+    return any;
+  }
+  function finishSite(b) {
+    delete b.prog;
+    removeBuildingMesh(b.id); addBuildingMesh(b);
+    assignBrigades(); updateStats(); saveNow();
+    if (infoId === b.id) renderInfo(b, true);
+    hint('✅ Построено: ' + G.cats[b.cat].names[b.size]);
+    renderMech();
+  }
+
   function rebuildAll() {
     if (!mapGroup.children.length || state.size !== N) { N = state.size; occ = new Int32Array(N * N); buildMapScene(); }
     Object.keys(bMeshes).forEach(function (id) { removeBuildingMesh(+id); });
@@ -411,7 +629,8 @@
     rebuildOcc();
     state.buildings.forEach(addBuildingMesh);
     Object.keys(state.roads).forEach(function (k) { var p = k.split(','); buildRoadCell(+p[0], +p[1]); });
-    updateStats(); dirty();
+    rebuildTrucks(); assignBrigades();
+    updateStats(); updateMoney(); refreshNeed(); dirty();
   }
 
   // ---------- Призрак и курсор ----------
@@ -507,16 +726,17 @@
 
   var HINTS = {
     view: TOUCH ? 'Нажмите на здание — справка. Два пальца — масштаб и поворот.' : 'Нажмите на здание — справка. ЛКМ/ПКМ — двигать карту, колесо — масштаб, Q/E — поворот.',
-    build: TOUCH ? 'Ведите пальцем, отпустите — дом встанет.' : 'Наведите на карту и нажмите, чтобы поставить. R — повернуть.',
+    build: TOUCH ? 'Ведите пальцем, отпустите — начнётся стройка.' : 'Наведите на карту и нажмите — начнётся стройка. R — повернуть.',
     road: 'Ведите по клеткам, чтобы проложить дорогу.',
     move: TOUCH ? 'Возьмите здание пальцем и перетащите на новое место.' : 'Зажмите здание и перетащите на новое место. R — повернуть.',
     delete: 'Нажмите на здание или ведите по дороге, чтобы удалить.'
   };
+  var NO_BRIGADE = 'Сначала купите бригаду: 🚚 Механизмы → Строительство';
   var hintTimer = 0;
   function hint(text, warn) {
     var h = $('hint'); h.textContent = text || HINTS[tool]; h.className = 'hint' + (warn ? ' warn' : ''); h.style.opacity = 1;
     clearTimeout(hintTimer);
-    hintTimer = warn ? setTimeout(function () { hint(); }, 1600) : setTimeout(function () { h.style.opacity = 0; }, 6000);
+    hintTimer = warn ? setTimeout(function () { hint(); }, 2200) : setTimeout(function () { h.style.opacity = 0; }, 6000);
   }
 
   function setTool(t) {
@@ -527,25 +747,25 @@
     hideGhost(); cursor.visible = false;
     if (moving) cancelMove();
     if (t !== 'view') closeInfo();
-    if (t === 'build') setGhost(buildCat, buildSize, buildSeed);
-    hint();
+    if (t === 'build') { setGhost(buildCat, buildSize, buildSeed); refreshNeed(); }
+    if (t === 'build' && !state.brigades.length) hint(NO_BRIGADE, true); else hint();
   }
+  function refreshNeed() { $('needBr').hidden = state.brigades.length > 0; }
+  $('needBuy').addEventListener('click', function () { openMech('build'); });
 
-  // --- миниатюры зданий (рисуются один раз в маленьком отдельном рендере) ---
+  // --- миниатюры (рисуются один раз в маленьком отдельном рендере) ---
   var thumbs = {}, thumbR = null;
-  function thumbUrl(cat, size) {
-    var k = cat + size; if (thumbs[k]) return thumbs[k];
+  function thumbOf(k, make) {
+    if (thumbs[k] !== undefined) return thumbs[k];
     try {
       if (!thumbR) {
-        var tc = document.createElement('canvas'); tc.width = tc.height = 128;
+        var tc = document.createElement('canvas'); tc.width = tc.height = 160;
         thumbR = { r: new THREE.WebGLRenderer({ canvas: tc, antialias: true, alpha: true, preserveDrawingBuffer: true }), s: new THREE.Scene(), c: new THREE.PerspectiveCamera(30, 1, 0.1, 100) };
-        thumbR.r.setSize(128, 128, false);
+        thumbR.r.setSize(160, 160, false);
         thumbR.s.add(new THREE.HemisphereLight('#e6f2ff', '#6d8a55', 1.0));
         var dl = new THREE.DirectionalLight('#fff3dc', 1.5); dl.position.set(-3, 6, 4); thumbR.s.add(dl);
       }
-      var T = thumbR, g = buildModel(cat, size, 12345 + size.length);
-      var s0 = G.sizes[size], pad = new THREE.Mesh(new THREE.BoxGeometry(s0.w, 0.06, s0.d), mat('#8cc068'));
-      pad.position.y = -0.03; g.add(pad);
+      var T = thumbR, g = make();
       T.s.add(g);
       var box = new THREE.Box3().setFromObject(g), sph = box.getBoundingSphere(new THREE.Sphere());
       var dist = sph.radius / Math.sin(THREE.MathUtils.degToRad(T.c.fov / 2)) * 1.02;
@@ -553,9 +773,23 @@
       T.c.lookAt(sph.center); T.c.updateProjectionMatrix();
       T.r.render(T.s, T.c);
       thumbs[k] = T.r.domElement.toDataURL('image/png');
-      T.s.remove(g); g.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
+      T.s.remove(g);
     } catch (e) { thumbs[k] = ''; }
     return thumbs[k];
+  }
+  function thumbUrl(cat, size) {
+    return thumbOf(cat + size, function () {
+      var g = buildModel(cat, size, 12345 + size.length);
+      var s0 = G.sizes[size], pad = new THREE.Mesh(new THREE.BoxGeometry(s0.w, 0.06, s0.d), mat('#8cc068'));
+      pad.position.y = -0.03; g.add(pad); return g;
+    });
+  }
+  function truckThumb() {
+    return thumbOf('truck', function () {
+      var g = new THREE.Group(), t = truckModel(); t.rotation.y = -0.35; g.add(t);
+      var pad = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.04, 1.05), mat('#8cc068')); pad.position.y = -0.02; g.add(pad);
+      return g;
+    });
   }
   function workText(cat, size) {
     var c = G.cats[cat];
@@ -582,14 +816,20 @@
         h += '<button class="bcard' + (on ? ' on' : '') + '" data-cat="' + ck + '" data-size="' + sk + '">' +
           (src ? '<img class="th" alt="" src="' + src + '">' : '<span class="th"></span>') +
           '<span class="tx"><b>' + esc(c.names[sk]) + '</b><small>' + workText(ck, sk) + '</small>' +
-          '<span class="sz"><i style="background:' + c.tag + '"></i>' + G.sizes[sk].label + '</span></span></button>';
+          '<span class="sz"><i style="background:' + c.tag + '"></i>' + G.sizes[sk].label + ' · <em>' + usd(costOf(ck, sk)) + '</em></span></span></button>';
       });
     });
     $('bGrid').innerHTML = h;
     var sel = $('bGrid').querySelector('.bcard.on');
     if (sel) sel.scrollIntoView({ block: 'nearest' });
   }
-  function buildHint() { hint('Строим: ' + G.cats[buildCat].names[buildSize] + ' (' + G.sizes[buildSize].label + '). ' + HINTS.build); }
+  function secText(s) { s = Math.max(1, Math.ceil(s)); return s < 60 ? s + ' с' : Math.floor(s / 60) + ' мин ' + (s % 60 ? s % 60 + ' с' : ''); }
+  function buildHint() {
+    var n = state.brigades.length;
+    if (!n) { hint(NO_BRIGADE, true); return; }
+    hint('Строим: ' + G.cats[buildCat].names[buildSize] + ' (' + G.sizes[buildSize].label + ') · ' + usd(costOf(buildCat, buildSize)) +
+      ' · ⏱ ~' + secText(G.buildTime[buildSize] / n) + ' (' + n + ' ' + plural(n, 'бригада', 'бригады', 'бригад') + ')');
+  }
   $('catChips').addEventListener('click', function (e) {
     var b = e.target.closest('[data-cat]'); if (!b) return;
     buildFilter = b.dataset.cat;
@@ -612,27 +852,37 @@
     if (tool === 'build' && lastHover && ghost && ghost.visible) buildGhostTo(lastHover);
   }
   $('btnRotate').addEventListener('click', rotateCurrent);
-  $('toolbar').addEventListener('click', function (e) { var b = e.target.closest('.tool'); if (b) setTool(b.dataset.tool); });
+  $('toolbar').addEventListener('click', function (e) {
+    var b = e.target.closest('.tool'); if (!b) return;
+    if (b.dataset.tool === 'mech') openMech(); else setTool(b.dataset.tool);
+  });
 
   // --- действия ---
   var lastHover = null;
   function buildGhostTo(c) {
     var o = originFor(buildSize, buildRot, c);
-    showGhostAt(buildSize, buildRot, o.x, o.z, canPlace(buildSize, buildRot, o.x, o.z, 0));
+    showGhostAt(buildSize, buildRot, o.x, o.z, canPlace(buildSize, buildRot, o.x, o.z, 0) && state.brigades.length > 0);
     return o;
   }
   function placeBuilding(c) {
-    var o = originFor(buildSize, buildRot, c);
+    if (!state.brigades.length) { hint(NO_BRIGADE, true); return; }
+    var o = originFor(buildSize, buildRot, c), cost = costOf(buildCat, buildSize);
     if (!canPlace(buildSize, buildRot, o.x, o.z, 0)) { hint('Здесь занято или край карты', true); return; }
-    var b = { id: state.nextId++, cat: buildCat, size: buildSize, x: o.x, z: o.z, rot: buildRot, seed: buildSeed };
+    if (!canPay(cost)) { hint('Не хватает долларов: нужно ' + usd(cost), true); return; }
+    pay(cost);
+    var b = { id: state.nextId++, cat: buildCat, size: buildSize, x: o.x, z: o.z, rot: buildRot, seed: buildSeed, prog: 0 };
     state.buildings.push(b); markOcc(b, b.id); addBuildingMesh(b);
+    assignBrigades();
     buildSeed = newSeed(); setGhost(buildCat, buildSize, buildSeed);
-    save(); updateStats(); dirty();
+    save(); updateStats(); renderMech(); dirty();
+    var crew = siteCrew(b.id).all;
+    hint(crew ? '🏗️ Стройка началась: ' + G.cats[b.cat].names[b.size] : '🏗️ Стройка ждёт: все бригады заняты — купите ещё, чтобы быстрее');
   }
   function deleteBuilding(b) {
     markOcc(b, 0); removeBuildingMesh(b.id);
     state.buildings.splice(state.buildings.indexOf(b), 1);
     if (infoId === b.id) closeInfo();
+    if (isSite(b)) { assignBrigades(); renderMech(); }
     save(); updateStats(); dirty();
   }
   function setRoad(x, z, t) {
@@ -732,7 +982,7 @@
       var c = centroid();
       cam.dist = gest.dist * (gest.c.d / Math.max(c.d, 1));
       cam.yaw = gest.yaw - (c.ang - gest.c.ang);
-            updateCam();
+      updateCam();
       var g2 = groundAt(c.x, c.y);
       if (g2 && gest.grab) { cam.tx -= g2.x - gest.grab.x; cam.tz -= g2.z - gest.grab.z; updateCam(); }
       return;
@@ -793,7 +1043,7 @@
     // второй палец быстро после первого — отменить случайную дорогу/удаление
     if (g.touch && Date.now() - g.t < 450) {
       if (tool === 'road' && g.snap) { state.roads = JSON.parse(g.snap); rebuildAll(); save(); }
-      if (tool === 'delete' && g.snap) { state = JSON.parse(g.snap); rebuildAll(); save(); }
+      if (tool === 'delete' && g.snap) { state = fixState(JSON.parse(g.snap)); rebuildAll(); save(); }
     }
     cursor.visible = false; gest = null; dirty();
   }
@@ -813,7 +1063,8 @@
     if (k === 'q' || k === 'й') { cam.yaw += Math.PI / 8; updateCam(); }
     else if (k === 'e' || k === 'у') { cam.yaw -= Math.PI / 8; updateCam(); }
     else if (k === 'r' || k === 'к') rotateCurrent();
-    else if (k === 'escape') { if (!$('modal').hidden) closeModal(); else { closeInfo(); setTool('view'); } }
+    else if (k === 'escape') { if (!$('modal').hidden) closeModal(); else if (!$('mech').hidden) closeMech(); else { closeInfo(); setTool('view'); } }
+    else if (k === '6') openMech();
     else if ('12345'.indexOf(k) >= 0 && k) setTool(['view', 'build', 'road', 'move', 'delete'][+k - 1]);
     else if (k === '+' || k === '=') { cam.dist /= 1.2; updateCam(); }
     else if (k === '-') { cam.dist *= 1.2; updateCam(); }
@@ -822,6 +1073,7 @@
   window.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
   window.addEventListener('blur', function () { keys = {}; });
   function keyPan(dt) {
+    if (!$('mech').hidden) return;
     var f = 0, s = 0;
     if (keys.w || keys['ц'] || keys.arrowup) f += 1;
     if (keys.s || keys['ы'] || keys.arrowdown) f -= 1;
@@ -836,6 +1088,60 @@
   $('camRotR').addEventListener('click', function () { cam.yaw -= Math.PI / 8; updateCam(); });
   $('camIn').addEventListener('click', function () { cam.dist /= 1.25; updateCam(); });
   $('camOut').addEventListener('click', function () { cam.dist *= 1.25; updateCam(); });
+
+  // ---------- Страница «Механизмы» ----------
+  var mechTab = 'build';
+  function openMech(tab) {
+    if (tab) mechTab = tab;
+    closeInfo(); if (moving) cancelMove();
+    $('mech').hidden = false;
+    document.querySelector('.tool.mech').classList.add('open');
+    $('mechTabs').innerHTML = G.mechTabs.map(function (t) { return '<button class="tab' + (t.id === mechTab ? ' on' : '') + '" data-tab="' + t.id + '">' + t.label + '</button>'; }).join('');
+    var h = '';
+    Object.keys(G.units).forEach(function (k) {
+      var u = G.units[k]; if (u.tab !== mechTab) return;
+      var src = k === 'brigade' ? truckThumb() : '';
+      h += '<div class="unit">' + (src ? '<img class="uimg" alt="" src="' + src + '">' : '<span class="uimg"></span>') +
+        '<div class="uinfo"><h3>' + esc(u.name) + '</h3><p>' + esc(u.about) + '</p>' +
+        '<div class="ukv"><span>Цена</span><span class="usd">' + usd(u.price) + '</span>' +
+        '<span>В парке</span><span><b id="mHave">0</b></span>' +
+        '<span>Сейчас строят</span><span id="mBusy">—</span>' +
+        '<span>Скорость</span><span id="mSpeed">—</span></div></div></div>' +
+        '<div class="ubtns"><button class="btn-buy" data-act="buy">Купить за ' + usd(u.price) + '</button>' +
+        '<button class="btn-sell" data-act="sell" id="mSell">Продать</button></div>';
+    });
+    h += '<h4>Стройки</h4><div id="mSites"></div>' +
+      '<p class="note">Как это работает: без бригады строить нельзя. Поставьте здание — бригада приедет, и дом начнёт расти. ' +
+      'Бригады делятся между стройками поровну; две бригады на одном доме строят вдвое быстрее. Деньги пока бесконечные (∞), продажа возвращает половину цены.</p>';
+    $('mechBody').innerHTML = h;
+    renderMech();
+  }
+  function closeMech() { $('mech').hidden = true; document.querySelector('.tool.mech').classList.remove('open'); }
+  function renderMech() {
+    if ($('mech').hidden || !$('mHave')) return;
+    var n = state.brigades.length, busy = 0;
+    state.brigades.forEach(function (br) { if (br.site) busy++; });
+    $('mHave').textContent = n;
+    $('mBusy').textContent = n ? busy + ' из ' + n : 'нет бригад';
+    $('mSpeed').textContent = n ? 'одна стройка — до ×' + n : 'стройка невозможна';
+    $('mSell').disabled = !n;
+    var S = state.buildings.filter(isSite), h = '';
+    S.forEach(function (b) {
+      var crew = siteCrew(b.id), left = (1 - b.prog) * buildTime(b) / Math.max(1, crew.all), pct = Math.floor(b.prog * 100);
+      h += '<div class="site-row"><div class="sr-top"><b>' + esc(G.cats[b.cat].names[b.size]) + '</b><span>' + pct + '%</span></div>' +
+        '<div class="pbar"><i style="width:' + pct + '%"></i></div>' +
+        '<div style="font-size:13px;color:#a9b6c8;margin:-4px 0 8px">' + (crew.all ? '🚚 ' + crew.all + ' ' + plural(crew.all, 'бригада', 'бригады', 'бригад') +
+          (crew.here < crew.all ? ' (едут: ' + (crew.all - crew.here) + ')' : '') + ' · осталось ≈ ' + secText(left) : '<span class="wait">ждёт свободную бригаду</span>') + '</div></div>';
+    });
+    $('mSites').innerHTML = h || '<div class="empty">Сейчас ничего не строится.</div>';
+  }
+  $('mechClose').addEventListener('click', closeMech);
+  $('mech').addEventListener('click', function (e) {
+    if (e.target === $('mech')) { closeMech(); return; }
+    var t = e.target.closest('[data-tab]'); if (t) { openMech(t.dataset.tab); return; }
+    var a = e.target.closest('[data-act]'); if (!a) return;
+    if (a.dataset.act === 'buy') buyBrigade(); else if (a.dataset.act === 'sell') sellBrigade();
+  });
 
   // ---------- Жители и сотрудники ----------
   var P = G.people;
@@ -895,12 +1201,20 @@
   // ---------- Справка о здании ----------
   var infoId = 0;
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function openInfo(b) {
+  function openInfo(b) { renderInfo(b, false); }
+  function renderInfo(b, keepScroll) {
     infoId = b.id;
     var c = G.cats[b.cat], name = c.names[b.size], h = '';
     h += '<h2>' + esc(name) + '</h2>';
     h += '<div class="sub"><span class="tag" style="background:' + c.tag + '">' + esc(c.label) + '</span>' + esc(address(b)) + ' · ' + G.sizes[b.size].label + '</div>';
-    if (b.cat === 'res') {
+    if (isSite(b)) {
+      var crew = siteCrew(b.id), pct = Math.floor(b.prog * 100), left = (1 - b.prog) * buildTime(b) / Math.max(1, crew.all);
+      h += '<div class="build-now">🏗️ Идёт стройка — ' + pct + '%</div><div class="pbar"><i style="width:' + pct + '%"></i></div>';
+      h += '<div class="kv"><span>Бригады</span><span>' + (crew.all ? crew.all + (crew.here < crew.all ? ' (в пути ' + (crew.all - crew.here) + ')' : ' на месте') : state.brigades.length ? 'ждёт свободную' : 'нет — купите в «Механизмы»') + '</span>' +
+        (crew.all ? '<span>Осталось</span><span>≈ ' + secText(left) + '</span>' : '') +
+        '<span>Цена</span><span>' + usd(costOf(b.cat, b.size)) + '</span>' +
+        '<span>После стройки</span><span>' + (b.cat === 'res' ? 'заедут ' + c.families[b.size] + ' ' + plural(c.families[b.size], 'семья', 'семьи', 'семей') : 'работа для ~' + c.staff[b.size] + ' чел.') + '</span></div>';
+    } else if (b.cat === 'res') {
       var R = residents(b);
       h += '<div class="kv"><span>Живут</span><span><b>' + R.total + '</b> чел., ' + R.families.length + ' ' + plural(R.families.length, 'семья', 'семьи', 'семей') + '</span>' +
         '<span>Дорога рядом</span><span>' + roadNear(b) + '</span></div>';
@@ -925,7 +1239,7 @@
         if (w.staff - 1 > w.team.length) h += '<div class="more">…и ещё ' + (w.staff - 1 - w.team.length) + ' чел.</div>';
       }
     }
-    $('infoBody').innerHTML = h; $('info').hidden = false; $('info').scrollTop = 0;
+    $('infoBody').innerHTML = h; $('info').hidden = false; if (!keepScroll) $('info').scrollTop = 0;
     highlight(b.id);
   }
   function famName(s) { return /(ов|ев|ин)$/.test(s) ? s + 'ых' : s; }
@@ -945,11 +1259,14 @@
 
   // ---------- Статистика ----------
   function updateStats() {
-    var people = 0, jobs = 0;
-    state.buildings.forEach(function (b) { if (b.cat === 'res') people += residents(b).total; else jobs += workplace(b).staff; });
+    var people = 0, jobs = 0, built = 0;
+    state.buildings.forEach(function (b) {
+      if (isSite(b)) return; built++;
+      if (b.cat === 'res') people += residents(b).total; else jobs += workplace(b).staff;
+    });
     $('stPeople').textContent = people.toLocaleString('ru-RU');
     $('stJobs').textContent = jobs.toLocaleString('ru-RU');
-    $('stBuild').textContent = state.buildings.length;
+    $('stBuild').textContent = built;
   }
 
   // ---------- Меню ----------
@@ -959,15 +1276,20 @@
   $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeModal(); });
 
   function helpHtml() {
-    return '<details' + (TOUCH ? ' open' : '') + '><summary>Телефон и планшет</summary><ul>' +
+    return '<details open><summary>🚚 Бригады и стройка</summary><ul>' +
+      '<li>Строить можно только с бригадой. Откройте 🚚 «Механизмы» → «Строительство» и купите «Бригаду» — зелёный грузовик.</li>' +
+      '<li>Поставьте здание: бригада приедет, дом начнёт расти, над ним — полоска прогресса.</li>' +
+      '<li>Чем больше бригад, тем быстрее. Бригады делятся между стройками поровну.</li>' +
+      '<li>Доллары — вверху экрана. Пока их бесконечно (∞), но у зданий и бригад уже есть цены.</li></ul></details>' +
+      '<details' + (TOUCH ? ' open' : '') + '><summary>Телефон и планшет</summary><ul>' +
       '<li>Один палец — двигать карту (в режиме «Смотреть»).</li><li>Два пальца — масштаб (щипок) и поворот карты.</li>' +
-      '<li>«Строить»: выберите вид и размер, коснитесь карты и ведите пальцем, отпустите — дом встанет. Зелёная клетка — можно, красная — занято.</li>' +
+      '<li>«Строить»: выберите вид и размер, коснитесь карты и ведите пальцем, отпустите — начнётся стройка. Зелёная клетка — можно, красная — занято.</li>' +
       '<li>«Дорога»: ведите пальцем по клеткам. «Переместить»: возьмите дом и перетащите. «Удалить»: нажмите на дом или ведите по дороге.</li>' +
       '<li>Кнопки справа: поворот камеры и масштаб.</li></ul></details>' +
       '<details' + (TOUCH ? '' : ' open') + '><summary>Компьютер</summary><ul>' +
       '<li>Левая кнопка — действие (в «Смотреть» — двигать карту и открыть справку).</li><li>Правая кнопка — двигать карту, колёсико — масштаб, средняя кнопка или Shift+правая — поворот и наклон.</li>' +
       '<li>Размер карты (от 32×32 до 128×128) — в меню ☰ → «Размер карты». Можно расширить карту, не теряя город.</li>' +
-      '<li>W A S D или стрелки — двигать карту, Q / E — поворот камеры, R — повернуть дом, 1–5 — инструменты, Esc — «Смотреть».</li></ul></details>' +
+      '<li>W A S D или стрелки — двигать карту, Q / E — поворот камеры, R — повернуть дом, 1–5 — инструменты, 6 — «Механизмы», Esc — «Смотреть».</li></ul></details>' +
       '<details><summary>Здания</summary><ul>' + Object.keys(G.cats).map(function (k) {
         var c = G.cats[k]; return '<li><b>' + c.label + '</b>: ' + Object.keys(G.sizes).map(function (s) { return G.sizes[s].label + ' ' + c.names[s].toLowerCase(); }).join(', ') + '.</li>';
       }).join('') + '</ul></details>';
@@ -979,10 +1301,11 @@
     openModal('<h2>Мое_город ' + G.version + '</h2>' +
       '<button class="menu-btn" data-m="help">❓ Как играть</button>' +
       '<button class="menu-btn" data-m="news">📝 Что нового</button>' +
+      '<button class="menu-btn" data-m="mech">🚚 Механизмы</button>' +
       '<button class="menu-btn" data-m="size">🗺️ Размер карты <span style="float:right;color:#a9b6c8">' + N + '×' + N + '</span></button>' +
       '<button class="menu-btn" data-m="demo">🏘️ Загрузить город-пример</button>' +
       '<button class="menu-btn danger" data-m="clear">🧹 Новая пустая карта</button>' +
-      '<p style="font-size:13px;color:#a9b6c8">Город сохраняется сам в этом браузере.</p>');
+      '<p style="font-size:13px;color:#a9b6c8">Город сохраняется сам в этом браузере. Бригады переезжают на новую карту вместе с вами.</p>');
   }
   var pickSize = 0;
   function sizeLabel(n) { for (var i = 0; i < G.mapSizes.length; i++) if (G.mapSizes[i].n === n) return G.mapSizes[i].label; return 'Своя'; }
@@ -1018,8 +1341,18 @@
       var p = k.split(','), x = +p[0] + o, z = +p[1] + o;
       if (x >= 0 && z >= 0 && x < n && z < n) nr[key(x, z)] = state.roads[k];
     });
+    state.brigades.forEach(function (br, i) {
+      br.x = clamp(br.x, -n / 2, n / 2); br.z = clamp(br.z, -n / 2, n / 2 + 2);
+      if (br.park) br.park = parkSpot(i, n);
+    });
     state.buildings = nb; state.roads = nr; state.size = n;
     resCache = {}; workCache = {};
+  }
+  // Новая карта: бригады и потраченные доллары переезжают с игроком
+  function carryUnits(s) {
+    s.brigades = state.brigades.map(function (br, i) { var p = parkSpot(i, s.size); return { id: br.id, x: p.x, z: p.z, yaw: Math.PI, park: p, site: 0 }; });
+    s.nextBr = state.nextBr; s.spent = state.spent;
+    return s;
   }
   function applyState(s, keepCam) {
     state = s; closeInfo(); cancelMove(); rebuildAll(); save();
@@ -1035,6 +1368,7 @@
     var sb = e.target.closest('[data-n]');
     if (sb) { pickSize = +sb.dataset.n; confirmArm = ''; openSize(); return; }
     if (m === 'help') openModal('<h2>Как играть</h2>' + helpHtml());
+    else if (m === 'mech') { closeModal(); openMech(); }
     else if (m === 'size') { pickSize = N; confirmArm = ''; openSize(); }
     else if (m === 'resize') {
       var L = lostCount(pickSize);
@@ -1043,24 +1377,32 @@
     }
     else if (m === 'newdemo' || m === 'newempty') {
       if (confirmArm !== m) { confirmArm = m; b.textContent = 'Точно? Текущий город пропадёт — нажмите ещё раз'; return; }
-      confirmArm = ''; applyState(m === 'newdemo' ? demoState(pickSize) : emptyState(pickSize), false);
+      confirmArm = ''; applyState(carryUnits(m === 'newdemo' ? demoState(pickSize) : emptyState(pickSize)), false);
     }
     else if (m === 'news') openModal('<h2>Что нового</h2>' + changelogHtml());
     else if (m === 'demo' || m === 'clear') {
       if (confirmArm !== m) { confirmArm = m; b.textContent = 'Точно? Текущий город пропадёт — нажмите ещё раз'; return; }
-      confirmArm = ''; applyState(m === 'demo' ? demoState(N) : emptyState(N), true);
+      confirmArm = ''; applyState(carryUnits(m === 'demo' ? demoState(N) : emptyState(N)), true);
     }
   });
 
   // ---------- Цикл отрисовки ----------
-  var needRender = true, lastT = performance.now();
+  var needRender = true, lastT = performance.now(), lastSave = 0, lastUi = 0;
   function dirty() { needRender = true; }
   function loop(t) {
     var dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
     keyPan(dt);
+    var active = tickBrigades(dt, t);
+    if (active && t - lastSave > 2000) { saveNow(); lastSave = t; }
+    if (t - lastUi > 400) {
+      lastUi = t;
+      if (infoId) { var ib = getB(infoId); if (ib && isSite(ib)) renderInfo(ib, true); }
+      if (active) renderMech();
+    }
     if (needRender) { renderer.render(scene, camera); needRender = false; }
     requestAnimationFrame(loop);
   }
+  window.addEventListener('pagehide', saveNow);
 
   // ---------- Старт ----------
   state = load() || demoState(G.mapSize);
@@ -1071,9 +1413,10 @@
   try {
     var seen = localStorage.getItem(SEEN_KEY);
     if (seen !== G.version) {
-      openModal(seen ? '<h2>Что нового в ' + G.version + '</h2>' + changelogHtml() : '<h2>Добро пожаловать в «Мое_город»!</h2><p>Стройте дома, службы и дороги. Нажмите на любое здание, чтобы узнать, кто там живёт.</p>' + helpHtml());
+      openModal(seen ? '<h2>Что нового в ' + G.version + '</h2>' + changelogHtml() : '<h2>Добро пожаловать в «Мое_город»!</h2><p>Купите бригаду в 🚚 «Механизмы», стройте дома, службы и дороги. Нажмите на любое здание, чтобы узнать, кто там живёт.</p>' + helpHtml());
       localStorage.setItem(SEEN_KEY, G.version);
     }
   } catch (e) {}
-  window.__gorod = { state: function () { return state; }, size: function () { return N; }, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam };
+  window.__gorod = { state: function () { return state; }, size: function () { return N; }, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam,
+    buy: buyBrigade, openMech: openMech, place: function (cat, size, x, z) { buildCat = cat; buildSize = size; buildRot = 0; placeBuilding({ px: x + G.sizes[size].w / 2, pz: z + G.sizes[size].d / 2 }); } };
 })();

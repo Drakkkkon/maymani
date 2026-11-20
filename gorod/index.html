@@ -14,6 +14,7 @@
 <header class="topbar">
   <div class="brand">🏙️ <b>Мое_город</b> <span class="ver" id="ver"></span></div>
   <div class="stats">
+    <span class="money" title="Доллары">$ <b id="stMoney">∞</b></span>
     <span title="Жители">👥 <b id="stPeople">0</b></span>
     <span title="Рабочие места">💼 <b id="stJobs">0</b></span>
     <span title="Здания">🏢 <b id="stBuild">0</b></span>
@@ -31,6 +32,7 @@
 <div class="hint" id="hint"></div>
 
 <section class="subpanel" id="panelBuild" hidden>
+  <div class="need" id="needBr" hidden>🚚 <span>Нет бригады — строить некому.</span><button id="needBuy">Купить бригаду</button></div>
   <div class="row">
     <div class="chips" id="catChips"></div>
     <button class="chip rot" id="btnRotate" title="Повернуть (R)">↻</button>
@@ -48,12 +50,25 @@
   <button class="tool" data-tool="road"><span>🛣️</span><small>Дорога</small></button>
   <button class="tool" data-tool="move"><span>✋</span><small>Перенести</small></button>
   <button class="tool" data-tool="delete"><span>🗑️</span><small>Удалить</small></button>
+  <button class="tool mech" data-tool="mech"><span>🚚</span><small>Механизмы</small></button>
 </nav>
 
 <aside class="info" id="info" hidden>
   <button class="icon-btn close" id="infoClose" aria-label="Закрыть">✕</button>
   <div id="infoBody"></div>
 </aside>
+
+<!-- Страница «Механизмы» -->
+<section class="page" id="mech" hidden>
+  <div class="page-card">
+    <div class="page-head">
+      <h2>🚚 Механизмы</h2>
+      <button class="icon-btn" id="mechClose" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="tabs" id="mechTabs"></div>
+    <div class="page-body" id="mechBody"></div>
+  </div>
+</section>
 
 <div class="modal" id="modal" hidden>
   <div class="card">
