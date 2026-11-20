@@ -17,6 +17,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #9fc6e8; col
 /* Изометрия: крупные пиксели, как в старых SimCity */
 #scene.iso { image-rendering: pixelated; image-rendering: crisp-edges; }
 body.iso { background: #10141c; }
+/* «ИЗО HD» — без пикселизации, полное разрешение и сглаживание */
 button { font: inherit; color: inherit; cursor: pointer; }
 [hidden] { display: none !important; }
 
@@ -39,6 +40,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .cam-btns { position: fixed; right: 8px; top: calc(66px + var(--safet)); display: flex; flex-direction: column; gap: 6px; z-index: 4; }
 .cam-btns .icon-btn { background: var(--bg); }
 .cam-btns .mode-btn { font-size: 12px; font-weight: 800; letter-spacing: .3px; color: var(--acc); }
+.cam-btns .mode-btn.hd { color: #1d2a3d; background: linear-gradient(135deg, #ffe48a, #ffc94a 55%, #ff9f4a); }
+.card .menu-btn.cur { outline: 2px solid var(--acc); }
 
 .hint { position: fixed; left: 50%; top: calc(66px + var(--safet)); transform: translateX(-50%); max-width: calc(100% - 120px);
   padding: 6px 12px; border-radius: 10px; background: var(--bg); font-size: 13px; color: var(--mut); text-align: center;

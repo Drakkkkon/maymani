@@ -1,5 +1,6 @@
 // «Мое_город» — градостроитель на Babylon.js.
-// Два вида: «3D» (свободная камера) и «ИЗО» (изометрия как в старых SimCity).
+// Три вида: «3D» (свободная камера), «ИЗО» (изометрия с крупными пикселями, как в старых SimCity)
+// и «ИЗО HD» (та же изометрия, но с полным разрешением, сглаживанием, SSAO и подробными текстурами).
 // Одинаковые здания рисуются пачками (thin instances): тысячи домов — это десятки вызовов отрисовки.
 (function () {
   'use strict';
@@ -161,8 +162,77 @@
     else if (style === 'shop') win(6, 14, 52, 42, ['#c3def2', '#6f98bd'], '#ffffff');
     return c;
   }
+  // Окна для «ИЗО HD»: та же раскладка, но 256×256 — рамы, подоконники, блики на стекле, фактура стен.
+  function shade(c, k) { // осветлить (k>0) или затемнить (k<0) цвет #rrggbb
+    var n = parseInt(c.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    function f(v) { return Math.round(k > 0 ? v + (255 - v) * k : v * (1 + k)); }
+    return 'rgb(' + f(r) + ',' + f(g) + ',' + f(b) + ')';
+  }
+  function windowCanvasHD(style, wall) {
+    var S = 256, c = document.createElement('canvas'); c.width = c.height = S;
+    var g = c.getContext('2d'), r = rng(style.length * 131 + parseInt(wall.slice(1), 16));
+    g.fillStyle = wall; g.fillRect(0, 0, S, S);
+    // штукатурка: мелкий шум
+    for (var i = 0; i < 1800; i++) {
+      g.fillStyle = r() > 0.5 ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
+      g.fillRect(r() * S, r() * S, 1 + r() * 2, 1 + r() * 2);
+    }
+    // межэтажный пояс сверху и тень снизу
+    g.fillStyle = shade(wall, 0.18); g.fillRect(0, 0, S, 6);
+    g.fillStyle = 'rgba(0,0,0,.10)'; g.fillRect(0, 6, S, 3);
+    g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(0, S - 4, S, 4);
+    function glass(x, y, w, h, c0, c1) {
+      var gr = g.createLinearGradient(x, y, x + w * 0.4, y + h);
+      gr.addColorStop(0, c0); gr.addColorStop(1, c1);
+      g.fillStyle = gr; g.fillRect(x, y, w, h);
+      // отражение неба — косая светлая полоса
+      g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+      g.fillStyle = 'rgba(255,255,255,.22)';
+      g.beginPath(); g.moveTo(x + w * 0.15, y + h); g.lineTo(x + w * 0.45, y); g.lineTo(x + w * 0.62, y); g.lineTo(x + w * 0.32, y + h); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.12)';
+      g.beginPath(); g.moveTo(x + w * 0.5, y + h); g.lineTo(x + w * 0.8, y); g.lineTo(x + w * 0.88, y); g.lineTo(x + w * 0.58, y + h); g.fill();
+      // тень от рамы сверху
+      g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x, y, w, Math.max(3, h * 0.06));
+      g.restore();
+    }
+    function win(x, y, w, h, c0, c1, frame, opt) {
+      opt = opt || {};
+      x *= 4; y *= 4; w *= 4; h *= 4;
+      var fw = opt.fw || 7;
+      g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x - fw + 3, y - fw + 4, w + fw * 2, h + fw * 2); // тень проёма
+      g.fillStyle = frame; g.fillRect(x - fw, y - fw, w + fw * 2, h + fw * 2);
+      g.fillStyle = shade(frame, -0.18); g.fillRect(x - fw, y + h, w + fw * 2, fw);            // низ рамы темнее
+      glass(x, y, w, h, c0, c1);
+      g.fillStyle = frame;
+      if (opt.cross) { g.fillRect(x + w / 2 - 3, y, 6, h); g.fillRect(x, y + h * 0.38 - 3, w, 6); }
+      if (opt.vbars) for (var k = 1; k < opt.vbars; k++) g.fillRect(x + w * k / opt.vbars - 3, y, 6, h);
+      if (opt.curtain) { g.fillStyle = opt.curtain; g.fillRect(x + 2, y + 2, w * 0.22, h - 4); g.fillRect(x + w - w * 0.22 - 2, y + 2, w * 0.22, h - 4); }
+      if (opt.sill) { // подоконник
+        g.fillStyle = '#f4f2ec'; g.fillRect(x - fw - 6, y + h + fw, w + fw * 2 + 12, 8);
+        g.fillStyle = 'rgba(0,0,0,.22)'; g.fillRect(x - fw - 4, y + h + fw + 8, w + fw * 2 + 8, 5);
+      }
+    }
+    var CUR = ['#f3e6c4', '#e9c9c0', '#d8e4c9', '#f1efe9'];
+    if (style === 'res') win(18, 18, 28, 28, '#b9d6ee', '#557ca3', '#fbf8f0', { cross: true, sill: true, curtain: pick(r, CUR) });
+    else if (style === 'office') win(4, 20, 56, 24, '#a9c7e3', '#4c7099', '#e8edf2', { vbars: 4, fw: 5 });
+    else if (style === 'glass') {
+      var gr = g.createLinearGradient(0, 0, S * 0.5, S); gr.addColorStop(0, '#9cc6ea'); gr.addColorStop(0.55, shade(wall, 0.1)); gr.addColorStop(1, shade(wall, -0.25));
+      g.fillStyle = gr; g.fillRect(0, 0, S, S);
+      g.fillStyle = 'rgba(255,255,255,.18)';
+      g.beginPath(); g.moveTo(0, S * 0.9); g.lineTo(S * 0.55, 0); g.lineTo(S * 0.75, 0); g.lineTo(S * 0.2, S); g.lineTo(0, S); g.fill();
+      g.fillStyle = 'rgba(200,225,248,.85)'; g.fillRect(0, 0, S, 8); g.fillRect(0, 0, 8, S);
+      g.fillStyle = 'rgba(20,40,70,.35)'; g.fillRect(0, 8, S, 4); g.fillRect(S / 2 - 2, 8, 4, S - 8);
+    }
+    else if (style === 'army') win(22, 24, 20, 14, '#6a7a60', '#2c3628', '#4b553a', { fw: 5, vbars: 2 });
+    else if (style === 'gov') win(22, 12, 20, 40, '#b4cfe6', '#53769a', '#fffdf6', { cross: true, sill: true, fw: 6 });
+    else if (style === 'shop') {
+      win(6, 14, 52, 42, '#d2e8f7', '#6690b6', '#ffffff', { vbars: 3, fw: 6 });
+      g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(0, 0, S, 40);   // тень от козырька
+    }
+    return c;
+  }
   function makeKit(sc) {
-    var mats = {}, wallM = {};
+    var mats = {}, wallM = {}, wallInfo = [], kitHD = false;
     function base(name) { var m = new B.StandardMaterial(name, sc); m.specularColor = B.Color3.Black(); return m; }
     return {
       scene: sc,
@@ -172,12 +242,25 @@
       },
       wall: function (style, wall) {
         var k = style + wall; if (wallM[k]) return wallM[k];
-        var t = new B.DynamicTexture('t' + k, windowCanvas(style, wall), sc, true);
-        t.update(); t.wrapU = t.wrapV = B.Texture.WRAP_ADDRESSMODE; t.anisotropicFilteringLevel = 4;
-        var m = base('w' + k); m.diffuseTexture = t; m.diffuseColor = B.Color3.White();
+        var m = base('w' + k), info = { m: m, style: style, wall: wall, lo: null, hi: null };
+        m.diffuseColor = B.Color3.White(); wallInfo.push(info);
+        wallTex(info, kitHD);
         return (wallM[k] = m);
-      }
+      },
+      // переключить окна всех домов между обычными (64 px) и HD (256 px)
+      setHD: function (hd) { kitHD = hd; wallInfo.forEach(function (i) { wallTex(i, hd); }); }
     };
+    function wallTex(info, hd) {
+      var slot = hd ? 'hi' : 'lo';
+      if (!info[slot]) {
+        var t = new B.DynamicTexture('t' + slot + info.style + info.wall, (hd ? windowCanvasHD : windowCanvas)(info.style, info.wall), sc, true);
+        t.update(); t.wrapU = t.wrapV = B.Texture.WRAP_ADDRESSMODE; t.anisotropicFilteringLevel = hd ? 8 : 4;
+        info[slot] = t;
+      }
+      info.m.diffuseTexture = info[slot];
+      if (info.style === 'glass') info.m.specularColor = hd ? hex('#3a4656') : B.Color3.Black(); // блик на стеклянных башнях
+      if (info.style === 'glass') info.m.specularPower = 48;
+    }
   }
   var kit = makeKit(scene);
 
@@ -437,10 +520,11 @@
   // ---------- Карта: земля, сетка, рамка, «срез» земли для изометрии ----------
   var mapNodes = [];
   var groundMat = kit.mat('#8cc068'), outerMat = kit.mat('#6f9a52'), frameMat = kit.mat('#c9b78f');
-  var outerGround = null, slab = null, gridMesh = null;
+  var outerGround = null, slab = null, slabHD = null, gridMesh = null, groundMesh = null;
   function buildMapScene() {
+    if (slabHD && slabHD.material) { slabHD.material.diffuseTexture.dispose(); slabHD.material.dispose(); }
     mapNodes.forEach(function (o) { o.dispose(); }); mapNodes = [];
-    var ground = B.MeshBuilder.CreateGround('ground', { width: N, height: N }, scene);
+    var ground = groundMesh = B.MeshBuilder.CreateGround('ground', { width: N, height: N }, scene);
     ground.material = groundMat; ground.receiveShadows = true; ground.isPickable = false; mapNodes.push(ground);
     outerGround = B.MeshBuilder.CreateGround('outer', { width: N * 6, height: N * 6 }, scene);
     outerGround.position.y = -0.03; outerGround.material = outerMat; outerGround.receiveShadows = true; outerGround.isPickable = false; mapNodes.push(outerGround);
@@ -450,6 +534,9 @@
       var s = B.MeshBuilder.CreateBox('slab', { width: N, height: L[1], depth: N }, scene);
       s.position.y = L[2]; s.material = kit.mat(L[0]); s.isPickable = false; s.parent = slab;
     });
+    // Срез для «ИЗО HD»: один блок с нарисованными слоями — дёрн, земля с камнями, глина, скала.
+    slabHD = B.MeshBuilder.CreateBox('slabHD', { width: N, height: 2.12, depth: N }, scene);
+    slabHD.position.y = -1.06 - 0.001; slabHD.isPickable = false; slabHD.material = hdMats().slab(N); mapNodes.push(slabHD);
     var lines = [], h = N / 2;
     for (var i = 0; i <= N; i++) {
       lines.push([new B.Vector3(-h + i, 0.006, -h), new B.Vector3(-h + i, 0.006, h)]);
@@ -748,9 +835,10 @@
   // ---------- Камера: 3D и изометрия ----------
   var ISO_PITCH = Math.PI / 6; // 30° — пропорция клетки 2:1, как в SimCity 2000
   var view = 'persp';
-  try { if (localStorage.getItem(VIEW_KEY) === 'iso') view = 'iso'; } catch (e) {}
+  try { var sv = localStorage.getItem(VIEW_KEY); if (sv === 'iso' || sv === 'isohd') view = sv; } catch (e) {}
   var cam = { tx: 0, tz: 2, dist: 34, yaw: Math.PI / 4, pitch: 0.95, yawGoal: null };
-  function isIso() { return view === 'iso'; }
+  function isIso() { return view !== 'persp'; }   // обе изометрии: «ИЗО» (пиксели) и «ИЗО HD»
+  function isHD() { return view === 'isohd'; }
   function snapYaw(y) { var q = Math.PI / 2; return Math.round((y - Math.PI / 4) / q) * q + Math.PI / 4; }
   function camHome() {
     cam.tx = 0; cam.tz = 2; cam.yaw = Math.PI / 4; cam.pitch = isIso() ? ISO_PITCH : 0.95; cam.yawGoal = null;
@@ -773,6 +861,7 @@
       camera.position.set(cam.tx + far * dx, far * sp, cam.tz + far * dz);
       camera.minZ = 1; camera.maxZ = far * 2.5;
       ext = halfH * Math.max(1, aspect()) * 1.6;
+      if (hdState && hdState.ssao) hdState.ssao.maxZ = camera.maxZ;
     } else {
       camera.mode = B.Camera.PERSPECTIVE_CAMERA;
       camera.position.set(cam.tx + cam.dist * dx, cam.dist * sp, cam.tz + cam.dist * dz);
@@ -788,26 +877,146 @@
     dirty();
   }
   function applyViewScenery() {
-    var iso = isIso();
+    var iso = isIso(), hd = isHD();
     if (outerGround) outerGround.setEnabled(!iso);
-    if (slab) slab.setEnabled(iso);
-    if (gridMesh) gridMesh.alpha = (N > 80 ? 0.16 : 0.22) * (iso ? 0.7 : 1);
+    if (slab) slab.setEnabled(iso && !hd);
+    if (slabHD) slabHD.setEnabled(hd);
+    if (gridMesh) gridMesh.alpha = (N > 80 ? 0.16 : 0.22) * (hd ? 0.35 : iso ? 0.7 : 1);
     scene.fogMode = iso ? B.Scene.FOGMODE_NONE : B.Scene.FOGMODE_LINEAR;
-    scene.clearColor = B.Color4.FromHexString((iso ? VOID : SKY) + 'ff');
+    scene.clearColor = B.Color4.FromHexString((hd ? VOID_HD : iso ? VOID : SKY) + 'ff');
     setShadowStyle(iso);
+    setQuality(hd);
+    if (groundMesh) {
+      var gm = hdMats().grass;
+      gm.diffuseTexture.uScale = gm.diffuseTexture.vScale = N / 3; // одна «плитка» травы на 3 клетки
+      groundMesh.material = hd ? gm : groundMat;
+    }
   }
+
+  // ---------- «ИЗО HD»: та же изометрия, но картинка намного качественнее ----------
+  // Полное разрешение экрана, сглаживание (MSAA + FXAA), мягкое затенение углов (SSAO),
+  // тени 4096, кинематографичная цветокоррекция (ACES), окна 256 px, трава и срез земли с фактурой.
+  var VOID_HD = '#141b27', hdState = null, hdMatCache = null;
+  function canvasTex(name, c, uS, vS) {
+    var t = new B.DynamicTexture(name, c, scene, true); t.update();
+    t.wrapU = t.wrapV = B.Texture.WRAP_ADDRESSMODE; t.anisotropicFilteringLevel = 8;
+    t.uScale = uS || 1; t.vScale = vS || 1; return t;
+  }
+  function hdMats() {
+    if (hdMatCache) return hdMatCache;
+    // трава: пятна разного оттенка и короткие травинки
+    var c = document.createElement('canvas'); c.width = c.height = 256; var g = c.getContext('2d'), r = rng(42);
+    g.fillStyle = '#86bd62'; g.fillRect(0, 0, 256, 256);
+    for (var i = 0; i < 90; i++) {
+      var x = r() * 256, y = r() * 256, rad = 10 + r() * 30;
+      var gr = g.createRadialGradient(x, y, 0, x, y, rad), col = r() > 0.5 ? '120,178,84' : '150,196,104';
+      gr.addColorStop(0, 'rgba(' + col + ',.3)'); gr.addColorStop(1, 'rgba(' + col + ',0)');
+      g.fillStyle = gr;
+      [[0, 0], [-256, 0], [256, 0], [0, -256], [0, 256]].forEach(function (o) { g.fillRect(x + o[0] - rad, y + o[1] - rad, rad * 2, rad * 2); });
+    }
+    for (i = 0; i < 2600; i++) {
+      g.fillStyle = r() > 0.55 ? 'rgba(60,110,40,.35)' : 'rgba(205,232,150,.35)';
+      g.fillRect(r() * 256, r() * 256, 1, 2 + r() * 3);
+    }
+    var grass = new B.StandardMaterial('grassHD', scene); grass.specularColor = B.Color3.Black();
+    grass.diffuseTexture = canvasTex('grassHDt', c, 1, 1);
+    // срез земли
+    function slabCanvas() {
+      var W = 512, H = 256, s = document.createElement('canvas'); s.width = W; s.height = H; var q = s.getContext('2d'), rr = rng(7);
+      var L = [[0, 0.07, '#5f9a43'], [0.07, 0.43, '#7b5a3c'], [0.43, 0.76, '#5e4632'], [0.76, 1, '#4a4a50']];
+      L.forEach(function (l, k) {
+        var y0 = l[0] * H, y1 = l[1] * H, gr = q.createLinearGradient(0, y0, 0, y1);
+        gr.addColorStop(0, shade(l[2], 0.08)); gr.addColorStop(1, shade(l[2], -0.12));
+        q.fillStyle = gr; q.fillRect(0, y0, W, y1 - y0 + 1);
+        // волнистая граница слоя
+        if (k) { q.fillStyle = shade(l[2], -0.2); for (var x = 0; x < W; x += 4) q.fillRect(x, y0 + Math.sin(x / 23 + k) * 3, 4, 3); }
+      });
+      for (var i = 0; i < 520; i++) { // камешки
+        var x = rr() * W, y = (0.1 + rr() * 0.9) * H, w = 2 + rr() * (y > H * 0.76 ? 14 : 6);
+        q.fillStyle = y > H * 0.76 ? (rr() > 0.5 ? '#5d5d64' : '#38383d') : (rr() > 0.5 ? 'rgba(160,130,95,.7)' : 'rgba(40,28,18,.5)');
+        q.beginPath(); q.ellipse(x, y, w, w * 0.6, 0, 0, Math.PI * 2); q.fill();
+      }
+      for (i = 0; i < 160; i++) { q.fillStyle = 'rgba(70,120,50,.8)'; q.fillRect(rr() * W, 0.06 * H, 2, 2 + rr() * 6); } // корешки травы
+      return s;
+    }
+    var slabC = slabCanvas();
+    hdMatCache = {
+      grass: grass,
+      slab: function (n) {
+        var m = new B.StandardMaterial('slabHD', scene); m.specularColor = B.Color3.Black();
+        m.emissiveColor = new B.Color3(0.3, 0.28, 0.26); // срез в тени не должен уходить в черноту
+        m.diffuseTexture = canvasTex('slabHDt', slabC, n / 8, -1); // -1: дёрн сверху, скала снизу
+        return m;
+      }
+    };
+    return hdMatCache;
+  }
+  function setQuality(hd) {
+    if (!!hdState === hd) return;
+    kit.setHD(hd);
+    if (hd) {
+      var dpr = window.devicePixelRatio || 1;
+      hdState = { hemi: hemi.intensity, sun: sun.intensity, sunC: sun.diffuse.clone(), ground: hemi.groundColor.clone() };
+      hemi.intensity = 0.7; hemi.groundColor = hex('#66745a');
+      sun.intensity = 1.0; sun.diffuse = hex('#fff1d8'); sun.specular = hex('#ffffff');
+      shadowGen.getShadowMap().resize(TOUCH ? 2048 : 4096);
+      shadowGen.filteringQuality = B.ShadowGenerator.QUALITY_HIGH;
+      shadowGen.darkness = 0.04;
+      try {
+        // мягкие тени в углах и у основания домов
+        var ssao = new B.SSAO2RenderingPipeline('ssao', scene, { ssaoRatio: TOUCH ? 0.5 : 1, blurRatio: TOUCH ? 0.5 : 1 }, [camera], true);
+        ssao.radius = 0.9; ssao.totalStrength = 1.15; ssao.base = 0.08; ssao.samples = TOUCH ? 8 : 16;
+        ssao.expensiveBlur = !TOUCH; ssao.maxZ = 400; ssao.minZAspect = 0.2;
+        hdState.ssao = ssao;
+      } catch (e) { hdState.ssao = null; }
+      var pp = new B.DefaultRenderingPipeline('hd', true, scene, [camera]);
+      pp.samples = 4; pp.fxaaEnabled = true;
+      pp.imageProcessingEnabled = true;
+      var ip = pp.imageProcessing;
+      ip.toneMappingEnabled = true; ip.toneMappingType = B.ImageProcessingConfiguration.TONEMAPPING_ACES;
+      ip.exposure = 1.32; ip.contrast = 1.18;
+      ip.vignetteEnabled = true; ip.vignetteWeight = 2.2; ip.vignetteStretch = 0.4; ip.vignetteColor = new B.Color4(0.02, 0.03, 0.06, 0);
+      pp.sharpenEnabled = true; pp.sharpen.edgeAmount = 0.22; pp.sharpen.colorAmount = 1;
+      hdState.pp = pp;
+    } else {
+      // снять эффекты с камеры и убрать их из движка целиком (иначе он пытается обновлять удалённые)
+      var pm = scene.postProcessRenderPipelineManager;
+      [hdState.pp, hdState.ssao].forEach(function (pl) {
+        if (!pl) return;
+        try { pm.detachCamerasFromRenderPipeline(pl._name, camera); } catch (e) {}
+        try { pl.dispose(); } catch (e) {}
+        if (pm.removePipeline) pm.removePipeline(pl._name);
+      });
+      hemi.intensity = hdState.hemi; hemi.groundColor = hdState.ground;
+      sun.intensity = hdState.sun; sun.diffuse = hdState.sunC; sun.specular = B.Color3.Black();
+      shadowGen.getShadowMap().resize(2048);
+      shadowGen.filteringQuality = B.ShadowGenerator.QUALITY_MEDIUM;
+      shadowGen.darkness = 0;
+      hdState = null;
+    }
+    dirty();
+  }
+
   function pixelScale() {
     var dpr = window.devicePixelRatio || 1;
-    // В изометрии рисуем в пониженном разрешении и растягиваем без сглаживания — крупные пиксели.
-    return isIso() ? (TOUCH ? 1.5 : 2) : 1 / Math.min(dpr, 2);
+    // «ИЗО»: рисуем в пониженном разрешении и растягиваем без сглаживания — крупные пиксели.
+    // «ИЗО HD» и 3D — полное разрешение экрана (до 2× на «ретина»-экранах).
+    return view === 'iso' ? (TOUCH ? 1.5 : 2) : 1 / Math.min(dpr, 2);
   }
+  var VIEWS = { persp: { btn: '3D', name: '🎥 Вид 3D' }, iso: { btn: 'ИЗО', name: '🧱 Изометрия (пиксели, как в SimCity)' }, isohd: { btn: 'HD', name: '✨ Изометрия HD (качественная картинка)' } };
+  var VIEW_ORDER = ['persp', 'iso', 'isohd'];
+  function nextView() { return VIEW_ORDER[(VIEW_ORDER.indexOf(view) + 1) % VIEW_ORDER.length]; }
   function setView(v) {
+    if (!VIEWS[v]) v = 'persp';
+    var wasIso = isIso();
     view = v;
     try { localStorage.setItem(VIEW_KEY, v); } catch (e) {}
-    canvas.classList.toggle('iso', v === 'iso'); document.body.classList.toggle('iso', v === 'iso');
-    $('camMode').textContent = v === 'iso' ? '3D' : 'ИЗО';
-    $('camMode').title = v === 'iso' ? 'Перейти в 3D' : 'Перейти в изометрию';
-    if (v === 'iso') { cam.pitch = ISO_PITCH; cam.yaw = snapYaw(cam.yaw); cam.yawGoal = null; }
+    canvas.classList.toggle('iso', v === 'iso'); document.body.classList.toggle('iso', isIso());
+    // на кнопке — текущий вид; нажатие переключает по кругу 3D → ИЗО → HD
+    $('camMode').textContent = VIEWS[v].btn;
+    $('camMode').classList.toggle('hd', v === 'isohd');
+    $('camMode').title = 'Вид: ' + VIEWS[v].btn + '. Нажмите — ' + VIEWS[nextView()].btn;
+    if (isIso()) { cam.pitch = ISO_PITCH; if (!wasIso) { cam.yaw = snapYaw(cam.yaw); cam.yawGoal = null; } }
     else cam.pitch = 0.95;
     applyViewScenery(); resize();
   }
@@ -1244,7 +1453,7 @@
     if (k === 'q' || k === 'й') rotateCam(1);
     else if (k === 'e' || k === 'у') rotateCam(-1);
     else if (k === 'r' || k === 'к') rotateCurrent();
-    else if (k === 'i' || k === 'ш') setView(isIso() ? 'persp' : 'iso');
+    else if (k === 'i' || k === 'ш') cycleView();
     else if (k === 'escape') { if (!$('modal').hidden) closeModal(); else if (!$('mech').hidden) closeMech(); else { closeInfo(); setTool('view'); } }
     else if (k === '6') openMech();
     else if ('12345'.indexOf(k) >= 0 && k) setTool(['view', 'build', 'road', 'move', 'delete'][+k - 1]);
@@ -1266,7 +1475,11 @@
     cam.tx += (-sy * f + cy * s) * sp; cam.tz += (-cy * f - sy * s) * sp; updateCam();
   }
 
-  $('camMode').addEventListener('click', function () { setView(isIso() ? 'persp' : 'iso'); hint(isIso() ? '🧱 Изометрия: поворот ⟲ ⟳ — на 90°' : '🎥 Вид 3D'); });
+  function cycleView() {
+    setView(nextView());
+    hint(view === 'isohd' ? '✨ Изометрия HD: сглаживание, мягкие тени, чёткие окна' : view === 'iso' ? '🧱 Изометрия: крупные пиксели, поворот ⟲ ⟳ — на 90°' : '🎥 Вид 3D');
+  }
+  $('camMode').addEventListener('click', cycleView);
   $('camRotL').addEventListener('click', function () { rotateCam(1); });
   $('camRotR').addEventListener('click', function () { rotateCam(-1); });
   $('camIn').addEventListener('click', function () { cam.dist /= 1.25; updateCam(); });
@@ -1485,10 +1698,11 @@
   $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeModal(); });
 
   function helpHtml() {
-    return '<details open><summary>🧱 Вид ИЗО и 3D</summary><ul>' +
-      '<li>Кнопка <b>ИЗО</b> справа включает изометрию, как в старых SimCity: камера под постоянным углом, крупные пиксели, город на срезе земли.</li>' +
-      '<li>В изометрии ⟲ ⟳ поворачивают карту ровно на 90°. Кнопка <b>3D</b> возвращает свободную камеру.</li>' +
-      '<li>На компьютере вид переключает клавиша I.</li></ul></details>' +
+    return '<details open><summary>🧱 Виды: 3D, ИЗО и ИЗО HD</summary><ul>' +
+      '<li>Верхняя кнопка справа показывает текущий вид и переключает их по кругу: <b>3D → ИЗО → HD</b>.</li>' +
+      '<li><b>ИЗО</b> — изометрия как в старых SimCity: камера под постоянным углом, крупные пиксели, город на срезе земли.</li>' +
+      '<li><b>HD</b> — та же изометрия, но качественная картинка: полное разрешение, сглаженные края, мягкие тени в углах, подробные окна, трава и слои земли. Нагружает телефон сильнее.</li>' +
+      '<li>В изометрии ⟲ ⟳ поворачивают карту ровно на 90°. Вид можно выбрать и в меню ☰. На компьютере — клавиша I.</li></ul></details>' +
       '<details><summary>🚚 Бригады и стройка</summary><ul>' +
       '<li>Строить можно только с бригадой. Откройте 🚚 «Механизмы» → «Строительство» и купите «Бригаду» — зелёный грузовик.</li>' +
       '<li>Поставьте здание: бригада приедет, дом начнёт расти, над ним — полоска прогресса.</li>' +
@@ -1532,7 +1746,7 @@
       '<button class="menu-btn" data-m="help">❓ Как играть</button>' +
       '<button class="menu-btn" data-m="news">📝 Что нового</button>' +
       '<button class="menu-btn" data-m="city">📊 Город</button>' +
-      '<button class="menu-btn" data-m="view">' + (isIso() ? '🎥 Вид 3D' : '🧱 Вид ИЗО (как в SimCity)') + '</button>' +
+      VIEW_ORDER.map(function (v) { return '<button class="menu-btn' + (v === view ? ' cur' : '') + '" data-m="view" data-v="' + v + '">' + VIEWS[v].name + (v === view ? ' <span style="float:right;color:#a9b6c8">сейчас</span>' : '') + '</button>'; }).join('') +
       '<button class="menu-btn" data-m="mech">🚚 Механизмы</button>' +
       '<button class="menu-btn" data-m="size">🗺️ Размер карты <span style="float:right;color:#a9b6c8">' + N + '×' + N + '</span></button>' +
       '<button class="menu-btn" data-m="demo">🏘️ Загрузить город-пример</button>' +
@@ -1601,7 +1815,7 @@
     if (sb) { pickSize = +sb.dataset.n; confirmArm = ''; openSize(); return; }
     if (m === 'help') openModal('<h2>Как играть</h2>' + helpHtml());
     else if (m === 'city') openModal(cityHtml());
-    else if (m === 'view') { closeModal(); setView(isIso() ? 'persp' : 'iso'); }
+    else if (m === 'view') { closeModal(); setView(b.dataset.v); }
     else if (m === 'mech') { closeModal(); openMech(); }
     else if (m === 'size') { pickSize = N; confirmArm = ''; openSize(); }
     else if (m === 'resize') {
