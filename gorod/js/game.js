@@ -23,19 +23,22 @@
 
   // ---------- Состояние ----------
   var state, occ = new Int32Array(N * N);
+  function sizeOk(n) { return typeof n === 'number' && n >= 16 && n <= 160 && (n | 0) === n; }
   function idx(x, z) { return z * N + x; }
   function inMap(x, z) { return x >= 0 && z >= 0 && x < N && z < N; }
   function key(x, z) { return x + ',' + z; }
   function foot(sz, rot) { var s = G.sizes[sz]; return rot % 2 ? { w: s.d, d: s.w } : { w: s.w, d: s.d }; }
 
-  function demoState() {
-    var s = { v: 1, nextId: 1, buildings: [], roads: {} };
-    var x, z;
-    for (x = 12; x <= 36; x++) s.roads[key(x, 24)] = 'asphalt';
-    for (z = 12; z <= 36; z++) s.roads[key(24, z)] = 'asphalt';
-    for (x = 8; x <= 23; x++) s.roads[key(x, 31)] = 'dirt';
-    for (z = 14; z <= 23; z++) s.roads[key(30, z)] = 'asphalt';
-    for (z = 25; z <= 30; z++) s.roads[key(12, z)] = 'dirt';
+  function demoState(n) {
+    n = n || G.mapSize;
+    var s = { v: 1, size: n, nextId: 1, buildings: [], roads: {} };
+    var x, z, o = Math.floor((n - 48) / 2); // пример нарисован для 48×48 — ставим его в центр
+    function rd(x, z, t) { x += o; z += o; if (x >= 0 && z >= 0 && x < n && z < n) s.roads[key(x, z)] = t; }
+    for (x = 12; x <= 36; x++) rd(x, 24, 'asphalt');
+    for (z = 12; z <= 36; z++) rd(24, z, 'asphalt');
+    for (x = 8; x <= 23; x++) rd(x, 31, 'dirt');
+    for (z = 14; z <= 23; z++) rd(30, z, 'asphalt');
+    for (z = 25; z <= 30; z++) rd(12, z, 'dirt');
     var list = [
       ['res', '1x1', 19, 23, 0], ['res', '1x1', 21, 23, 0], ['res', '2x1', 16, 23, 0], ['res', '1x1', 14, 30, 2],
       ['res', '2x1', 17, 30, 2], ['res', '1x1', 20, 30, 2], ['res', '2x2', 26, 22, 0], ['res', '4x4', 31, 19, 0],
@@ -43,16 +46,18 @@
       ['corp', '4x4', 28, 27, 3], ['corp', '2x1', 22, 22, 0], ['corp', '1x1', 25, 30, 1], ['army', '2x2', 14, 26, 1]
     ];
     list.forEach(function (b) {
-      s.buildings.push({ id: s.nextId++, cat: b[0], size: b[1], x: b[2], z: b[3], rot: b[4], seed: newSeed() });
+      var f = foot(b[1], b[4]), bx = b[2] + o, bz = b[3] + o;
+      if (bx < 0 || bz < 0 || bx + f.w > n || bz + f.d > n) return;
+      s.buildings.push({ id: s.nextId++, cat: b[0], size: b[1], x: bx, z: bz, rot: b[4], seed: newSeed() });
     });
     return s;
   }
-  function emptyState() { return { v: 1, nextId: 1, buildings: [], roads: {} }; }
+  function emptyState(n) { return { v: 1, size: n || G.mapSize, nextId: 1, buildings: [], roads: {} }; }
 
   function load() {
     try {
       var s = JSON.parse(localStorage.getItem(SAVE_KEY));
-      if (s && s.v === 1 && Array.isArray(s.buildings) && s.roads) return s;
+      if (s && s.v === 1 && Array.isArray(s.buildings) && s.roads) { if (!sizeOk(s.size)) s.size = 48; return s; }
     } catch (e) {}
     return null;
   }
@@ -95,27 +100,44 @@
   var camera = new THREE.PerspectiveCamera(45, 1, 0.1, 400);
 
   scene.add(new THREE.HemisphereLight('#dbeeff', '#5d7a45', 0.85));
+  // Солнце идёт за камерой: тени чёткие на карте любого размера.
+  var SUN_OFF = new THREE.Vector3(-22, 40, 18);
   var sun = new THREE.DirectionalLight('#fff3dc', 1.6);
-  sun.position.set(-22, 40, 18);
+  sun.position.copy(SUN_OFF);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  var sc = sun.shadow.camera; sc.left = -32; sc.right = 32; sc.top = 32; sc.bottom = -32; sc.near = 1; sc.far = 120;
+  var sc = sun.shadow.camera; sc.left = -32; sc.right = 32; sc.top = 32; sc.bottom = -32; sc.near = 1; sc.far = 140;
   sun.shadow.bias = -0.0008;
-  scene.add(sun);
+  scene.add(sun); scene.add(sun.target);
+  var shadowExt = 32;
+  function updateSun() {
+    sun.target.position.set(cam.tx, 0, cam.tz);
+    sun.position.set(cam.tx + SUN_OFF.x, SUN_OFF.y, cam.tz + SUN_OFF.z);
+    var ext = Math.round(clamp(cam.dist * 1.1, 18, 70));
+    if (ext !== shadowExt) { shadowExt = ext; sc.left = sc.bottom = -ext; sc.right = sc.top = ext; sc.updateProjectionMatrix(); }
+  }
 
-  var ground = new THREE.Mesh(new THREE.PlaneGeometry(N, N), new THREE.MeshLambertMaterial({ color: '#8cc068' }));
-  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
-  var outer = new THREE.Mesh(new THREE.PlaneGeometry(N * 6, N * 6), new THREE.MeshLambertMaterial({ color: '#6f9a52' }));
-  outer.rotation.x = -Math.PI / 2; outer.position.y = -0.03; scene.add(outer);
-  var grid = new THREE.GridHelper(N, N, '#2d4a22', '#2d4a22');
-  grid.material.transparent = true; grid.material.opacity = 0.22; grid.position.y = 0.006; scene.add(grid);
-  // рамка карты
-  (function () {
-    var m = new THREE.MeshLambertMaterial({ color: '#c9b78f' }), t = 0.25, h = 0.12;
+  // Земля, сетка и рамка — пересоздаются при смене размера карты.
+  var mapGroup = new THREE.Group(); scene.add(mapGroup);
+  var groundMat = new THREE.MeshLambertMaterial({ color: '#8cc068' }), outerMat = new THREE.MeshLambertMaterial({ color: '#6f9a52' });
+  var frameMat = new THREE.MeshLambertMaterial({ color: '#c9b78f' });
+  function buildMapScene() {
+    while (mapGroup.children.length) {
+      var o = mapGroup.children.pop();
+      if (o.geometry) o.geometry.dispose();
+      if (o.material && o.material.dispose && o.material !== groundMat && o.material !== outerMat && o.material !== frameMat) o.material.dispose();
+    }
+    var ground = new THREE.Mesh(new THREE.PlaneGeometry(N, N), groundMat);
+    ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; mapGroup.add(ground);
+    var outer = new THREE.Mesh(new THREE.PlaneGeometry(N * 6, N * 6), outerMat);
+    outer.rotation.x = -Math.PI / 2; outer.position.y = -0.03; mapGroup.add(outer);
+    var grid = new THREE.GridHelper(N, N, '#2d4a22', '#2d4a22');
+    grid.material.transparent = true; grid.material.opacity = N > 80 ? 0.16 : 0.22; grid.position.y = 0.006; mapGroup.add(grid);
+    var t = 0.25, h = 0.12; // рамка карты
     [[0, -N / 2 - t / 2, N + 2 * t, t], [0, N / 2 + t / 2, N + 2 * t, t], [-N / 2 - t / 2, 0, t, N], [N / 2 + t / 2, 0, t, N]].forEach(function (a) {
-      var e = new THREE.Mesh(new THREE.BoxGeometry(a[2], h, a[3]), m); e.position.set(a[0], h / 2 - 0.02, a[1]); e.receiveShadow = true; scene.add(e);
+      var e = new THREE.Mesh(new THREE.BoxGeometry(a[2], h, a[3]), frameMat); e.position.set(a[0], h / 2 - 0.02, a[1]); e.receiveShadow = true; mapGroup.add(e);
     });
-  })();
+  }
 
   var buildGroup = new THREE.Group(), roadGroup = new THREE.Group();
   scene.add(roadGroup); scene.add(buildGroup);
@@ -383,6 +405,7 @@
   }
 
   function rebuildAll() {
+    if (!mapGroup.children.length || state.size !== N) { N = state.size; occ = new Int32Array(N * N); buildMapScene(); }
     Object.keys(bMeshes).forEach(function (id) { removeBuildingMesh(+id); });
     Object.keys(rMeshes).forEach(function (k) { roadGroup.remove(rMeshes[k]); delete rMeshes[k]; });
     rebuildOcc();
@@ -426,13 +449,21 @@
 
   // ---------- Камера ----------
   var cam = { tx: 0, tz: 2, dist: 34, yaw: Math.PI / 4, pitch: 0.95 };
+  function camHome() {
+    cam.tx = 0; cam.tz = 2; cam.yaw = Math.PI / 4; cam.pitch = 0.95;
+    cam.dist = clamp(N * 0.72, 24, 90) * (window.innerWidth < window.innerHeight ? 1.3 : 1);
+    updateCam();
+  }
   function updateCam() {
-    cam.dist = clamp(cam.dist, 5, 80); cam.pitch = clamp(cam.pitch, 0.35, 1.45);
+    cam.dist = clamp(cam.dist, 5, Math.max(80, N * 1.3)); cam.pitch = clamp(cam.pitch, 0.35, 1.45);
     cam.tx = clamp(cam.tx, -N / 2, N / 2); cam.tz = clamp(cam.tz, -N / 2, N / 2);
     var cp = Math.cos(cam.pitch);
     camera.position.set(cam.tx + cam.dist * cp * Math.sin(cam.yaw), cam.dist * Math.sin(cam.pitch), cam.tz + cam.dist * cp * Math.cos(cam.yaw));
     camera.lookAt(cam.tx, 0, cam.tz);
     camera.updateMatrixWorld();
+    camera.far = Math.max(400, cam.dist * 6); camera.updateProjectionMatrix();
+    scene.fog.near = cam.dist * 1.6 + 15; scene.fog.far = cam.dist * 3.2 + 60;
+    updateSun();
     dirty();
   }
   function resize() {
@@ -885,6 +916,7 @@
       '<li>Кнопки справа: поворот камеры и масштаб.</li></ul></details>' +
       '<details' + (TOUCH ? '' : ' open') + '><summary>Компьютер</summary><ul>' +
       '<li>Левая кнопка — действие (в «Смотреть» — двигать карту и открыть справку).</li><li>Правая кнопка — двигать карту, колёсико — масштаб, средняя кнопка или Shift+правая — поворот и наклон.</li>' +
+      '<li>Размер карты (от 32×32 до 128×128) — в меню ☰ → «Размер карты». Можно расширить карту, не теряя город.</li>' +
       '<li>W A S D или стрелки — двигать карту, Q / E — поворот камеры, R — повернуть дом, 1–5 — инструменты, Esc — «Смотреть».</li></ul></details>' +
       '<details><summary>Здания</summary><ul>' + Object.keys(G.cats).map(function (k) {
         var c = G.cats[k]; return '<li><b>' + c.label + '</b>: ' + Object.keys(G.sizes).map(function (s) { return G.sizes[s].label + ' ' + c.names[s].toLowerCase(); }).join(', ') + '.</li>';
@@ -897,20 +929,76 @@
     openModal('<h2>Мое_город ' + G.version + '</h2>' +
       '<button class="menu-btn" data-m="help">❓ Как играть</button>' +
       '<button class="menu-btn" data-m="news">📝 Что нового</button>' +
+      '<button class="menu-btn" data-m="size">🗺️ Размер карты <span style="float:right;color:#a9b6c8">' + N + '×' + N + '</span></button>' +
       '<button class="menu-btn" data-m="demo">🏘️ Загрузить город-пример</button>' +
       '<button class="menu-btn danger" data-m="clear">🧹 Новая пустая карта</button>' +
       '<p style="font-size:13px;color:#a9b6c8">Город сохраняется сам в этом браузере.</p>');
   }
+  var pickSize = 0;
+  function sizeLabel(n) { for (var i = 0; i < G.mapSizes.length; i++) if (G.mapSizes[i].n === n) return G.mapSizes[i].label; return 'Своя'; }
+  function lostCount(n) { // сколько зданий и дорог не поместится при смене размера
+    var o = Math.floor((n - N) / 2), lb = 0, lr = 0;
+    state.buildings.forEach(function (b) { var f = foot(b.size, b.rot); if (b.x + o < 0 || b.z + o < 0 || b.x + o + f.w > n || b.z + o + f.d > n) lb++; });
+    Object.keys(state.roads).forEach(function (k) { var p = k.split(','), x = +p[0] + o, z = +p[1] + o; if (x < 0 || z < 0 || x >= n || z >= n) lr++; });
+    return { b: lb, r: lr };
+  }
+  function openSize() {
+    if (!pickSize) pickSize = N;
+    var h = '<h2>Размер карты</h2><p>Сейчас: <b>' + sizeLabel(N).toLowerCase() + ', ' + N + '×' + N + '</b> клеток.</p><div class="size-grid">' +
+      G.mapSizes.map(function (m) {
+        return '<button class="size-opt' + (m.n === pickSize ? ' on' : '') + '" data-n="' + m.n + '"><i style="width:' + Math.round(14 + m.n / 128 * 30) + 'px;height:' + Math.round(14 + m.n / 128 * 30) + 'px"></i><b>' + m.label + '</b><span>' + m.n + '×' + m.n + '</span></button>';
+      }).join('') + '</div>';
+    if (pickSize !== N) {
+      var L = lostCount(pickSize), warn = '';
+      if (L.b || L.r) warn = '<p class="warn">Не поместятся у края: ' + (L.b ? L.b + ' ' + plural(L.b, 'здание', 'здания', 'зданий') : '') + (L.b && L.r ? ' и ' : '') + (L.r ? L.r + ' ' + plural(L.r, 'клетка', 'клетки', 'клеток') + ' дороги' : '') + ' — они будут удалены.</p>';
+      h += '<button class="menu-btn" data-m="resize">' + (pickSize > N ? '↔️ Расширить карту — город останется в центре' : '↘️ Уменьшить карту — город останется в центре') + '</button>' + warn +
+        '<button class="menu-btn" data-m="newdemo">🏘️ Новая карта ' + pickSize + '×' + pickSize + ' с городом-примером</button>' +
+        '<button class="menu-btn danger" data-m="newempty">🧹 Новая пустая карта ' + pickSize + '×' + pickSize + '</button>';
+    } else h += '<p style="font-size:13px;color:#a9b6c8">Выберите другой размер, чтобы расширить или уменьшить карту.</p>';
+    h += '<p style="font-size:13px;color:#a9b6c8">Огромные карты на слабых телефонах могут работать медленнее.</p>';
+    openModal(h);
+  }
+  function resizeMap(n) {
+    var o = Math.floor((n - N) / 2), nb = [], nr = {};
+    state.buildings.forEach(function (b) {
+      var f = foot(b.size, b.rot); b.x += o; b.z += o;
+      if (b.x >= 0 && b.z >= 0 && b.x + f.w <= n && b.z + f.d <= n) nb.push(b);
+    });
+    Object.keys(state.roads).forEach(function (k) {
+      var p = k.split(','), x = +p[0] + o, z = +p[1] + o;
+      if (x >= 0 && z >= 0 && x < n && z < n) nr[key(x, z)] = state.roads[k];
+    });
+    state.buildings = nb; state.roads = nr; state.size = n;
+    resCache = {}; workCache = {};
+  }
+  function applyState(s, keepCam) {
+    state = s; closeInfo(); cancelMove(); rebuildAll(); save();
+    if (keepCam) updateCam(); else camHome();
+    pickSize = 0; closeModal();
+    hint('Карта ' + N + '×' + N + ' готова');
+  }
   $('btnMenu').addEventListener('click', openMenu);
   var confirmArm = '';
   $('modalBody').addEventListener('click', function (e) {
-    var b = e.target.closest('[data-m]'); if (!b) return;
+    var b = e.target.closest('[data-m],[data-n]'); if (!b) return;
     var m = b.dataset.m;
+    var sb = e.target.closest('[data-n]');
+    if (sb) { pickSize = +sb.dataset.n; confirmArm = ''; openSize(); return; }
     if (m === 'help') openModal('<h2>Как играть</h2>' + helpHtml());
+    else if (m === 'size') { pickSize = N; confirmArm = ''; openSize(); }
+    else if (m === 'resize') {
+      var L = lostCount(pickSize);
+      if ((L.b || L.r) && confirmArm !== m) { confirmArm = m; b.textContent = 'Точно? Часть города у края пропадёт — нажмите ещё раз'; return; }
+      confirmArm = ''; resizeMap(pickSize); applyState(state, false);
+    }
+    else if (m === 'newdemo' || m === 'newempty') {
+      if (confirmArm !== m) { confirmArm = m; b.textContent = 'Точно? Текущий город пропадёт — нажмите ещё раз'; return; }
+      confirmArm = ''; applyState(m === 'newdemo' ? demoState(pickSize) : emptyState(pickSize), false);
+    }
     else if (m === 'news') openModal('<h2>Что нового</h2>' + changelogHtml());
     else if (m === 'demo' || m === 'clear') {
       if (confirmArm !== m) { confirmArm = m; b.textContent = 'Точно? Текущий город пропадёт — нажмите ещё раз'; return; }
-      confirmArm = ''; state = m === 'demo' ? demoState() : emptyState(); closeInfo(); rebuildAll(); save(); closeModal();
+      confirmArm = ''; applyState(m === 'demo' ? demoState(N) : emptyState(N), true);
     }
   });
 
@@ -925,11 +1013,10 @@
   }
 
   // ---------- Старт ----------
-  state = load() || demoState();
+  state = load() || demoState(G.mapSize);
   $('ver').textContent = G.version;
-  renderChips(); resize(); rebuildAll(); setTool('view');
-  if (window.innerWidth < window.innerHeight) cam.dist = 44;
-  updateCam();
+  renderChips(); rebuildAll(); resize(); setTool('view');
+  camHome();
   requestAnimationFrame(loop);
   try {
     var seen = localStorage.getItem(SEEN_KEY);
@@ -938,5 +1025,5 @@
       localStorage.setItem(SEEN_KEY, G.version);
     }
   } catch (e) {}
-  window.__gorod = { state: function () { return state; }, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam };
+  window.__gorod = { state: function () { return state; }, size: function () { return N; }, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam };
 })();

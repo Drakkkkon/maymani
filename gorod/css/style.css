@@ -78,6 +78,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .card summary { cursor: pointer; font-weight: 600; }
 .card p { margin: 6px 0; color: #d5deea; }
 
+.size-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin: 10px 0 12px; }
+.size-opt { border: 1px solid var(--line); background: rgba(255,255,255,.06); border-radius: 12px; padding: 10px 8px 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.size-opt i { display: block; height: 30px; border-radius: 4px; background: #8cc068; border: 2px solid #c9b78f; margin-bottom: 4px; }
+.size-opt span { font-size: 12px; color: var(--mut); }
+.size-opt.on { background: var(--acc); color: #2a2205; border-color: var(--acc); }
+.size-opt.on span { color: #4a3d0b; }
+.card p.warn { color: #ffb4a8; font-size: 13px; margin: -2px 0 10px; }
+
 /* Компьютер */
 @media (min-width: 900px) {
   .topbar { left: 12px; right: auto; top: 12px; min-width: 460px; }
