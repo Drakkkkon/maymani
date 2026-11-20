@@ -1,8 +1,10 @@
-// «Мое_город» — простой градостроитель на Three.js.
+// «Мое_город» — градостроитель на Babylon.js.
+// Два вида: «3D» (свободная камера) и «ИЗО» (изометрия как в старых SimCity).
+// Одинаковые здания рисуются пачками (thin instances): тысячи домов — это десятки вызовов отрисовки.
 (function () {
   'use strict';
-  var G = window.GAME, N = G.mapSize;
-  var SAVE_KEY = 'moe_gorod_save_v1', SEEN_KEY = 'moe_gorod_seen';
+  var G = window.GAME, N = G.mapSize, B = window.BABYLON;
+  var SAVE_KEY = 'moe_gorod_save_v1', SEEN_KEY = 'moe_gorod_seen', VIEW_KEY = 'moe_gorod_view';
   var $ = function (id) { return document.getElementById(id); };
   var TOUCH = window.matchMedia && matchMedia('(pointer: coarse)').matches;
 
@@ -20,6 +22,7 @@
   function rint(r, a, b) { return a + Math.floor(r() * (b - a + 1)); }
   function newSeed() { return (Math.random() * 2147483647) | 0; }
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function hex(c) { return B.Color3.FromHexString(c); }
 
   // ---------- Состояние ----------
   // b.prog (0…1) есть только у зданий, которые ещё строятся.
@@ -71,23 +74,18 @@
     return null;
   }
   var saveTimer = 0;
-  function save() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveNow, 250);
-  }
+  function save() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 250); }
   function saveNow() {
     clearTimeout(saveTimer);
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {}
   }
-  function rebuildOcc() {
-    occ.fill(0);
-    state.buildings.forEach(function (b) { markOcc(b, b.id); });
-  }
+  function rebuildOcc() { occ.fill(0); state.buildings.forEach(function (b) { markOcc(b, b.id); }); }
   function markOcc(b, val) {
     var f = foot(b.size, b.rot);
     for (var z = b.z; z < b.z + f.d; z++) for (var x = b.x; x < b.x + f.w; x++) if (inMap(x, z)) occ[idx(x, z)] = val;
   }
-  function getB(id) { for (var i = 0; i < state.buildings.length; i++) if (state.buildings[i].id === id) return state.buildings[i]; return null; }
+  var byId = {};
+  function getB(id) { return byId[id] || null; }
   function canPlace(sz, rot, x, z, ignoreId) {
     var f = foot(sz, rot);
     for (var zz = z; zz < z + f.d; zz++) for (var xx = x; xx < x + f.w; xx++) {
@@ -108,65 +106,39 @@
   function buildTime(b) { return G.buildTime[b.size] || 20; }
   function updateMoney() { var m = money(); $('stMoney').textContent = isFinite(m) ? Math.round(m).toLocaleString('ru-RU') : '∞'; }
 
-  // ---------- Three.js ----------
+  // ---------- Движок Babylon.js ----------
   var canvas = $('scene');
-  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  var scene = new THREE.Scene();
-  scene.background = new THREE.Color('#a9d0f0');
-  scene.fog = new THREE.Fog('#a9d0f0', 70, 140);
-  var camera = new THREE.PerspectiveCamera(45, 1, 0.1, 400);
+  var engine = new B.Engine(canvas, true, { stencil: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' }, false);
+  var scene = new B.Scene(engine);
+  scene.useRightHandedSystem = true;      // как в прежней версии: x вправо, z к зрителю
+  scene.skipPointerMovePicking = true;    // свои обработчики касаний — движку не нужно искать объекты
+  scene.autoClearDepthAndStencil = true;
+  var SKY = '#a9d0f0', VOID = '#10141c';
+  scene.clearColor = B.Color4.FromHexString(SKY + 'ff');
+  scene.fogColor = hex(SKY);
 
-  scene.add(new THREE.HemisphereLight('#dbeeff', '#5d7a45', 0.85));
+  var camera = new B.FreeCamera('cam', new B.Vector3(0, 30, 30), scene);
+  camera.fov = 45 * Math.PI / 180; camera.minZ = 0.1; camera.maxZ = 600;
+  camera.inputs.clear();
+
+  var hemi = new B.HemisphericLight('hemi', new B.Vector3(0, 1, 0), scene);
+  hemi.diffuse = hex('#e8f2ff'); hemi.groundColor = hex('#6f8a5a'); hemi.specular = B.Color3.Black(); hemi.intensity = 0.72;
   // Солнце идёт за камерой: тени чёткие на карте любого размера.
-  var SUN_OFF = new THREE.Vector3(-22, 40, 18);
-  var sun = new THREE.DirectionalLight('#fff3dc', 1.6);
-  sun.position.copy(SUN_OFF);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  var sc = sun.shadow.camera; sc.left = -32; sc.right = 32; sc.top = 32; sc.bottom = -32; sc.near = 1; sc.far = 140;
-  sun.shadow.bias = -0.0008;
-  scene.add(sun); scene.add(sun.target);
-  var shadowExt = 32;
-  function updateSun() {
-    sun.target.position.set(cam.tx, 0, cam.tz);
-    sun.position.set(cam.tx + SUN_OFF.x, SUN_OFF.y, cam.tz + SUN_OFF.z);
-    var ext = Math.round(clamp(cam.dist * 1.1, 18, 70));
-    if (ext !== shadowExt) { shadowExt = ext; sc.left = sc.bottom = -ext; sc.right = sc.top = ext; sc.updateProjectionMatrix(); }
+  var SUN_OFF = new B.Vector3(-22, 40, 18);
+  var sun = new B.DirectionalLight('sun', SUN_OFF.scale(-1).normalize(), scene);
+  sun.diffuse = hex('#fff3dc'); sun.specular = B.Color3.Black(); sun.intensity = 0.62;
+  sun.autoUpdateExtends = false; sun.autoCalcShadowZBounds = false;
+  sun.shadowMinZ = 1; sun.shadowMaxZ = 200;
+  var shadowGen = new B.ShadowGenerator(2048, sun);
+  shadowGen.bias = 0.0015; shadowGen.normalBias = 0.01;
+  function setShadowStyle(iso) {
+    // Один и тот же фильтр в обоих видах: смена фильтра на лету пересобирает шейдеры.
+    shadowGen.usePercentageCloserFiltering = true;
+    shadowGen.filteringQuality = B.ShadowGenerator.QUALITY_MEDIUM;
+    shadowGen.usePoissonSampling = false;
   }
 
-  // Земля, сетка и рамка — пересоздаются при смене размера карты.
-  var mapGroup = new THREE.Group(); scene.add(mapGroup);
-  var groundMat = new THREE.MeshLambertMaterial({ color: '#8cc068' }), outerMat = new THREE.MeshLambertMaterial({ color: '#6f9a52' });
-  var frameMat = new THREE.MeshLambertMaterial({ color: '#c9b78f' });
-  function buildMapScene() {
-    while (mapGroup.children.length) {
-      var o = mapGroup.children.pop();
-      if (o.geometry) o.geometry.dispose();
-      if (o.material && o.material.dispose && o.material !== groundMat && o.material !== outerMat && o.material !== frameMat) o.material.dispose();
-    }
-    var ground = new THREE.Mesh(new THREE.PlaneGeometry(N, N), groundMat);
-    ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; mapGroup.add(ground);
-    var outer = new THREE.Mesh(new THREE.PlaneGeometry(N * 6, N * 6), outerMat);
-    outer.rotation.x = -Math.PI / 2; outer.position.y = -0.03; outer.receiveShadow = true; mapGroup.add(outer);
-    var grid = new THREE.GridHelper(N, N, '#2d4a22', '#2d4a22');
-    grid.material.transparent = true; grid.material.opacity = N > 80 ? 0.16 : 0.22; grid.position.y = 0.006; mapGroup.add(grid);
-    var t = 0.25, h = 0.12; // рамка карты
-    [[0, -N / 2 - t / 2, N + 2 * t, t], [0, N / 2 + t / 2, N + 2 * t, t], [-N / 2 - t / 2, 0, t, N], [N / 2 + t / 2, 0, t, N]].forEach(function (a) {
-      var e = new THREE.Mesh(new THREE.BoxGeometry(a[2], h, a[3]), frameMat); e.position.set(a[0], h / 2 - 0.02, a[1]); e.receiveShadow = true; mapGroup.add(e);
-    });
-  }
-
-  var buildGroup = new THREE.Group(), roadGroup = new THREE.Group(), truckGroup = new THREE.Group();
-  scene.add(roadGroup); scene.add(buildGroup); scene.add(truckGroup);
-  var bMeshes = {}, rMeshes = {}, tMeshes = {};
-
-  function cellCenter(x, z) { return { x: x - N / 2 + 0.5, z: z - N / 2 + 0.5 }; }
-
-  // ---------- Текстуры окон ----------
-  var texCache = {}, matCache = {};
+  // ---------- Материалы (на каждую сцену свой набор) ----------
   function windowCanvas(style, wall) {
     var c = document.createElement('canvas'); c.width = c.height = 64;
     var g = c.getContext('2d');
@@ -187,68 +159,93 @@
     else if (style === 'army') win(22, 24, 20, 14, ['#56634f', '#303a2c'], '#4b553a');
     else if (style === 'gov') win(22, 12, 20, 40, ['#a3c1dc', '#5d7fa0'], '#fffdf6');
     else if (style === 'shop') win(6, 14, 52, 42, ['#c3def2', '#6f98bd'], '#ffffff');
-    var t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
-    return t;
+    return c;
   }
-  var perUnit = { res: 1.5, office: 2.5, glass: 2.5, army: 2, gov: 2, shop: 1, plain: 0 };
-  function wallMats(style, wall, roof, w, d, floors) {
-    var k = [style, wall, roof, w.toFixed(2), d.toFixed(2), floors].join('|');
-    if (matCache[k]) return matCache[k];
-    var roofM = new THREE.MeshLambertMaterial({ color: roof });
-    var res;
-    if (style === 'plain') {
-      var wm = new THREE.MeshLambertMaterial({ color: wall });
-      res = [wm, wm, roofM, roofM, wm, wm];
-    } else {
-      var tk = style + wall;
-      var base = texCache[tk] || (texCache[tk] = windowCanvas(style, wall));
-      var tw = base.clone(), td = base.clone();
-      tw.needsUpdate = td.needsUpdate = true;
-      tw.repeat.set(Math.max(1, Math.round(w * perUnit[style])), floors);
-      td.repeat.set(Math.max(1, Math.round(d * perUnit[style])), floors);
-      var mw = new THREE.MeshLambertMaterial({ map: tw }), md = new THREE.MeshLambertMaterial({ map: td });
-      res = [md, md, roofM, roofM, mw, mw];
-    }
-    matCache[k] = res;
-    return res;
+  function makeKit(sc) {
+    var mats = {}, wallM = {};
+    function base(name) { var m = new B.StandardMaterial(name, sc); m.specularColor = B.Color3.Black(); return m; }
+    return {
+      scene: sc,
+      mat: function (color) {
+        if (mats[color]) return mats[color];
+        var m = base('m' + color); m.diffuseColor = hex(color); return (mats[color] = m);
+      },
+      wall: function (style, wall) {
+        var k = style + wall; if (wallM[k]) return wallM[k];
+        var t = new B.DynamicTexture('t' + k, windowCanvas(style, wall), sc, true);
+        t.update(); t.wrapU = t.wrapV = B.Texture.WRAP_ADDRESSMODE; t.anisotropicFilteringLevel = 4;
+        var m = base('w' + k); m.diffuseTexture = t; m.diffuseColor = B.Color3.White();
+        return (wallM[k] = m);
+      }
+    };
   }
-  var simpleMat = {};
-  function mat(color) { return simpleMat[color] || (simpleMat[color] = new THREE.MeshLambertMaterial({ color: color })); }
+  var kit = makeKit(scene);
 
   // ---------- Модели зданий ----------
+  // Модель собирается из простых фигур и сливается в ОДНУ сетку (с несколькими материалами).
   var RES_WALL = ['#f2d3a2', '#e9b98f', '#f4e7c8', '#d9c2a7', '#f0c9c0', '#cfe0c3', '#e3d0e8'];
   var RES_ROOF = ['#b8553a', '#8e4a3a', '#6b4c3b', '#a0522d', '#5e6a7a', '#3f6b5a'];
+  var perUnit = { res: 1.5, office: 2.5, glass: 2.5, army: 2, gov: 2, shop: 1, plain: 0 };
 
-  function buildModel(cat, size, seed) {
+  function Shapes(K, ox, oz) {
+    var sc = K.scene, parts = [];
+    function put(m, material, x, y, z) { m.position.set(x - ox, y, z - oz); m.material = material; parts.push(m); return m; }
+    var api = {
+      parts: parts,
+      box: function (w, h, d, material, x, y, z, faceUV) {
+        return put(B.MeshBuilder.CreateBox('b', { width: w, height: h, depth: d, faceUV: faceUV, wrap: true }, sc), material, x, y, z);
+      },
+      cube: function (x0, z0, x1, z1, y0, h, color) {
+        return api.box(x1 - x0, h, z1 - z0, K.mat(color), (x0 + x1) / 2, y0 + h / 2, (z0 + z1) / 2);
+      },
+      cyl: function (rt, rb, h, seg, color, x, y, z) {
+        return put(B.MeshBuilder.CreateCylinder('c', { diameterTop: rt * 2, diameterBottom: rb * 2, height: h, tessellation: seg }, sc), K.mat(color), x, y, z);
+      },
+      // поворот «запекается» в вершины, затем масштаб — как в прежней версии
+      bake: function (m, rx, ry, rz) { m.rotation.set(rx || 0, ry || 0, rz || 0); var p = m.position.clone(); m.position.set(0, 0, 0); m.bakeCurrentTransformIntoVertices(); m.position.copyFrom(p); return m; },
+      merge: function () {
+        var m = B.Mesh.MergeMeshes(parts, true, true, undefined, false, true);
+        m.refreshBoundingInfo();
+        return m;
+      }
+    };
+    return api;
+  }
+
+  function buildModel(K, cat, size, seed) {
     var s = G.sizes[size], W = s.w, D = s.d, m = 0.08;
-    var r = rng(seed), g = new THREE.Group();
-    function mesh(geo, material, x, y, z) {
-      var o = new THREE.Mesh(geo, material); o.position.set(x - W / 2, y, z - D / 2);
-      o.castShadow = true; o.receiveShadow = true; g.add(o); return o;
-    }
+    var r = rng(seed), S = Shapes(K, W / 2, D / 2);
     function part(x0, z0, x1, z1, y0, h, floors, style, wall, roof, roofType, roofH) {
-      var w = x1 - x0, d = z1 - z0;
-      mesh(new THREE.BoxGeometry(w, h, d), wallMats(style, wall, roof, w, d, floors), (x0 + x1) / 2, y0 + h / 2, (z0 + z1) / 2);
+      var w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      if (style === 'plain') S.box(w, h, d, K.mat(wall), cx, y0 + h / 2, cz);
+      else {
+        var uw = Math.max(1, Math.round(w * perUnit[style])), ud = Math.max(1, Math.round(d * perUnit[style])), cap = new B.Vector4(0.02, 0.02, 0.03, 0.03);
+        S.box(w, h, d, K.wall(style, wall), cx, y0 + h / 2, cz,
+          [new B.Vector4(0, 0, uw, floors), new B.Vector4(0, 0, uw, floors), new B.Vector4(0, 0, ud, floors), new B.Vector4(0, 0, ud, floors), cap, cap]);
+      }
       if (roofType === 'hip') {
-        var cone = new THREE.ConeGeometry(Math.SQRT1_2, 1, 4, 1); cone.rotateY(Math.PI / 4);
-        var c = mesh(cone, mat(roof), (x0 + x1) / 2, y0 + h + roofH / 2, (z0 + z1) / 2);
-        c.scale.set(w * 1.12, roofH, d * 1.12);
+        var cone = B.MeshBuilder.CreateCylinder('r', { diameterTop: 0, diameterBottom: Math.SQRT2, height: 1, tessellation: 4 }, K.scene);
+        cone.material = K.mat(roof);
+        S.bake(cone, 0, Math.PI / 4, 0);
+        cone.convertToFlatShadedMesh();
+        cone.scaling.set(w * 1.12, roofH, d * 1.12);
+        cone.position.set(cx - W / 2, y0 + h + roofH / 2, cz - D / 2);
+        S.parts.push(cone);
       } else if (roofType === 'flat') {
-        mesh(new THREE.BoxGeometry(w + 0.04, 0.05, d + 0.04), mat(roof), (x0 + x1) / 2, y0 + h + 0.025, (z0 + z1) / 2);
+        S.box(w + 0.04, 0.05, d + 0.04, K.mat(roof), cx, y0 + h + 0.025, cz);
+      } else if (roofType === 'none' && style !== 'plain') {
+        S.box(w, 0.01, d, K.mat(roof), cx, y0 + h + 0.005, cz);
       }
     }
-    function cube(x0, z0, x1, z1, y0, h, color) {
-      return mesh(new THREE.BoxGeometry(x1 - x0, h, z1 - z0), mat(color), (x0 + x1) / 2, y0 + h / 2, (z0 + z1) / 2);
-    }
+    var cube = S.cube;
     function flag(x, y, z, color) {
-      mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.6, 6), mat('#c9ccd1'), x, y + 0.3, z);
-      mesh(new THREE.BoxGeometry(0.26, 0.15, 0.01), mat(color || '#19a7c9'), x + 0.14, y + 0.51, z);
+      S.cyl(0.015, 0.015, 0.6, 6, '#c9ccd1', x, y + 0.3, z);
+      S.box(0.26, 0.15, 0.01, K.mat(color || '#19a7c9'), x + 0.14, y + 0.51, z);
     }
     function tree(x, z, sc) {
       sc = sc || 1;
-      mesh(new THREE.CylinderGeometry(0.03 * sc, 0.04 * sc, 0.2 * sc, 6), mat('#7a5634'), x, 0.1 * sc, z);
-      mesh(new THREE.ConeGeometry(0.17 * sc, 0.42 * sc, 7), mat('#3f8f46'), x, 0.38 * sc, z);
+      S.cyl(0.03 * sc, 0.04 * sc, 0.2 * sc, 6, '#7a5634', x, 0.1 * sc, z);
+      S.cyl(0, 0.17 * sc, 0.42 * sc, 7, '#3f8f46', x, 0.38 * sc, z);
     }
     function cross(x, y, z, color, flat) {
       if (flat) { cube(x - 0.25, z - 0.07, x + 0.25, z + 0.07, y, 0.03, color); cube(x - 0.07, z - 0.25, x + 0.07, z + 0.25, y, 0.03, color); }
@@ -291,24 +288,24 @@
         flag(1.8, 0.8, 0.2);
       } else if (size === '2x2') {
         part(m, m, W - m, D - 0.45, 0, 1.0, 3, 'gov', '#e6e2d6', '#8c949e', 'flat');
-        for (var i = 0; i < 5; i++) mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.9, 10), mat('#f5f2ea'), 0.25 + i * 0.375, 0.45, D - 0.22);
+        for (var i = 0; i < 5; i++) S.cyl(0.045, 0.05, 0.9, 10, '#f5f2ea', 0.25 + i * 0.375, 0.45, D - 0.22);
         cube(m, D - 0.45, W - m, D - m, 0.9, 0.12, '#e6e2d6');
         cube(m, D - 0.45, W - m, D - m + 0.04, 0, 0.05, '#cfcabd');
         flag(1.0, 1.05, 0.8);
       } else {
         part(F[0], F[1], F[2], F[3], 0, 0.8, 2, 'gov', '#ece6d6', '#8c949e', 'flat');
         part(0.8, 0.6, 3.2, 3.0, 0.8, 1.4, 4, 'gov', '#f1ebdc', '#8c949e', 'flat');
-        var dome = new THREE.SphereGeometry(0.55, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
-        mesh(dome, mat('#3f8fbf'), 2.0, 2.25, 1.8);
+        var dome = B.MeshBuilder.CreateSphere('d', { diameter: 1.1, segments: 12, slice: 0.5 }, K.scene);
+        dome.material = K.mat('#3f8fbf'); dome.position.set(2.0 - W / 2, 2.25, 1.8 - D / 2); S.parts.push(dome);
         flag(2.0, 2.8, 1.8);
-        for (var j = 0; j < 6; j++) mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.75, 10), mat('#fbf8f0'), 0.9 + j * 0.44, 0.4, D - 0.02);
+        for (var j = 0; j < 6; j++) S.cyl(0.05, 0.055, 0.75, 10, '#fbf8f0', 0.9 + j * 0.44, 0.4, D - 0.02);
         cube(0.7, D - 0.1, 3.3, D - 0.0, 0.76, 0.1, '#ece6d6');
       }
     } else if (cat === 'army') {
       var aw = '#7d8b5a', ar = '#58623f';
       if (size === '1x1') {
         part(0.3, 0.3, 0.72, 0.72, 0, 0.45, 1, 'army', aw, ar, 'flat');
-        cube(0.15, 0.82, 0.95, 0.86, 0.22, 0.04, '#e25b4a'); cube(0.12, 0.78, 0.18, 0.9, 0, 0.25, '#555');
+        cube(0.15, 0.82, 0.95, 0.86, 0.22, 0.04, '#e25b4a'); cube(0.12, 0.78, 0.18, 0.9, 0, 0.25, '#555555');
       } else if (size === '2x1') {
         part(F[0], F[1], F[2], F[3], 0, 0.7, 2, 'army', '#c9c2a0', ar, 'flat');
         cube(m - 0.01, m - 0.01, W - m + 0.01, D - m + 0.01, 0.05, 0.08, aw);
@@ -327,7 +324,7 @@
         cube(2.2, 2.2, 3.7, 3.7, 0, 0.02, '#9e9e94');
         // танк
         cube(2.65, 2.75, 3.25, 3.15, 0.02, 0.16, '#4e5a35'); cube(2.8, 2.82, 3.1, 3.08, 0.18, 0.1, '#5b6840');
-        var barrel = mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.38, 6), mat('#3f4a2b'), 2.95, 0.24, 2.72); barrel.rotation.x = Math.PI / 2;
+        S.bake(S.cyl(0.02, 0.02, 0.38, 6, '#3f4a2b', 2.95, 0.24, 2.72), Math.PI / 2, 0, 0);
         // вышка
         cube(0.35, 3.25, 0.65, 3.55, 0, 1.0, '#6c6a5a'); cube(0.25, 3.15, 0.75, 3.65, 1.0, 0.25, aw); cube(0.22, 3.12, 0.78, 3.68, 1.25, 0.04, ar);
         flag(1.2, 0, 2.8, '#2f6b3a');
@@ -335,7 +332,7 @@
     } else if (cat === 'corp') {
       if (size === '1x1') {
         part(F[0], F[1], F[2], F[3], 0, 0.5, 1, 'shop', '#f6d9a0', '#8d8d8d', 'flat');
-        var aw2 = cube(0.12, D - m, 0.88, D - m + 0.16, 0.4, 0.03, '#d9534f'); aw2.rotation.x = 0.25;
+        S.bake(cube(0.12, D - m, 0.88, D - m + 0.16, 0.4, 0.03, '#d9534f'), 0.25, 0, 0);
       } else if (size === '2x1') {
         part(F[0], F[1], F[2], F[3], 0, 1.3, 4, 'office', '#cfd8e3', '#7b8794', 'flat');
         cube(0.3, 0.3, 0.55, 0.55, 1.35, 0.12, '#a9b1b9'); cube(1.3, 0.35, 1.6, 0.6, 1.35, 0.12, '#a9b1b9');
@@ -346,164 +343,247 @@
         part(F[0], F[1], F[2], F[3], 0, 0.6, 2, 'glass', '#264b78', '#5c6b7a', 'flat');
         part(0.7, 0.7, 3.3, 3.3, 0.65, 5.2, 17, 'glass', '#2f5f93', '#5c6b7a', 'none');
         part(1.0, 1.0, 3.0, 3.0, 5.85, 0.4, 1, 'plain', '#c7d2dd', '#9aa7b4', 'flat');
-        mesh(new THREE.CylinderGeometry(0.02, 0.05, 1.1, 8), mat('#d0d6dc'), 2.0, 6.85, 2.0);
+        S.cyl(0.02, 0.05, 1.1, 8, '#d0d6dc', 2.0, 6.85, 2.0);
       }
     }
-    return g;
+    return S.merge();
   }
 
   // ---------- Грузовик «Бригада» (зелёный, в стиле 60-х). Смотрит вперёд по +z ----------
-  function truckModel() {
-    var g = new THREE.Group();
+  function truckModel(K) {
+    var S = Shapes(K, 0, 0);
     var GREEN = '#4f8f3e', DARK = '#3b6e2e', CREAM = '#ece4c8', CHROME = '#d9dcd2', TIRE = '#1c1c1c', WOOD = '#a8844f', GLASS = '#9cc3dd';
-    function add(geo, color, x, y, z) { var o = new THREE.Mesh(geo, mat(color)); o.position.set(x, y, z); o.castShadow = true; o.receiveShadow = true; g.add(o); return o; }
-    function box(w, h, d, color, x, y, z) { return add(new THREE.BoxGeometry(w, h, d), color, x, y, z); }
-    // рама
-    box(0.26, 0.05, 0.86, '#2c2c2a', 0, 0.12, -0.02);
-    // колёса с белыми колпаками
-    [[0.15, 0.27], [-0.15, 0.27], [0.15, -0.25], [-0.15, -0.25]].forEach(function (p) {
-      var w = new THREE.CylinderGeometry(0.075, 0.075, 0.06, 14); w.rotateZ(Math.PI / 2); add(w, TIRE, p[0], 0.075, p[1]);
-      var h = new THREE.CylinderGeometry(0.035, 0.035, 0.064, 10); h.rotateZ(Math.PI / 2); add(h, CHROME, p[0], 0.075, p[1]);
+    function box(w, h, d, color, x, y, z) { return S.box(w, h, d, K.mat(color), x, y, z); }
+    box(0.26, 0.05, 0.86, '#2c2c2a', 0, 0.12, -0.02);                                   // рама
+    [[0.15, 0.27], [-0.15, 0.27], [0.15, -0.25], [-0.15, -0.25]].forEach(function (p) {   // колёса с белыми колпаками
+      S.bake(S.cyl(0.075, 0.075, 0.06, 14, TIRE, p[0], 0.075, p[1]), 0, 0, Math.PI / 2);
+      S.bake(S.cyl(0.035, 0.035, 0.064, 10, CHROME, p[0], 0.075, p[1]), 0, 0, Math.PI / 2);
     });
-    // круглые крылья над передними колёсами
-    [0.15, -0.15].forEach(function (x) {
-      var f = new THREE.CylinderGeometry(0.095, 0.095, 0.08, 14, 1, false, 0, Math.PI); f.rotateZ(Math.PI / 2); add(f, DARK, x, 0.1, 0.27);
-    });
-    // капот с округлой крышкой
-    box(0.22, 0.1, 0.22, GREEN, 0, 0.2, 0.33);
-    var hood = new THREE.CylinderGeometry(0.11, 0.11, 0.22, 14, 1, false, Math.PI / 2, Math.PI); hood.rotateX(Math.PI / 2);
-    var hm = add(hood, GREEN, 0, 0.25, 0.33); hm.scale.set(1, 0.5, 1);
-    // хромированная решётка, бампер, круглые фары
-    box(0.15, 0.08, 0.012, CHROME, 0, 0.2, 0.445);
+    [0.15, -0.15].forEach(function (x) { box(0.08, 0.03, 0.2, DARK, x, 0.17, 0.27); });  // крылья над передними колёсами
+    box(0.22, 0.1, 0.22, GREEN, 0, 0.2, 0.33);                                            // капот
+    var hood = S.bake(S.cyl(0.11, 0.11, 0.22, 14, GREEN, 0, 0.25, 0.33), Math.PI / 2, 0, 0); hood.scaling.set(1, 0.5, 1);
+    box(0.15, 0.08, 0.012, CHROME, 0, 0.2, 0.445);                                        // решётка, бампер, фары
     for (var i = 0; i < 3; i++) box(0.15, 0.008, 0.016, '#7b7e78', 0, 0.175 + i * 0.025, 0.446);
     box(0.32, 0.03, 0.035, CHROME, 0, 0.12, 0.46);
-    [0.085, -0.085].forEach(function (x) {
-      var l = new THREE.CylinderGeometry(0.028, 0.028, 0.02, 12); l.rotateX(Math.PI / 2); add(l, '#fff4c2', x, 0.245, 0.447);
-    });
-    // кабина: зелёная, крыша кремовая (двухцветная окраска 60-х)
-    box(0.3, 0.2, 0.2, GREEN, 0, 0.3, 0.12);
+    [0.085, -0.085].forEach(function (x) { S.bake(S.cyl(0.028, 0.028, 0.02, 12, '#fff4c2', x, 0.245, 0.447), Math.PI / 2, 0, 0); });
+    box(0.3, 0.2, 0.2, GREEN, 0, 0.3, 0.12);                                              // кабина
     box(0.31, 0.035, 0.21, CREAM, 0, 0.418, 0.12);
-    box(0.24, 0.085, 0.012, GLASS, 0, 0.345, 0.222);             // лобовое
-    box(0.304, 0.075, 0.12, GLASS, 0, 0.345, 0.125);             // боковые окна
-    box(0.302, 0.02, 0.202, CREAM, 0, 0.27, 0.12);               // молдинг
-    // кузов: деревянные борта, внутри кирпич и доски
-    box(0.32, 0.03, 0.42, WOOD, 0, 0.17, -0.21);
+    box(0.24, 0.085, 0.012, GLASS, 0, 0.345, 0.222);
+    box(0.304, 0.075, 0.12, GLASS, 0, 0.345, 0.125);
+    box(0.302, 0.02, 0.202, CREAM, 0, 0.27, 0.12);
+    box(0.32, 0.03, 0.42, WOOD, 0, 0.17, -0.21);                                          // кузов
     box(0.02, 0.1, 0.42, WOOD, 0.15, 0.23, -0.21); box(0.02, 0.1, 0.42, WOOD, -0.15, 0.23, -0.21);
     box(0.32, 0.1, 0.02, WOOD, 0, 0.23, -0.41); box(0.32, 0.13, 0.02, DARK, 0, 0.245, 0.0);
     box(0.322, 0.012, 0.422, '#7d6136', 0, 0.255, -0.21);
-    box(0.18, 0.07, 0.14, '#b5563c', -0.04, 0.22, -0.13);
+    box(0.18, 0.07, 0.14, '#b5563c', -0.04, 0.22, -0.13);                                 // кирпич и доски
     box(0.08, 0.04, 0.33, '#e0c48a', 0.08, 0.205, -0.22);
-    // лесенка-стремянка на кузове
-    box(0.04, 0.02, 0.3, '#f0b23c', -0.07, 0.28, -0.26);
-    return g;
+    box(0.04, 0.02, 0.3, '#f0b23c', -0.07, 0.28, -0.26);                                  // стремянка
+    return S.merge();
   }
-  var truckTpl = null;
-  function newTruckMesh() { if (!truckTpl) truckTpl = truckModel(); var m = truckTpl.clone(); m.scale.setScalar(0.78); return m; }
+
+  // ---------- Пачки (thin instances): одна сетка — много копий ----------
+  var batches = {}, dirtyBatches = {};
+  var tmpM = B.Matrix.Identity(), tmpQ = new B.Quaternion(), tmpS = new B.Vector3(), tmpT = new B.Vector3();
+  function getBatch(k, make) {
+    var bt = batches[k];
+    if (bt) return bt;
+    var mesh = make();
+    mesh.isPickable = false; mesh.receiveShadows = true; mesh.alwaysSelectAsActiveMesh = true;
+    mesh.setEnabled(false);
+    shadowGen.addShadowCaster(mesh, false);
+    bt = batches[k] = { key: k, mesh: mesh, h: mesh.getBoundingInfo().boundingBox.maximumWorld.y, ids: [], at: {}, buf: new Float32Array(16 * 8) };
+    return bt;
+  }
+  function batchSet(bt, id, x, y, z, yaw, sx, sy, sz, roll) {
+    var i = bt.at[id];
+    if (i === undefined) {
+      i = bt.at[id] = bt.ids.length; bt.ids.push(id);
+      if (bt.buf.length < bt.ids.length * 16) { var nb = new Float32Array(bt.buf.length * 2); nb.set(bt.buf); bt.buf = nb; }
+    }
+    B.Quaternion.FromEulerAnglesToRef(0, yaw, roll || 0, tmpQ);
+    tmpS.set(sx, sy, sz); tmpT.set(x, y, z);
+    B.Matrix.ComposeToRef(tmpS, tmpQ, tmpT, tmpM);
+    tmpM.copyToArray(bt.buf, i * 16);
+    dirtyBatches[bt.key] = bt;
+  }
+  function batchRemove(bt, id) {
+    var i = bt.at[id]; if (i === undefined) return;
+    var last = bt.ids.length - 1, lid = bt.ids[last];
+    if (i !== last) { bt.buf.copyWithin(i * 16, last * 16, last * 16 + 16); bt.ids[i] = lid; bt.at[lid] = i; }
+    bt.ids.pop(); delete bt.at[id];
+    dirtyBatches[bt.key] = bt;
+  }
+  function flushBatches() {
+    for (var k in dirtyBatches) {
+      var bt = dirtyBatches[k], n = bt.ids.length;
+      if (n) {
+        bt.mesh.thinInstanceSetBuffer('matrix', bt.buf.subarray(0, n * 16), 16, false);
+        bt.mesh.setEnabled(true);
+      } else bt.mesh.setEnabled(false);
+    }
+    dirtyBatches = {};
+  }
+
+  // Вариант модели: у жилых — 6 расцветок, у остальных — одна.
+  var RES_VARIANTS = 6;
+  function variantOf(cat, seed) { return cat === 'res' ? (seed >>> 0) % RES_VARIANTS : 0; }
+  function modelSeed(cat, v) { return cat === 'res' ? 9001 + v * 7919 : 1; }
+  function tplKey(cat, size, seed) { return cat + '|' + size + '|' + variantOf(cat, seed); }
+  function buildingBatch(b) {
+    var v = variantOf(b.cat, b.seed);
+    return getBatch(tplKey(b.cat, b.size, b.seed), function () { return buildModel(kit, b.cat, b.size, modelSeed(b.cat, v)); });
+  }
+
+  // ---------- Карта: земля, сетка, рамка, «срез» земли для изометрии ----------
+  var mapNodes = [];
+  var groundMat = kit.mat('#8cc068'), outerMat = kit.mat('#6f9a52'), frameMat = kit.mat('#c9b78f');
+  var outerGround = null, slab = null, gridMesh = null;
+  function buildMapScene() {
+    mapNodes.forEach(function (o) { o.dispose(); }); mapNodes = [];
+    var ground = B.MeshBuilder.CreateGround('ground', { width: N, height: N }, scene);
+    ground.material = groundMat; ground.receiveShadows = true; ground.isPickable = false; mapNodes.push(ground);
+    outerGround = B.MeshBuilder.CreateGround('outer', { width: N * 6, height: N * 6 }, scene);
+    outerGround.position.y = -0.03; outerGround.material = outerMat; outerGround.receiveShadows = true; outerGround.isPickable = false; mapNodes.push(outerGround);
+    // Срез земли под картой (видно в изометрии, как в SimCity 2000): трава, земля, камень.
+    slab = new B.TransformNode('slab', scene); mapNodes.push(slab);
+    [['#7b5a3c', 0.9, -0.47], ['#5e4632', 0.7, -1.27], ['#4a4a4f', 0.5, -1.87]].forEach(function (L) {
+      var s = B.MeshBuilder.CreateBox('slab', { width: N, height: L[1], depth: N }, scene);
+      s.position.y = L[2]; s.material = kit.mat(L[0]); s.isPickable = false; s.parent = slab;
+    });
+    var lines = [], h = N / 2;
+    for (var i = 0; i <= N; i++) {
+      lines.push([new B.Vector3(-h + i, 0.006, -h), new B.Vector3(-h + i, 0.006, h)]);
+      lines.push([new B.Vector3(-h, 0.006, -h + i), new B.Vector3(h, 0.006, -h + i)]);
+    }
+    var grid = B.MeshBuilder.CreateLineSystem('grid', { lines: lines }, scene);
+    grid.color = hex('#2d4a22'); grid.alpha = N > 80 ? 0.16 : 0.22; grid.isPickable = false; grid.applyFog = false; mapNodes.push(grid);
+    gridMesh = grid;
+    var t = 0.25, fh = 0.12;
+    [[0, -N / 2 - t / 2, N + 2 * t, t], [0, N / 2 + t / 2, N + 2 * t, t], [-N / 2 - t / 2, 0, t, N], [N / 2 + t / 2, 0, t, N]].forEach(function (a) {
+      var e = B.MeshBuilder.CreateBox('frame', { width: a[2], height: fh, depth: a[3] }, scene);
+      e.position.set(a[0], fh / 2 - 0.02, a[1]); e.material = frameMat; e.receiveShadows = true; e.isPickable = false; mapNodes.push(e);
+    });
+    applyViewScenery();
+  }
+
+  function cellCenter(x, z) { return { x: x - N / 2 + 0.5, z: z - N / 2 + 0.5 }; }
+
+  // ---------- Плоские четырёхугольники (дороги, подсветка) ----------
+  function flatMat(color, opts) {
+    opts = opts || {};
+    var m = new B.StandardMaterial('f' + color, scene);
+    m.specularColor = B.Color3.Black(); m.backFaceCulling = false;
+    if (opts.overlay) { m.disableLighting = true; m.emissiveColor = hex(color); m.alpha = opts.alpha; m.zOffset = -3; m.disableDepthWrite = true; }
+    else m.diffuseColor = hex(color);
+    return m;
+  }
+  function quadsMesh(name, quads, material) { // quads: [cx, cz, w, d, y]
+    var pos = [], nor = [], uv = [], ind = [];
+    quads.forEach(function (q, i) {
+      var x0 = q[0] - q[2] / 2, x1 = q[0] + q[2] / 2, z0 = q[1] - q[3] / 2, z1 = q[1] + q[3] / 2, y = q[4];
+      pos.push(x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1);
+      nor.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
+      uv.push(0, 0, 1, 0, 1, 1, 0, 1);
+      var o = i * 4; ind.push(o, o + 2, o + 1, o, o + 3, o + 2);
+    });
+    var m = new B.Mesh(name, scene), vd = new B.VertexData();
+    vd.positions = pos; vd.normals = nor; vd.uvs = uv; vd.indices = ind; vd.applyToMesh(m);
+    m.material = material; m.isPickable = false;
+    return m;
+  }
+
+  // ---------- Дороги: куски карты 16×16 клеток, каждый — одна сетка на материал ----------
+  var roadMat = {};
+  ['asphalt', 'dirt'].forEach(function (t) {
+    var c = document.createElement('canvas'); c.width = c.height = 64; var g = c.getContext('2d');
+    g.fillStyle = G.roads[t].color; g.fillRect(0, 0, 64, 64);
+    var r = rng(t === 'dirt' ? 7 : 3);
+    for (var i = 0; i < 260; i++) {
+      var v = r(); g.fillStyle = t === 'dirt' ? (v > .5 ? 'rgba(120,90,55,.35)' : 'rgba(200,170,120,.3)') : (v > .5 ? 'rgba(0,0,0,.18)' : 'rgba(255,255,255,.07)');
+      g.fillRect(r() * 64, r() * 64, 2, 2);
+    }
+    var m = flatMat('#ffffff'), tx = new B.DynamicTexture('road' + t, c, scene, true); tx.update();
+    m.diffuseTexture = tx; roadMat[t] = m;
+  });
+  roadMat.line = flatMat('#f1f1e6'); roadMat.curb = flatMat('#c4c4bc'); roadMat.rut = flatMat('#8a6a44');
+  var CH = 16, chunks = {}, dirtyChunks = {};
+  var DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  function markRoad(x, z) { dirtyChunks[Math.floor(x / CH) + ',' + Math.floor(z / CH)] = 1; }
+  function buildChunk(ck) {
+    (chunks[ck] || []).forEach(function (m) { m.dispose(); }); chunks[ck] = [];
+    var p = ck.split(','), X0 = +p[0] * CH, Z0 = +p[1] * CH, Q = { asphalt: [], dirt: [], line: [], curb: [], rut: [] };
+    for (var z = Z0; z < Z0 + CH; z++) for (var x = X0; x < X0 + CH; x++) {
+      var t = state.roads[key(x, z)]; if (!t || !inMap(x, z)) continue;
+      var c = cellCenter(x, z);
+      Q[t].push([c.x, c.z, 1, 1, 0.012]);
+      DIRS.forEach(function (dv) {
+        var n = state.roads[key(x + dv[0], z + dv[1])], hx = dv[0] !== 0, sgn = dv[0] + dv[1];
+        if (t === 'asphalt') {
+          if (n === 'asphalt') Q.line.push(hx ? [c.x + sgn * 0.3, c.z, 0.22, 0.05, 0.016] : [c.x, c.z + sgn * 0.3, 0.05, 0.22, 0.016]);
+          else if (!n) Q.curb.push(hx ? [c.x + sgn * 0.46, c.z, 0.08, 1, 0.018] : [c.x, c.z + sgn * 0.46, 1, 0.08, 0.018]);
+        } else if (n) {
+          Q.rut.push(hx ? [c.x + sgn * 0.25, c.z - 0.18, 0.5, 0.06, 0.015] : [c.x - 0.18, c.z + sgn * 0.25, 0.06, 0.5, 0.015]);
+          Q.rut.push(hx ? [c.x + sgn * 0.25, c.z + 0.18, 0.5, 0.06, 0.015] : [c.x + 0.18, c.z + sgn * 0.25, 0.06, 0.5, 0.015]);
+        }
+      });
+    }
+    Object.keys(Q).forEach(function (k) {
+      if (!Q[k].length) return;
+      var m = quadsMesh('road', Q[k], roadMat[k]); m.receiveShadows = true; chunks[ck].push(m);
+    });
+  }
+  function flushRoads() { for (var ck in dirtyChunks) buildChunk(ck); dirtyChunks = {}; }
+  function refreshRoadAround(x, z) { markRoad(x, z); DIRS.forEach(function (d) { markRoad(x + d[0], z + d[1]); }); }
 
   // ---------- Здания и стройплощадки на сцене ----------
-  function placeMesh(obj, b) {
-    var f = foot(b.size, b.rot);
-    obj.position.set(b.x + f.w / 2 - N / 2, 0, b.z + f.d / 2 - N / 2);
-    obj.rotation.y = -b.rot * Math.PI / 2;
-  }
-  function addSiteParts(g, b) {
-    var s = G.sizes[b.size], W = s.w, D = s.d, site = new THREE.Group();
-    var box = new THREE.Box3().setFromObject(g.userData.model);
-    g.userData.h = Math.max(0.45, box.max.y);
-    function bx(w, h, d, color, x, y, z, shadow) { var o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color)); o.position.set(x, y, z); o.castShadow = !!shadow; o.receiveShadow = true; site.add(o); return o; }
-    bx(W - 0.1, 0.04, D - 0.1, '#a39d92', 0, 0.02, 0);                // фундамент
-    var e = 0.03;                                                     // ограждение
-    bx(W - 0.02, 0.05, e, '#ff8a1f', 0, 0.13, -D / 2 + e); bx(W - 0.02, 0.05, e, '#ff8a1f', 0, 0.13, D / 2 - e);
-    bx(e, 0.05, D - 0.02, '#ff8a1f', -W / 2 + e, 0.13, 0); bx(e, 0.05, D - 0.02, '#ff8a1f', W / 2 - e, 0.13, 0);
-    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (c) { bx(0.04, 0.18, 0.04, '#f2f2ea', c[0] * (W / 2 - e), 0.09, c[1] * (D / 2 - e), true); });
-    // полоска прогресса над стройкой
-    var bar = new THREE.Group(), bw = Math.min(W, 2.4) * 0.8;
-    var bg = new THREE.Mesh(new THREE.BoxGeometry(bw + 0.08, 0.11, 0.11), mat('#26303d'));
-    var fg = new THREE.BoxGeometry(bw, 0.075, 0.13); fg.translate(bw / 2, 0, 0);
-    var fill = new THREE.Mesh(fg, mat('#5fd35a')); fill.position.x = -bw / 2;
-    bar.add(bg); bar.add(fill); site.add(bar);
-    g.add(site);
-    g.userData.site = site; g.userData.fill = fill; g.userData.bar = bar;
-  }
-  function updateSiteMesh(b) {
-    var g = bMeshes[b.id]; if (!g || !g.userData.site) return;
-    var p = clamp(b.prog, 0, 1), sy = Math.max(0.04, p);
-    g.userData.model.scale.y = sy;
-    g.userData.fill.scale.x = Math.max(0.001, p);
-    g.userData.bar.position.y = g.userData.h * sy + 0.35;
+  var placed = {}, sites = {}; // id -> batch; id -> узел стройки
+  function bPos(b) { var f = foot(b.size, b.rot); return { x: b.x + f.w / 2 - N / 2, z: b.z + f.d / 2 - N / 2, yaw: -b.rot * Math.PI / 2 }; }
+  function writeBuilding(b) {
+    var bt = placed[b.id]; if (!bt) return;
+    var p = bPos(b), hide = moving && moving.b.id === b.id;
+    var sy = isSite(b) ? Math.max(0.04, clamp(b.prog, 0, 1)) : 1;
+    if (hide) batchSet(bt, b.id, p.x, -50, p.z, p.yaw, 0.001, 0.001, 0.001);
+    else batchSet(bt, b.id, p.x, 0, p.z, p.yaw, 1, sy, 1);
+    var st = sites[b.id];
+    if (st) { st.node.position.set(p.x, 0, p.z); st.node.rotation.y = p.yaw; st.node.setEnabled(!hide); }
     dirty();
   }
+  function addSiteParts(b) {
+    var s = G.sizes[b.size], W = s.w, D = s.d, node = new B.TransformNode('site' + b.id, scene), S = Shapes(kit, 0, 0), e = 0.03;
+    S.box(W - 0.1, 0.04, D - 0.1, kit.mat('#a39d92'), 0, 0.02, 0);                   // фундамент
+    S.box(W - 0.02, 0.05, e, kit.mat('#ff8a1f'), 0, 0.13, -D / 2 + e); S.box(W - 0.02, 0.05, e, kit.mat('#ff8a1f'), 0, 0.13, D / 2 - e);
+    S.box(e, 0.05, D - 0.02, kit.mat('#ff8a1f'), -W / 2 + e, 0.13, 0); S.box(e, 0.05, D - 0.02, kit.mat('#ff8a1f'), W / 2 - e, 0.13, 0);
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (c) { S.box(0.04, 0.18, 0.04, kit.mat('#f2f2ea'), c[0] * (W / 2 - e), 0.09, c[1] * (D / 2 - e)); });
+    var fence = S.merge(); fence.parent = node; fence.receiveShadows = true; fence.isPickable = false;
+    var bw = Math.min(W, 2.4) * 0.8, bar = new B.TransformNode('bar', scene); bar.parent = node;
+    var bg = B.MeshBuilder.CreateBox('bbg', { width: bw + 0.08, height: 0.11, depth: 0.11 }, scene); bg.material = kit.mat('#26303d'); bg.parent = bar;
+    var fill = B.MeshBuilder.CreateBox('bfill', { width: bw, height: 0.075, depth: 0.13 }, scene);
+    fill.setPivotPoint(new B.Vector3(-bw / 2, 0, 0)); fill.material = kit.mat('#5fd35a'); fill.parent = bar;
+    [bg, fill].forEach(function (m) { m.isPickable = false; });
+    sites[b.id] = { node: node, fill: fill, bar: bar };
+  }
+  function updateSite(b) {
+    var st = sites[b.id]; if (!st) return;
+    var p = clamp(b.prog, 0, 1), sy = Math.max(0.04, p), h = Math.max(0.45, placed[b.id].h);
+    st.fill.scaling.x = Math.max(0.001, p);
+    st.bar.position.y = h * sy + 0.35;
+    writeBuilding(b);
+  }
   function addBuildingMesh(b) {
-    var g = new THREE.Group(), m = buildModel(b.cat, b.size, b.seed);
-    g.add(m); g.userData.model = m;
-    if (isSite(b)) addSiteParts(g, b);
-    g.traverse(function (o) { o.userData.bid = b.id; });
-    placeMesh(g, b);
-    buildGroup.add(g); bMeshes[b.id] = g;
-    if (isSite(b)) updateSiteMesh(b);
+    byId[b.id] = b;
+    placed[b.id] = buildingBatch(b);
+    if (isSite(b)) { addSiteParts(b); updateSite(b); }
+    writeBuilding(b);
   }
   function removeBuildingMesh(id) {
-    var g = bMeshes[id]; if (!g) return;
-    buildGroup.remove(g);
-    g.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
-    delete bMeshes[id];
-  }
-
-  // ---------- Дороги ----------
-  var roadMat = {
-    asphalt: new THREE.MeshLambertMaterial({ color: G.roads.asphalt.color }),
-    dirt: new THREE.MeshLambertMaterial({ color: G.roads.dirt.color })
-  };
-  (function () { // лёгкий шум для текстуры дорог
-    ['asphalt', 'dirt'].forEach(function (t) {
-      var c = document.createElement('canvas'); c.width = c.height = 64; var g = c.getContext('2d');
-      g.fillStyle = G.roads[t].color; g.fillRect(0, 0, 64, 64);
-      var r = rng(t === 'dirt' ? 7 : 3);
-      for (var i = 0; i < 260; i++) {
-        var v = r(); g.fillStyle = t === 'dirt' ? (v > .5 ? 'rgba(120,90,55,.35)' : 'rgba(200,170,120,.3)') : (v > .5 ? 'rgba(0,0,0,.18)' : 'rgba(255,255,255,.07)');
-        g.fillRect(r() * 64, r() * 64, 2, 2);
-      }
-      var tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;
-      roadMat[t].map = tx; roadMat[t].color.set('#ffffff'); roadMat[t].needsUpdate = true;
-    });
-  })();
-  var lineMat = new THREE.MeshLambertMaterial({ color: '#f1f1e6' });
-  var curbMat = new THREE.MeshLambertMaterial({ color: '#c4c4bc' });
-  var rutMat = new THREE.MeshLambertMaterial({ color: '#8a6a44' });
-  var planeGeo = new THREE.PlaneGeometry(1, 1); planeGeo.rotateX(-Math.PI / 2);
-
-  function flatQuad(material, cx, cz, w, d, y) {
-    var q = new THREE.Mesh(planeGeo, material); q.scale.set(w, 1, d); q.position.set(cx, y, cz); q.receiveShadow = true; return q;
-  }
-  var DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-  function buildRoadCell(x, z) {
-    var k = key(x, z);
-    if (rMeshes[k]) { roadGroup.remove(rMeshes[k]); delete rMeshes[k]; }
-    var t = state.roads[k]; if (!t) return;
-    var c = cellCenter(x, z), g = new THREE.Group();
-    g.add(flatQuad(roadMat[t], c.x, c.z, 1, 1, 0.012));
-    DIRS.forEach(function (dv) {
-      var n = state.roads[key(x + dv[0], z + dv[1])];
-      var hx = dv[0] !== 0, sgn = dv[0] + dv[1];
-      if (t === 'asphalt') {
-        if (n === 'asphalt') { // разметка к соседу
-          g.add(hx ? flatQuad(lineMat, c.x + sgn * 0.3, c.z, 0.22, 0.05, 0.016) : flatQuad(lineMat, c.x, c.z + sgn * 0.3, 0.05, 0.22, 0.016));
-        } else if (!n) { // бордюр
-          g.add(hx ? flatQuad(curbMat, c.x + sgn * 0.46, c.z, 0.08, 1, 0.018) : flatQuad(curbMat, c.x, c.z + sgn * 0.46, 1, 0.08, 0.018));
-        }
-      } else if (n) { // колея к соседу
-        g.add(hx ? flatQuad(rutMat, c.x + sgn * 0.25, c.z - 0.18, 0.5, 0.06, 0.015) : flatQuad(rutMat, c.x - 0.18, c.z + sgn * 0.25, 0.06, 0.5, 0.015));
-        g.add(hx ? flatQuad(rutMat, c.x + sgn * 0.25, c.z + 0.18, 0.5, 0.06, 0.015) : flatQuad(rutMat, c.x + 0.18, c.z + sgn * 0.25, 0.06, 0.5, 0.015));
-      }
-    });
-    roadGroup.add(g); rMeshes[k] = g;
-  }
-  function refreshRoadAround(x, z) {
-    buildRoadCell(x, z);
-    DIRS.forEach(function (d) { if (inMap(x + d[0], z + d[1])) buildRoadCell(x + d[0], z + d[1]); });
+    if (placed[id]) { batchRemove(placed[id], id); delete placed[id]; }
+    if (sites[id]) { sites[id].node.dispose(); delete sites[id]; }
+    dirty();
   }
 
   // ---------- Бригады ----------
+  function truckBatch() { return getBatch('truck', function () { return truckModel(kit); }); }
+  function writeTruck(br, bob, roll) { batchSet(truckBatch(), br.id, br.x, bob || 0, br.z, br.yaw || 0, 0.78, 0.78, 0.78, roll || 0); }
   function parkSpot(i, n) { n = n || N; return { x: ((i % 6) - 2.5) * 0.9, z: n / 2 - 0.9 - Math.floor(i / 6) * 0.9 }; }
   function siteCenter(b) { var f = foot(b.size, b.rot); return { x: b.x + f.w / 2 - N / 2, z: b.z + f.d / 2 - N / 2 }; }
   // k-я машина на объекте встаёт вдоль сторон участка
@@ -547,12 +627,10 @@
     return { all: all, here: here };
   }
   function rebuildTrucks() {
-    Object.keys(tMeshes).forEach(function (id) { truckGroup.remove(tMeshes[id]); delete tMeshes[id]; });
-    state.brigades.forEach(addTruck);
-  }
-  function addTruck(br) {
-    var m = newTruckMesh(); m.position.set(br.x, 0, br.z); m.rotation.y = br.yaw || 0;
-    truckGroup.add(m); tMeshes[br.id] = m; dirty();
+    var bt = truckBatch();
+    bt.ids.slice().forEach(function (id) { batchRemove(bt, id); });
+    state.brigades.forEach(function (br) { writeTruck(br); });
+    dirty();
   }
   function buyBrigade() {
     var u = G.units.brigade;
@@ -560,7 +638,7 @@
     pay(u.price);
     var i = state.brigades.length, p = parkSpot(i);
     var br = { id: state.nextBr++, x: p.x, z: N / 2 + 1.6, yaw: Math.PI, park: p, site: 0 };
-    state.brigades.push(br); addTruck(br);
+    state.brigades.push(br); writeTruck(br); dirty();
     assignBrigades(); save(); refreshNeed(); renderMech();
     hint(state.buildings.some(isSite) ? '🚚 Бригада выехала на стройку' : '🚚 Бригада куплена — теперь можно строить');
   }
@@ -569,7 +647,7 @@
     var j = state.brigades.length - 1;
     for (var i = state.brigades.length - 1; i >= 0; i--) if (!state.brigades[i].site) { j = i; break; } // сначала свободную
     var br = state.brigades.splice(j, 1)[0];
-    if (tMeshes[br.id]) { truckGroup.remove(tMeshes[br.id]); delete tMeshes[br.id]; }
+    batchRemove(truckBatch(), br.id);
     state.spent -= Math.round(G.units.brigade.price / 2); updateMoney();
     assignBrigades(); save(); refreshNeed(); renderMech(); dirty();
     hint('Бригада продана, вернули ' + usd(G.units.brigade.price / 2));
@@ -583,30 +661,30 @@
       var b = br.site ? getB(br.site) : null, tgt = null, atSite = false;
       if (b && isSite(b)) { var k = perSite[b.id] || 0; perSite[b.id] = k + 1; tgt = slotPos(b, k); atSite = true; }
       else if (br.park) tgt = { x: br.park.x, z: br.park.z, yaw: br.yaw };
+      var was = br.work, moved = false;
       br.work = false;
       if (tgt) {
         var dx = tgt.x - br.x, dz = tgt.z - br.z, d = Math.hypot(dx, dz);
         if (d > 0.02) {
           var v = Math.max(u.speed, d / 3), st = Math.min(d, v * dt);
           br.x += dx / d * st; br.z += dz / d * st;
-          br.yaw = angTo(br.yaw || 0, Math.atan2(dx, dz), Math.min(1, dt * 10)); any = true;
+          br.yaw = angTo(br.yaw || 0, Math.atan2(dx, dz), Math.min(1, dt * 10)); moved = true;
         } else {
           br.x = tgt.x; br.z = tgt.z;
-          if (Math.abs(Math.atan2(Math.sin(tgt.yaw - br.yaw), Math.cos(tgt.yaw - br.yaw))) > 0.01) { br.yaw = angTo(br.yaw, tgt.yaw, Math.min(1, dt * 8)); any = true; }
-          if (atSite) { br.work = true; arrived[b.id] = (arrived[b.id] || 0) + 1; any = true; }
+          if (Math.abs(Math.atan2(Math.sin(tgt.yaw - br.yaw), Math.cos(tgt.yaw - br.yaw))) > 0.01) { br.yaw = angTo(br.yaw, tgt.yaw, Math.min(1, dt * 8)); moved = true; }
+          if (atSite) { br.work = true; arrived[b.id] = (arrived[b.id] || 0) + 1; moved = true; }
         }
       }
-      var m = tMeshes[br.id];
-      if (m) {
-        m.position.set(br.x, br.work ? Math.abs(Math.sin(t * 0.012 + br.id * 1.7)) * 0.012 : 0, br.z);
-        m.rotation.y = br.yaw || 0; m.rotation.z = br.work ? Math.sin(t * 0.02 + br.id) * 0.02 : 0;
+      if (moved || was) {
+        writeTruck(br, br.work ? Math.abs(Math.sin(t * 0.012 + br.id * 1.7)) * 0.012 : 0, br.work ? Math.sin(t * 0.02 + br.id) * 0.02 : 0);
+        any = true;
       }
     });
     var done = [];
     state.buildings.forEach(function (b) {
       var a = arrived[b.id]; if (!a || !isSite(b)) return;
       b.prog = Math.min(1, b.prog + dt * a * u.power / buildTime(b));
-      updateSiteMesh(b);
+      updateSite(b);
       if (b.prog >= 1) done.push(b);
     });
     done.forEach(finishSite);
@@ -623,94 +701,171 @@
   }
 
   function rebuildAll() {
-    if (!mapGroup.children.length || state.size !== N) { N = state.size; occ = new Int32Array(N * N); buildMapScene(); }
-    Object.keys(bMeshes).forEach(function (id) { removeBuildingMesh(+id); });
-    Object.keys(rMeshes).forEach(function (k) { roadGroup.remove(rMeshes[k]); delete rMeshes[k]; });
+    if (!mapNodes.length || state.size !== N) { N = state.size; occ = new Int32Array(N * N); buildMapScene(); }
+    Object.keys(placed).forEach(function (id) { removeBuildingMesh(+id); });
+    byId = {};
+    Object.keys(chunks).forEach(function (ck) { chunks[ck].forEach(function (m) { m.dispose(); }); }); chunks = {};
     rebuildOcc();
     state.buildings.forEach(addBuildingMesh);
-    Object.keys(state.roads).forEach(function (k) { var p = k.split(','); buildRoadCell(+p[0], +p[1]); });
+    Object.keys(state.roads).forEach(function (k) { var p = k.split(','); markRoad(+p[0], +p[1]); });
     rebuildTrucks(); assignBrigades();
+    resCache = {}; workCache = {};
     updateStats(); updateMoney(); refreshNeed(); dirty();
   }
 
   // ---------- Призрак и курсор ----------
-  var ghost = null, ghostKey = '', ghostFoot = flatQuad(new THREE.MeshBasicMaterial({ color: '#4cd964', transparent: true, opacity: 0.45, depthWrite: false }), 0, 0, 1, 1, 0.03);
-  ghostFoot.visible = false; ghostFoot.renderOrder = 2; scene.add(ghostFoot);
-  var cursor = flatQuad(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.4, depthWrite: false }), 0, 0, 1, 1, 0.035);
-  cursor.visible = false; cursor.renderOrder = 2; scene.add(cursor);
+  var ghost = null, ghostKey = '';
+  var ghostFoot = quadsMesh('gfoot', [[0, 0, 1, 1, 0.03]], flatMat('#4cd964', { overlay: true, alpha: 0.45 }));
+  var cursor = quadsMesh('cursor', [[0, 0, 1, 1, 0.035]], flatMat('#ffffff', { overlay: true, alpha: 0.4 }));
+  var hl = quadsMesh('hl', [[0, 0, 1, 1, 0.025]], flatMat('#ffc94a', { overlay: true, alpha: 0.55 }));
+  [ghostFoot, cursor, hl].forEach(function (m) { m.setEnabled(false); });
+  function setOverlay(m, x, z, w, d, color) {
+    m.position.set(x, 0, z); m.scaling.set(w, 1, d);
+    if (color) m.material.emissiveColor = hex(color);
+    m.setEnabled(true); dirty();
+  }
 
   function setGhost(cat, size, seed) {
-    var k = cat + size + seed;
+    var k = tplKey(cat, size, seed);
     if (k === ghostKey && ghost) return;
-    if (ghost) { scene.remove(ghost); ghost = null; }
+    if (ghost) { var mm = ghost.material; ghost.dispose(); if (mm) mm.dispose(); ghost = null; }
     ghostKey = k;
-    ghost = buildModel(cat, size, seed);
-    ghost.traverse(function (o) {
-      if (!o.material) return;
-      var cl = function (mm) { var c = mm.clone(); c.transparent = true; c.opacity = 0.6; c.depthWrite = false; return c; };
-      o.material = Array.isArray(o.material) ? o.material.map(cl) : cl(o.material);
-      o.castShadow = false;
-    });
-    ghost.visible = false; scene.add(ghost);
+    ghost = buildModel(kit, cat, size, modelSeed(cat, variantOf(cat, seed)));
+    ghost.visibility = 0.6; ghost.isPickable = false;
+    ghost.setEnabled(false);
   }
   function showGhostAt(size, rot, x, z, ok) {
-    var b = { size: size, rot: rot, x: x, z: z }, f = foot(size, rot);
-    placeMesh(ghost, b); ghost.visible = true;
-    ghostFoot.scale.set(f.w, 1, f.d); ghostFoot.position.set(b.x + f.w / 2 - N / 2, 0.03, b.z + f.d / 2 - N / 2);
-    ghostFoot.material.color.set(ok ? '#4cd964' : '#ff3b30'); ghostFoot.visible = true;
-    dirty();
+    var b = { size: size, rot: rot, x: x, z: z }, f = foot(size, rot), p = bPos(b);
+    ghost.position.set(p.x, 0, p.z); ghost.rotation.y = p.yaw; ghost.setEnabled(true);
+    setOverlay(ghostFoot, p.x, p.z, f.w, f.d, ok ? '#4cd964' : '#ff3b30');
   }
-  function hideGhost() { if (ghost) ghost.visible = false; ghostFoot.visible = false; dirty(); }
+  function hideGhost() { if (ghost) ghost.setEnabled(false); ghostFoot.setEnabled(false); dirty(); }
   function showCursor(x, z, color) {
-    if (!inMap(x, z)) { cursor.visible = false; dirty(); return; }
-    var c = cellCenter(x, z); cursor.position.set(c.x, 0.035, c.z); cursor.material.color.set(color); cursor.visible = true; dirty();
+    if (!inMap(x, z)) { cursor.setEnabled(false); dirty(); return; }
+    var c = cellCenter(x, z); setOverlay(cursor, c.x, c.z, 1, 1, color);
   }
 
-  // ---------- Камера ----------
-  var cam = { tx: 0, tz: 2, dist: 34, yaw: Math.PI / 4, pitch: 0.95 };
+  // ---------- Камера: 3D и изометрия ----------
+  var ISO_PITCH = Math.PI / 6; // 30° — пропорция клетки 2:1, как в SimCity 2000
+  var view = 'persp';
+  try { if (localStorage.getItem(VIEW_KEY) === 'iso') view = 'iso'; } catch (e) {}
+  var cam = { tx: 0, tz: 2, dist: 34, yaw: Math.PI / 4, pitch: 0.95, yawGoal: null };
+  function isIso() { return view === 'iso'; }
+  function snapYaw(y) { var q = Math.PI / 2; return Math.round((y - Math.PI / 4) / q) * q + Math.PI / 4; }
   function camHome() {
-    cam.tx = 0; cam.tz = 2; cam.yaw = Math.PI / 4; cam.pitch = 0.95;
+    cam.tx = 0; cam.tz = 2; cam.yaw = Math.PI / 4; cam.pitch = isIso() ? ISO_PITCH : 0.95; cam.yawGoal = null;
     cam.dist = clamp(N * 0.72, 24, 90) * (window.innerWidth < window.innerHeight ? 1.3 : 1);
     updateCam();
   }
+  function aspect() { return engine.getRenderWidth() / Math.max(1, engine.getRenderHeight()); }
   function updateCam() {
-    cam.dist = clamp(cam.dist, 5, Math.max(80, N * 1.3)); cam.pitch = clamp(cam.pitch, 0.35, 1.45);
+    cam.dist = clamp(cam.dist, 5, Math.max(80, N * 1.3));
+    cam.pitch = isIso() ? ISO_PITCH : clamp(cam.pitch, 0.35, 1.45);
     cam.tx = clamp(cam.tx, -N / 2, N / 2); cam.tz = clamp(cam.tz, -N / 2, N / 2);
-    var cp = Math.cos(cam.pitch);
-    camera.position.set(cam.tx + cam.dist * cp * Math.sin(cam.yaw), cam.dist * Math.sin(cam.pitch), cam.tz + cam.dist * cp * Math.cos(cam.yaw));
-    camera.lookAt(cam.tx, 0, cam.tz);
-    camera.updateMatrixWorld();
-    camera.far = Math.max(400, cam.dist * 6); camera.updateProjectionMatrix();
-    scene.fog.near = cam.dist * 1.6 + 15; scene.fog.far = cam.dist * 3.2 + 60;
-    updateSun();
+    var cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch), dx = cp * Math.sin(cam.yaw), dz = cp * Math.cos(cam.yaw);
+    var halfH = cam.dist * Math.tan(camera.fov / 2), ext;
+    if (isIso()) {
+      // Ортографическая камера: дальние дома не уменьшаются, все линии параллельны.
+      var far = N * 2 + 60;
+      camera.mode = B.Camera.ORTHOGRAPHIC_CAMERA;
+      camera.orthoTop = halfH; camera.orthoBottom = -halfH;
+      camera.orthoLeft = -halfH * aspect(); camera.orthoRight = halfH * aspect();
+      camera.position.set(cam.tx + far * dx, far * sp, cam.tz + far * dz);
+      camera.minZ = 1; camera.maxZ = far * 2.5;
+      ext = halfH * Math.max(1, aspect()) * 1.6;
+    } else {
+      camera.mode = B.Camera.PERSPECTIVE_CAMERA;
+      camera.position.set(cam.tx + cam.dist * dx, cam.dist * sp, cam.tz + cam.dist * dz);
+      camera.minZ = 0.1; camera.maxZ = Math.max(400, cam.dist * 6);
+      scene.fogStart = cam.dist * 1.6 + 15; scene.fogEnd = cam.dist * 3.2 + 60;
+      ext = clamp(cam.dist * 1.1, 18, 70);
+    }
+    camera.setTarget(new B.Vector3(cam.tx, 0, cam.tz));
+    // солнце и тени следуют за камерой
+    sun.position.set(cam.tx + SUN_OFF.x * 2, SUN_OFF.y * 2, cam.tz + SUN_OFF.z * 2);
+    sun.orthoLeft = -ext; sun.orthoRight = ext; sun.orthoTop = ext; sun.orthoBottom = -ext;
+    sun.shadowMaxZ = 200 + ext;
     dirty();
   }
+  function applyViewScenery() {
+    var iso = isIso();
+    if (outerGround) outerGround.setEnabled(!iso);
+    if (slab) slab.setEnabled(iso);
+    if (gridMesh) gridMesh.alpha = (N > 80 ? 0.16 : 0.22) * (iso ? 0.7 : 1);
+    scene.fogMode = iso ? B.Scene.FOGMODE_NONE : B.Scene.FOGMODE_LINEAR;
+    scene.clearColor = B.Color4.FromHexString((iso ? VOID : SKY) + 'ff');
+    setShadowStyle(iso);
+  }
+  function pixelScale() {
+    var dpr = window.devicePixelRatio || 1;
+    // В изометрии рисуем в пониженном разрешении и растягиваем без сглаживания — крупные пиксели.
+    return isIso() ? (TOUCH ? 1.5 : 2) : 1 / Math.min(dpr, 2);
+  }
+  function setView(v) {
+    view = v;
+    try { localStorage.setItem(VIEW_KEY, v); } catch (e) {}
+    canvas.classList.toggle('iso', v === 'iso'); document.body.classList.toggle('iso', v === 'iso');
+    $('camMode').textContent = v === 'iso' ? '3D' : 'ИЗО';
+    $('camMode').title = v === 'iso' ? 'Перейти в 3D' : 'Перейти в изометрию';
+    if (v === 'iso') { cam.pitch = ISO_PITCH; cam.yaw = snapYaw(cam.yaw); cam.yawGoal = null; }
+    else cam.pitch = 0.95;
+    applyViewScenery(); resize();
+  }
+  function rotateCam(dir) { // dir: +1 влево, -1 вправо
+    if (isIso()) { cam.yawGoal = snapYaw((cam.yawGoal === null ? cam.yaw : cam.yawGoal) + dir * Math.PI / 2); }
+    else { cam.yaw += dir * Math.PI / 8; updateCam(); }
+  }
+  function tickCam(dt) {
+    if (cam.yawGoal === null) return;
+    var d = cam.yawGoal - cam.yaw;
+    if (Math.abs(d) < 0.002) { cam.yaw = cam.yawGoal; cam.yawGoal = null; }
+    else cam.yaw += d * Math.min(1, dt * 12);
+    updateCam();
+  }
   function resize() {
-    var w = window.innerWidth, h = window.innerHeight;
-    renderer.setSize(w, h, false); camera.aspect = w / h;
-    camera.fov = w < h ? 55 : 45; camera.updateProjectionMatrix(); updateCam();
+    engine.setHardwareScalingLevel(pixelScale());
+    engine.resize();
+    camera.fov = (window.innerWidth < window.innerHeight ? 55 : 45) * Math.PI / 180;
+    updateCam();
   }
   window.addEventListener('resize', resize);
 
-  var ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), gplane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), tmpV = new THREE.Vector3();
-  function setRay(sx, sy) {
+  // Луч из точки экрана: пересечение с землёй и со зданиями (без помощи движка — быстро и на тысячах домов).
+  var rayM = B.Matrix.Identity();
+  function rayAt(sx, sy) {
     var rc = canvas.getBoundingClientRect();
-    ndc.set(((sx - rc.left) / rc.width) * 2 - 1, -((sy - rc.top) / rc.height) * 2 + 1);
-    ray.setFromCamera(ndc, camera);
+    return scene.createPickingRay(sx - rc.left, sy - rc.top, rayM, camera, false);
   }
   function groundAt(sx, sy) {
-    setRay(sx, sy);
-    var p = ray.ray.intersectPlane(gplane, tmpV);
-    return p ? { x: p.x, z: p.z } : null;
+    var r = rayAt(sx, sy);
+    if (Math.abs(r.direction.y) < 1e-6) return null;
+    var t = -r.origin.y / r.direction.y; if (t < 0) return null;
+    return { x: r.origin.x + r.direction.x * t, z: r.origin.z + r.direction.z * t };
   }
   function cellAt(sx, sy) {
     var p = groundAt(sx, sy); if (!p) return null;
     return { x: Math.floor(p.x + N / 2), z: Math.floor(p.z + N / 2), px: p.x + N / 2, pz: p.z + N / 2 };
   }
+  function rayBox(o, d, x0, y0, z0, x1, y1, z1) {
+    var tmin = -Infinity, tmax = Infinity, a = [o.x, o.y, o.z], v = [d.x, d.y, d.z], lo = [x0, y0, z0], hi = [x1, y1, z1];
+    for (var i = 0; i < 3; i++) {
+      if (Math.abs(v[i]) < 1e-9) { if (a[i] < lo[i] || a[i] > hi[i]) return -1; continue; }
+      var t1 = (lo[i] - a[i]) / v[i], t2 = (hi[i] - a[i]) / v[i];
+      if (t1 > t2) { var tt = t1; t1 = t2; t2 = tt; }
+      if (t1 > tmin) tmin = t1; if (t2 < tmax) tmax = t2;
+      if (tmin > tmax) return -1;
+    }
+    return tmax < 0 ? -1 : Math.max(0, tmin);
+  }
   function pickBuilding(sx, sy) {
-    setRay(sx, sy);
-    var hits = ray.intersectObjects(buildGroup.children, true);
-    for (var i = 0; i < hits.length; i++) { var id = hits[i].object.userData.bid; if (id) return getB(id); }
+    var r = rayAt(sx, sy), best = null, bt = Infinity;
+    state.buildings.forEach(function (b) {
+      var f = foot(b.size, b.rot), x0 = b.x - N / 2, z0 = b.z - N / 2, bh = placed[b.id] ? placed[b.id].h : 1;
+      var h = isSite(b) ? Math.max(0.2, bh * b.prog) : bh;
+      var t = rayBox(r.origin, r.direction, x0 + 0.05, 0, z0 + 0.05, x0 + f.w - 0.05, h, z0 + f.d - 0.05);
+      if (t >= 0 && t < bt) { bt = t; best = b; }
+    });
+    if (best) return best;
     var c = cellAt(sx, sy);
     if (c && inMap(c.x, c.z) && occ[idx(c.x, c.z)]) return getB(occ[idx(c.x, c.z)]);
     return null;
@@ -744,7 +899,7 @@
     document.querySelectorAll('.tool').forEach(function (b) { b.classList.toggle('on', b.dataset.tool === t); });
     $('panelBuild').hidden = t !== 'build';
     $('panelRoad').hidden = t !== 'road';
-    hideGhost(); cursor.visible = false;
+    hideGhost(); cursor.setEnabled(false);
     if (moving) cancelMove();
     if (t !== 'view') closeInfo();
     if (t === 'build') { setGhost(buildCat, buildSize, buildSeed); refreshNeed(); }
@@ -753,44 +908,63 @@
   function refreshNeed() { $('needBr').hidden = state.brigades.length > 0; }
   $('needBuy').addEventListener('click', function () { openMech('build'); });
 
-  // --- миниатюры (рисуются один раз в маленьком отдельном рендере) ---
-  var thumbs = {}, thumbR = null;
-  function thumbOf(k, make) {
+  // --- миниатюры: отдельный маленький движок, рисуются по очереди и подставляются в карточки ---
+  var thumbs = {}, tq = [], T = null, tBusy = false;
+  function thumbReq(k, make) {
     if (thumbs[k] !== undefined) return thumbs[k];
+    thumbs[k] = ''; tq.push({ k: k, make: make }); pumpThumbs();
+    return '';
+  }
+  function thumbInit() {
+    var tc = document.createElement('canvas'); tc.width = tc.height = 160;
+    var en = new B.Engine(tc, true, { preserveDrawingBuffer: true, stencil: false, alpha: true }, false);
+    var sc = new B.Scene(en); sc.useRightHandedSystem = true; sc.clearColor = new B.Color4(0, 0, 0, 0);
+    var h = new B.HemisphericLight('h', new B.Vector3(0, 1, 0), sc); h.diffuse = hex('#eef6ff'); h.groundColor = hex('#6d8a55'); h.intensity = 0.85; h.specular = B.Color3.Black();
+    var dl = new B.DirectionalLight('d', new B.Vector3(3, -6, -4), sc); dl.intensity = 0.6; dl.specular = B.Color3.Black();
+    var c = new B.FreeCamera('c', new B.Vector3(0, 3, 3), sc); c.fov = 30 * Math.PI / 180; c.minZ = 0.05; c.maxZ = 100;
+    T = { canvas: tc, engine: en, scene: sc, cam: c, kit: makeKit(sc) };
+  }
+  function pumpThumbs() { if (tBusy || !tq.length) return; tBusy = true; requestAnimationFrame(thumbStep); }
+  function thumbStep() {
     try {
-      if (!thumbR) {
-        var tc = document.createElement('canvas'); tc.width = tc.height = 160;
-        thumbR = { r: new THREE.WebGLRenderer({ canvas: tc, antialias: true, alpha: true, preserveDrawingBuffer: true }), s: new THREE.Scene(), c: new THREE.PerspectiveCamera(30, 1, 0.1, 100) };
-        thumbR.r.setSize(160, 160, false);
-        thumbR.s.add(new THREE.HemisphereLight('#e6f2ff', '#6d8a55', 1.0));
-        var dl = new THREE.DirectionalLight('#fff3dc', 1.5); dl.position.set(-3, 6, 4); thumbR.s.add(dl);
+      if (!T) thumbInit();
+      var it = tq[0];
+      if (!it.mesh) {
+        it.mesh = it.make(T.kit);
+        it.mesh.computeWorldMatrix(true);
+        var bi = it.mesh.getHierarchyBoundingVectors(true), ctr = bi.min.add(bi.max).scale(0.5), rad = bi.max.subtract(bi.min).length() / 2;
+        var dist = rad / Math.sin(T.cam.fov / 2) * 1.02;
+        T.cam.position.set(ctr.x + dist * 0.55, ctr.y + dist * 0.5, ctr.z + dist * 0.67);
+        T.cam.setTarget(ctr);
+        it.tries = 0;
       }
-      var T = thumbR, g = make();
-      T.s.add(g);
-      var box = new THREE.Box3().setFromObject(g), sph = box.getBoundingSphere(new THREE.Sphere());
-      var dist = sph.radius / Math.sin(THREE.MathUtils.degToRad(T.c.fov / 2)) * 1.02;
-      T.c.position.set(sph.center.x + dist * 0.55, sph.center.y + dist * 0.5, sph.center.z + dist * 0.67);
-      T.c.lookAt(sph.center); T.c.updateProjectionMatrix();
-      T.r.render(T.s, T.c);
-      thumbs[k] = T.r.domElement.toDataURL('image/png');
-      T.s.remove(g);
-    } catch (e) { thumbs[k] = ''; }
-    return thumbs[k];
+      if (!T.scene.isReady() && it.tries++ < 60) { requestAnimationFrame(thumbStep); return; }
+      T.scene.render();
+      var url = T.canvas.toDataURL('image/png');
+      thumbs[it.k] = url;
+      document.querySelectorAll('img[data-th="' + it.k + '"]').forEach(function (im) { im.src = url; });
+      it.mesh.getChildMeshes(false).concat([it.mesh]).forEach(function (m) { var mm = m.material; m.dispose(); if (mm && mm.subMaterials) mm.dispose(); });
+    } catch (e) { if (tq[0]) thumbs[tq[0].k] = ''; }
+    tq.shift();
+    if (tq.length) requestAnimationFrame(thumbStep); else tBusy = false;
   }
   function thumbUrl(cat, size) {
-    return thumbOf(cat + size, function () {
-      var g = buildModel(cat, size, 12345 + size.length);
-      var s0 = G.sizes[size], pad = new THREE.Mesh(new THREE.BoxGeometry(s0.w, 0.06, s0.d), mat('#8cc068'));
-      pad.position.y = -0.03; g.add(pad); return g;
+    return thumbReq(cat + size, function (K) {
+      var root = new B.Mesh('thumb', K.scene), g = buildModel(K, cat, size, modelSeed(cat, 0)), s0 = G.sizes[size];
+      g.parent = root;
+      var pad = B.MeshBuilder.CreateBox('pad', { width: s0.w, height: 0.06, depth: s0.d }, K.scene); pad.position.y = -0.03; pad.material = K.mat('#8cc068'); pad.parent = root;
+      return root;
     });
   }
   function truckThumb() {
-    return thumbOf('truck', function () {
-      var g = new THREE.Group(), t = truckModel(); t.rotation.y = -0.35; g.add(t);
-      var pad = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.04, 1.05), mat('#8cc068')); pad.position.y = -0.02; g.add(pad);
-      return g;
+    return thumbReq('truck', function (K) {
+      var root = new B.Mesh('thumb', K.scene), t = truckModel(K); t.rotation.y = -0.35; t.parent = root;
+      var pad = B.MeshBuilder.CreateBox('pad', { width: 0.75, height: 0.04, depth: 1.05 }, K.scene); pad.position.y = -0.02; pad.material = K.mat('#8cc068'); pad.parent = root;
+      return root;
     });
   }
+  function thumbImg(cls, k, src) { return '<img class="' + cls + '" alt="" data-th="' + k + '"' + (src ? ' src="' + src + '"' : '') + '>'; }
+
   function workText(cat, size) {
     var c = G.cats[cat];
     if (cat === 'res') { var f = c.families[size]; return '👥 ' + f + ' ' + plural(f, 'семья', 'семьи', 'семей'); }
@@ -812,9 +986,8 @@
     cats.forEach(function (ck) {
       var c = G.cats[ck];
       Object.keys(G.sizes).forEach(function (sk) {
-        var on = ck === buildCat && sk === buildSize, src = thumbUrl(ck, sk);
-        h += '<button class="bcard' + (on ? ' on' : '') + '" data-cat="' + ck + '" data-size="' + sk + '">' +
-          (src ? '<img class="th" alt="" src="' + src + '">' : '<span class="th"></span>') +
+        var on = ck === buildCat && sk === buildSize;
+        h += '<button class="bcard' + (on ? ' on' : '') + '" data-cat="' + ck + '" data-size="' + sk + '">' + thumbImg('th', ck + sk, thumbUrl(ck, sk)) +
           '<span class="tx"><b>' + esc(c.names[sk]) + '</b><small>' + workText(ck, sk) + '</small>' +
           '<span class="sz"><i style="background:' + c.tag + '"></i>' + G.sizes[sk].label + ' · <em>' + usd(costOf(ck, sk)) + '</em></span></span></button>';
       });
@@ -849,7 +1022,7 @@
   function rotateCurrent() {
     if (moving) { moving.rot = (moving.rot + 1) % 4; if (lastHover) moveGhostTo(lastHover); return; }
     buildRot = (buildRot + 1) % 4;
-    if (tool === 'build' && lastHover && ghost && ghost.visible) buildGhostTo(lastHover);
+    if (tool === 'build' && lastHover && ghost && ghost.isEnabled()) buildGhostTo(lastHover);
   }
   $('btnRotate').addEventListener('click', rotateCurrent);
   $('toolbar').addEventListener('click', function (e) {
@@ -879,7 +1052,7 @@
     hint(crew ? '🏗️ Стройка началась: ' + G.cats[b.cat].names[b.size] : '🏗️ Стройка ждёт: все бригады заняты — купите ещё, чтобы быстрее');
   }
   function deleteBuilding(b) {
-    markOcc(b, 0); removeBuildingMesh(b.id);
+    markOcc(b, 0); removeBuildingMesh(b.id); delete byId[b.id];
     state.buildings.splice(state.buildings.indexOf(b), 1);
     if (infoId === b.id) closeInfo();
     if (isSite(b)) { assignBrigades(); renderMech(); }
@@ -912,8 +1085,8 @@
   }
 
   function startMove(b, c) {
-    var g = bMeshes[b.id]; if (g) g.visible = false;
     moving = { b: b, offX: c.px - b.x, offZ: c.pz - b.z, rot: b.rot, x: b.x, z: b.z };
+    writeBuilding(b);
     setGhost(b.cat, b.size, b.seed);
     moveGhostTo(c);
   }
@@ -928,12 +1101,12 @@
     var mv = moving, b = mv.b; moving = null;
     if (canPlace(b.size, mv.rot, mv.x, mv.z, b.id)) {
       markOcc(b, 0); b.x = mv.x; b.z = mv.z; b.rot = mv.rot; markOcc(b, b.id);
-      placeMesh(bMeshes[b.id], b); save();
+      save(); updateStats();
     } else hint('Сюда нельзя — здание вернулось на место', true);
-    if (bMeshes[b.id]) bMeshes[b.id].visible = true;
+    writeBuilding(b);
     hideGhost();
   }
-  function cancelMove() { if (!moving) return; if (bMeshes[moving.b.id]) bMeshes[moving.b.id].visible = true; moving = null; hideGhost(); }
+  function cancelMove() { if (!moving) return; var b = moving.b; moving = null; writeBuilding(b); hideGhost(); }
 
   // ---------- Указатель: мышь и касания ----------
   var ptrs = new Map(), gest = null;
@@ -953,8 +1126,8 @@
     }
     if (ptrs.size > 2) return;
     var mouse = e.pointerType === 'mouse';
-    if (mouse && e.button === 1) { gest = { type: 'rotate', lx: e.clientX, ly: e.clientY }; return; }
-    if (mouse && e.button === 2) { if (e.shiftKey) gest = { type: 'rotate', lx: e.clientX, ly: e.clientY }; else startPan(e, false); return; }
+    if (mouse && e.button === 1) { gest = { type: 'rotate', lx: e.clientX, ly: e.clientY, acc: 0 }; return; }
+    if (mouse && e.button === 2) { if (e.shiftKey) gest = { type: 'rotate', lx: e.clientX, ly: e.clientY, acc: 0 }; else startPan(e, false); return; }
     if (tool === 'view') { startPan(e, true); return; }
     var c2 = cellAt(e.clientX, e.clientY); if (!c2) return;
     gest = { type: 'action', sx: e.clientX, sy: e.clientY, t: Date.now(), touch: !mouse, last: c2 };
@@ -981,13 +1154,21 @@
     if (gest.type === 'two' && ptrs.size === 2) {
       var c = centroid();
       cam.dist = gest.dist * (gest.c.d / Math.max(c.d, 1));
-      cam.yaw = gest.yaw - (c.ang - gest.c.ang);
+      if (isIso()) { // в изометрии поворот двумя пальцами — щелчком на 90°
+        var da = c.ang - gest.c.ang;
+        if (Math.abs(da) > 0.6) { rotateCam(da > 0 ? -1 : 1); gest.c.ang = c.ang; }
+      } else cam.yaw = gest.yaw - (c.ang - gest.c.ang);
       updateCam();
       var g2 = groundAt(c.x, c.y);
       if (g2 && gest.grab) { cam.tx -= g2.x - gest.grab.x; cam.tz -= g2.z - gest.grab.z; updateCam(); }
       return;
     }
     if (gest.type === 'rotate') {
+      if (isIso()) {
+        gest.acc += e.clientX - gest.lx; gest.lx = e.clientX;
+        if (Math.abs(gest.acc) > 80) { rotateCam(gest.acc > 0 ? -1 : 1); gest.acc = 0; }
+        return;
+      }
       cam.yaw -= (e.clientX - gest.lx) * 0.008; cam.pitch += (e.clientY - gest.ly) * 0.005;
       gest.lx = e.clientX; gest.ly = e.clientY; updateCam(); return;
     }
@@ -1028,12 +1209,12 @@
       var c = cellAt(e.clientX, e.clientY) || g.last;
       if (tool === 'build') { placeBuilding(c); if (g.touch) hideGhost(); else buildGhostTo(c); }
       else if (tool === 'move' && moving) finishMove();
-      if (g.touch) { cursor.visible = false; dirty(); }
+      if (g.touch) { cursor.setEnabled(false); dirty(); }
     }
   }
   canvas.addEventListener('pointerup', endPointer);
   canvas.addEventListener('pointercancel', endPointer);
-  canvas.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse' && !gest) { if (!moving) hideGhost(); cursor.visible = false; dirty(); } });
+  canvas.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse' && !gest) { if (!moving) hideGhost(); cursor.setEnabled(false); dirty(); } });
 
   function cancelAction(g) {
     g = g || gest;
@@ -1045,7 +1226,7 @@
       if (tool === 'road' && g.snap) { state.roads = JSON.parse(g.snap); rebuildAll(); save(); }
       if (tool === 'delete' && g.snap) { state = fixState(JSON.parse(g.snap)); rebuildAll(); save(); }
     }
-    cursor.visible = false; gest = null; dirty();
+    cursor.setEnabled(false); gest = null; dirty();
   }
 
   canvas.addEventListener('wheel', function (e) {
@@ -1060,9 +1241,10 @@
   window.addEventListener('keydown', function (e) {
     if (e.target.tagName === 'INPUT') return;
     var k = e.key.toLowerCase();
-    if (k === 'q' || k === 'й') { cam.yaw += Math.PI / 8; updateCam(); }
-    else if (k === 'e' || k === 'у') { cam.yaw -= Math.PI / 8; updateCam(); }
+    if (k === 'q' || k === 'й') rotateCam(1);
+    else if (k === 'e' || k === 'у') rotateCam(-1);
     else if (k === 'r' || k === 'к') rotateCurrent();
+    else if (k === 'i' || k === 'ш') setView(isIso() ? 'persp' : 'iso');
     else if (k === 'escape') { if (!$('modal').hidden) closeModal(); else if (!$('mech').hidden) closeMech(); else { closeInfo(); setTool('view'); } }
     else if (k === '6') openMech();
     else if ('12345'.indexOf(k) >= 0 && k) setTool(['view', 'build', 'road', 'move', 'delete'][+k - 1]);
@@ -1084,8 +1266,9 @@
     cam.tx += (-sy * f + cy * s) * sp; cam.tz += (-cy * f - sy * s) * sp; updateCam();
   }
 
-  $('camRotL').addEventListener('click', function () { cam.yaw += Math.PI / 8; updateCam(); });
-  $('camRotR').addEventListener('click', function () { cam.yaw -= Math.PI / 8; updateCam(); });
+  $('camMode').addEventListener('click', function () { setView(isIso() ? 'persp' : 'iso'); hint(isIso() ? '🧱 Изометрия: поворот ⟲ ⟳ — на 90°' : '🎥 Вид 3D'); });
+  $('camRotL').addEventListener('click', function () { rotateCam(1); });
+  $('camRotR').addEventListener('click', function () { rotateCam(-1); });
   $('camIn').addEventListener('click', function () { cam.dist /= 1.25; updateCam(); });
   $('camOut').addEventListener('click', function () { cam.dist *= 1.25; updateCam(); });
 
@@ -1100,8 +1283,7 @@
     var h = '';
     Object.keys(G.units).forEach(function (k) {
       var u = G.units[k]; if (u.tab !== mechTab) return;
-      var src = k === 'brigade' ? truckThumb() : '';
-      h += '<div class="unit">' + (src ? '<img class="uimg" alt="" src="' + src + '">' : '<span class="uimg"></span>') +
+      h += '<div class="unit">' + (k === 'brigade' ? thumbImg('uimg', 'truck', truckThumb()) : '<span class="uimg"></span>') +
         '<div class="uinfo"><h3>' + esc(u.name) + '</h3><p>' + esc(u.about) + '</p>' +
         '<div class="ukv"><span>Цена</span><span class="usd">' + usd(u.price) + '</span>' +
         '<span>В парке</span><span><b id="mHave">0</b></span>' +
@@ -1151,10 +1333,11 @@
     return { name: (male ? pick(r, P.male) : pick(r, P.female)) + ' ' + (male ? sur[0] : sur[1]), age: age, job: job, m: male };
   }
   function ageWord(n) { var a = n % 10, b = n % 100; return n + ' ' + (b >= 11 && b <= 14 ? 'лет' : a === 1 ? 'год' : a >= 2 && a <= 4 ? 'года' : 'лет'); }
+  function canWork(m) { return m.age >= 18 && m.age < 63 && m.job !== 'студент'; }
   var resCache = {};
   function residents(b) {
     var ck = b.id + ':' + b.seed; if (resCache[ck]) return resCache[ck];
-    var r = rng(b.seed ^ 0x5bd1e995), nf = G.cats.res.families[b.size], fams = [], total = 0;
+    var r = rng(b.seed ^ 0x5bd1e995), nf = G.cats.res.families[b.size], fams = [], total = 0, adults = 0;
     for (var i = 0; i < nf; i++) {
       var sur = pick(r, P.surnames), roll = r(), mem = [], male = r() < 0.5;
       if (roll < 0.18) mem.push(person(r, male, sur, 20, 80));
@@ -1165,9 +1348,9 @@
         for (var k = 0; k < kids; k++) mem.push(person(r, r() < 0.5, sur, 1, Math.min(20, pa.age - 20)));
       } else { mem.push(person(r, true, sur, 63, 85)); mem.push(person(r, false, sur, 61, 83)); }
       var fam = { surname: sur, members: mem, pet: r() < 0.35 ? pick(r, P.pets) : null, flat: b.size === '2x2' || b.size === '4x4' ? String(i + 1) : null };
-      total += mem.length; fams.push(fam);
+      total += mem.length; mem.forEach(function (m) { if (canWork(m)) adults++; }); fams.push(fam);
     }
-    return (resCache[ck] = { families: fams, total: total });
+    return (resCache[ck] = { families: fams, total: total, adults: adults });
   }
   var workCache = {};
   function workplace(b) {
@@ -1198,6 +1381,32 @@
     return 'нет — дом стоит без дороги';
   }
 
+  // ---------- Расчёт жителей в фоне (js/sim.js) ----------
+  var sim = { people: 0, adults: 0, employed: 0, unemployed: 0, jobs: 0, freeJobs: 0, home: {}, work: {}, ms: 0, ready: false };
+  var simTimer = 0;
+  function simRequest() {
+    clearTimeout(simTimer);
+    simTimer = setTimeout(function () {
+      var homes = [], works = [];
+      state.buildings.forEach(function (b) {
+        if (isSite(b)) return;
+        var c = siteCenter(b);
+        if (b.cat === 'res') { var R = residents(b); homes.push([b.id, c.x, c.z, R.adults, R.total]); }
+        else works.push([b.id, c.x, c.z, workplace(b).staff]);
+      });
+      window.SIM.run({ homes: homes, works: works });
+    }, 200);
+  }
+  window.SIM.onResult(function (r) {
+    sim.people = r.people; sim.adults = r.adults; sim.employed = r.employed; sim.unemployed = r.unemployed;
+    sim.jobs = r.jobs; sim.freeJobs = r.freeJobs; sim.ms = r.ms; sim.ready = true;
+    sim.home = {}; sim.work = {};
+    r.homes.forEach(function (h) { sim.home[h[0]] = h[1]; });
+    r.works.forEach(function (w) { sim.work[w[0]] = w[1]; });
+    $('stJobsWrap').title = 'Рабочие места: ' + r.jobs.toLocaleString('ru-RU') + ', занято ' + r.employed.toLocaleString('ru-RU') + ', без работы ' + r.unemployed.toLocaleString('ru-RU');
+    if (infoId) { var ib = getB(infoId); if (ib) renderInfo(ib, true); }
+  });
+
   // ---------- Справка о здании ----------
   var infoId = 0;
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -1215,8 +1424,9 @@
         '<span>Цена</span><span>' + usd(costOf(b.cat, b.size)) + '</span>' +
         '<span>После стройки</span><span>' + (b.cat === 'res' ? 'заедут ' + c.families[b.size] + ' ' + plural(c.families[b.size], 'семья', 'семьи', 'семей') : 'работа для ~' + c.staff[b.size] + ' чел.') + '</span></div>';
     } else if (b.cat === 'res') {
-      var R = residents(b);
+      var R = residents(b), emp = sim.home[b.id];
       h += '<div class="kv"><span>Живут</span><span><b>' + R.total + '</b> чел., ' + R.families.length + ' ' + plural(R.families.length, 'семья', 'семьи', 'семей') + '</span>' +
+        '<span>Работают</span><span>' + (emp === undefined ? '…считаем' : emp + ' из ' + R.adults + ' взрослых' + (emp < R.adults ? ' — ' + (R.adults - emp) + ' ищут работу' : '')) + '</span>' +
         '<span>Дорога рядом</span><span>' + roadNear(b) + '</span></div>';
       var show = R.families.slice(0, 8);
       show.forEach(function (f) {
@@ -1227,11 +1437,12 @@
       });
       if (R.families.length > show.length) h += '<div class="more">…и ещё ' + (R.families.length - show.length) + ' ' + plural(R.families.length - show.length, 'семья', 'семьи', 'семей') + '</div>';
     } else {
-      var w = workplace(b), headLabel = c.head[b.size] + (c.rank ? ' (' + c.rank[b.size] + ')' : '');
+      var w = workplace(b), headLabel = c.head[b.size] + (c.rank ? ' (' + c.rank[b.size] + ')' : ''), filled = sim.work[b.id];
       h += '<div class="about">' + esc(c.about[b.size]) + '</div>';
       h += '<div class="kv">' + (w.company ? '<span>Компания</span><span>«' + esc(w.company) + '»</span>' : '') +
         '<span>' + esc(headLabel) + '</span><span>' + esc(w.head) + '</span>' +
-        '<span>Работают</span><span><b>' + w.staff + '</b> чел.</span>' +
+        '<span>Мест</span><span><b>' + w.staff + '</b></span>' +
+        '<span>Из горожан</span><span>' + (filled === undefined ? '…считаем' : filled + ' чел.' + (filled < w.staff ? ' — свободно ' + (w.staff - filled) : ' — все места заняты')) + '</span>' +
         '<span>' + esc(cap(c.visitors[b.size])) + '</span><span>' + w.visits + '</span>' +
         '<span>Дорога рядом</span><span>' + roadNear(b) + '</span></div>';
       if (w.team.length) {
@@ -1247,14 +1458,11 @@
   function plural(n, a, b, c) { var x = n % 10, y = n % 100; return y >= 11 && y <= 14 ? c : x === 1 ? a : x >= 2 && x <= 4 ? b : c; }
   function closeInfo() { infoId = 0; $('info').hidden = true; highlight(0); }
   $('infoClose').addEventListener('click', closeInfo);
-
-  var hl = flatQuad(new THREE.MeshBasicMaterial({ color: '#ffc94a', transparent: true, opacity: 0.55, depthWrite: false }), 0, 0, 1, 1, 0.025);
-  hl.visible = false; scene.add(hl);
   function highlight(id) {
     var b = id && getB(id);
-    if (!b) { hl.visible = false; dirty(); return; }
-    var f = foot(b.size, b.rot);
-    hl.scale.set(f.w + 0.2, 1, f.d + 0.2); hl.position.set(b.x + f.w / 2 - N / 2, 0.025, b.z + f.d / 2 - N / 2); hl.visible = true; dirty();
+    if (!b) { hl.setEnabled(false); dirty(); return; }
+    var f = foot(b.size, b.rot), p = bPos(b);
+    setOverlay(hl, p.x, p.z, f.w + 0.2, f.d + 0.2);
   }
 
   // ---------- Статистика ----------
@@ -1267,6 +1475,7 @@
     $('stPeople').textContent = people.toLocaleString('ru-RU');
     $('stJobs').textContent = jobs.toLocaleString('ru-RU');
     $('stBuild').textContent = built;
+    simRequest();
   }
 
   // ---------- Меню ----------
@@ -1276,23 +1485,44 @@
   $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeModal(); });
 
   function helpHtml() {
-    return '<details open><summary>🚚 Бригады и стройка</summary><ul>' +
+    return '<details open><summary>🧱 Вид ИЗО и 3D</summary><ul>' +
+      '<li>Кнопка <b>ИЗО</b> справа включает изометрию, как в старых SimCity: камера под постоянным углом, крупные пиксели, город на срезе земли.</li>' +
+      '<li>В изометрии ⟲ ⟳ поворачивают карту ровно на 90°. Кнопка <b>3D</b> возвращает свободную камеру.</li>' +
+      '<li>На компьютере вид переключает клавиша I.</li></ul></details>' +
+      '<details><summary>🚚 Бригады и стройка</summary><ul>' +
       '<li>Строить можно только с бригадой. Откройте 🚚 «Механизмы» → «Строительство» и купите «Бригаду» — зелёный грузовик.</li>' +
       '<li>Поставьте здание: бригада приедет, дом начнёт расти, над ним — полоска прогресса.</li>' +
       '<li>Чем больше бригад, тем быстрее. Бригады делятся между стройками поровну.</li>' +
       '<li>Доллары — вверху экрана. Пока их бесконечно (∞), но у зданий и бригад уже есть цены.</li></ul></details>' +
+      '<details><summary>👥 Жители и работа</summary><ul>' +
+      '<li>Каждый взрослый житель сам ищет работу поближе к дому. Это считается в фоне и не тормозит игру.</li>' +
+      '<li>В справке дома видно, сколько жильцов работают; у работы — сколько мест заняли горожане.</li>' +
+      '<li>Сводка по городу — ☰ → «Город».</li></ul></details>' +
       '<details' + (TOUCH ? ' open' : '') + '><summary>Телефон и планшет</summary><ul>' +
       '<li>Один палец — двигать карту (в режиме «Смотреть»).</li><li>Два пальца — масштаб (щипок) и поворот карты.</li>' +
       '<li>«Строить»: выберите вид и размер, коснитесь карты и ведите пальцем, отпустите — начнётся стройка. Зелёная клетка — можно, красная — занято.</li>' +
       '<li>«Дорога»: ведите пальцем по клеткам. «Переместить»: возьмите дом и перетащите. «Удалить»: нажмите на дом или ведите по дороге.</li>' +
-      '<li>Кнопки справа: поворот камеры и масштаб.</li></ul></details>' +
+      '<li>Кнопки справа: вид ИЗО/3D, поворот камеры и масштаб.</li></ul></details>' +
       '<details' + (TOUCH ? '' : ' open') + '><summary>Компьютер</summary><ul>' +
       '<li>Левая кнопка — действие (в «Смотреть» — двигать карту и открыть справку).</li><li>Правая кнопка — двигать карту, колёсико — масштаб, средняя кнопка или Shift+правая — поворот и наклон.</li>' +
       '<li>Размер карты (от 32×32 до 128×128) — в меню ☰ → «Размер карты». Можно расширить карту, не теряя город.</li>' +
-      '<li>W A S D или стрелки — двигать карту, Q / E — поворот камеры, R — повернуть дом, 1–5 — инструменты, 6 — «Механизмы», Esc — «Смотреть».</li></ul></details>' +
+      '<li>W A S D или стрелки — двигать карту, Q / E — поворот камеры, I — ИЗО/3D, R — повернуть дом, 1–5 — инструменты, 6 — «Механизмы», Esc — «Смотреть».</li></ul></details>' +
       '<details><summary>Здания</summary><ul>' + Object.keys(G.cats).map(function (k) {
         var c = G.cats[k]; return '<li><b>' + c.label + '</b>: ' + Object.keys(G.sizes).map(function (s) { return G.sizes[s].label + ' ' + c.names[s].toLowerCase(); }).join(', ') + '.</li>';
       }).join('') + '</ul></details>';
+  }
+  function cityHtml() {
+    var f = function (n) { return Number(n).toLocaleString('ru-RU'); };
+    var nb = Object.keys(batches).filter(function (k) { return batches[k].ids.length; }).length;
+    return '<h2>📊 Город</h2><div class="kv">' +
+      '<span>Жителей</span><span><b>' + f(sim.people) + '</b></span>' +
+      '<span>Взрослых, кто может работать</span><span>' + f(sim.adults) + '</span>' +
+      '<span>Работают</span><span>' + f(sim.employed) + '</span>' +
+      '<span>Ищут работу</span><span>' + f(sim.unemployed) + '</span>' +
+      '<span>Рабочих мест</span><span>' + f(sim.jobs) + ' (свободно ' + f(sim.freeJobs) + ')</span>' +
+      '<span>Зданий</span><span>' + f(state.buildings.length) + '</span></div>' +
+      '<p style="font-size:13px;color:#a9b6c8">Расчёт жителей: ' + (window.SIM.threaded() ? 'в фоновом потоке' : 'на странице') + ', ' + sim.ms + ' мс. ' +
+      'Отрисовка: Babylon.js ' + B.Engine.Version + ', ' + nb + ' ' + plural(nb, 'пачка', 'пачки', 'пачек') + ' одинаковых моделей.</p>';
   }
   function changelogHtml() {
     return G.changelog.map(function (c) { return '<p><b>' + c.v + '</b> · ' + c.date + '</p><ul>' + c.items.map(function (i) { return '<li>' + esc(i) + '</li>'; }).join('') + '</ul>'; }).join('');
@@ -1301,6 +1531,8 @@
     openModal('<h2>Мое_город ' + G.version + '</h2>' +
       '<button class="menu-btn" data-m="help">❓ Как играть</button>' +
       '<button class="menu-btn" data-m="news">📝 Что нового</button>' +
+      '<button class="menu-btn" data-m="city">📊 Город</button>' +
+      '<button class="menu-btn" data-m="view">' + (isIso() ? '🎥 Вид 3D' : '🧱 Вид ИЗО (как в SimCity)') + '</button>' +
       '<button class="menu-btn" data-m="mech">🚚 Механизмы</button>' +
       '<button class="menu-btn" data-m="size">🗺️ Размер карты <span style="float:right;color:#a9b6c8">' + N + '×' + N + '</span></button>' +
       '<button class="menu-btn" data-m="demo">🏘️ Загрузить город-пример</button>' +
@@ -1355,7 +1587,7 @@
     return s;
   }
   function applyState(s, keepCam) {
-    state = s; closeInfo(); cancelMove(); rebuildAll(); save();
+    closeInfo(); cancelMove(); state = s; rebuildAll(); save();
     if (keepCam) updateCam(); else camHome();
     pickSize = 0; closeModal();
     hint('Карта ' + N + '×' + N + ' готова');
@@ -1368,6 +1600,8 @@
     var sb = e.target.closest('[data-n]');
     if (sb) { pickSize = +sb.dataset.n; confirmArm = ''; openSize(); return; }
     if (m === 'help') openModal('<h2>Как играть</h2>' + helpHtml());
+    else if (m === 'city') openModal(cityHtml());
+    else if (m === 'view') { closeModal(); setView(isIso() ? 'persp' : 'iso'); }
     else if (m === 'mech') { closeModal(); openMech(); }
     else if (m === 'size') { pickSize = N; confirmArm = ''; openSize(); }
     else if (m === 'resize') {
@@ -1387,11 +1621,12 @@
   });
 
   // ---------- Цикл отрисовки ----------
-  var needRender = true, lastT = performance.now(), lastSave = 0, lastUi = 0;
+  // Кадр рисуется только когда что-то изменилось — телефон не греется на пустом месте.
+  var needRender = true, lastT = performance.now(), lastSave = 0, lastUi = 0, frames = 0;
   function dirty() { needRender = true; }
-  function loop(t) {
-    var dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
-    keyPan(dt);
+  function loop() {
+    var t = performance.now(), dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
+    keyPan(dt); tickCam(dt);
     var active = tickBrigades(dt, t);
     if (active && t - lastSave > 2000) { saveNow(); lastSave = t; }
     if (t - lastUi > 400) {
@@ -1399,17 +1634,25 @@
       if (infoId) { var ib = getB(infoId); if (ib && isSite(ib)) renderInfo(ib, true); }
       if (active) renderMech();
     }
-    if (needRender) { renderer.render(scene, camera); needRender = false; }
-    requestAnimationFrame(loop);
+    flushRoads(); flushBatches();
+    if (needRender) {
+      needRender = false;
+      scene.render();
+      frames++;
+      if (!scene.isReady()) needRender = true; // шейдеры ещё собираются — дорисуем следующим кадром
+    }
   }
   window.addEventListener('pagehide', saveNow);
 
   // ---------- Старт ----------
   state = load() || demoState(G.mapSize);
   $('ver').textContent = G.version;
-  renderChips(); rebuildAll(); resize(); setTool('view');
+  setView(view);
+  renderChips(); rebuildAll(); setTool('view');
   camHome();
-  requestAnimationFrame(loop);
+  engine.runRenderLoop(loop);
+  scene.executeWhenReady(function () { $('loading').classList.add('done'); dirty(); });
+  setTimeout(function () { $('loading').classList.add('done'); }, 5000);
   try {
     var seen = localStorage.getItem(SEEN_KEY);
     if (seen !== G.version) {
@@ -1417,6 +1660,20 @@
       localStorage.setItem(SEEN_KEY, G.version);
     }
   } catch (e) {}
-  window.__gorod = { state: function () { return state; }, size: function () { return N; }, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam,
-    buy: buyBrigade, openMech: openMech, place: function (cat, size, x, z) { buildCat = cat; buildSize = size; buildRot = 0; placeBuilding({ px: x + G.sizes[size].w / 2, pz: z + G.sizes[size].d / 2 }); } };
+  window.__gorod = {
+    state: function () { return state; }, size: function () { return N; }, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam,
+    buy: buyBrigade, openMech: openMech, setView: setView, sim: function () { return sim; }, frames: function () { return frames; },
+    batches: function () { return Object.keys(batches).map(function (k) { return k + ':' + batches[k].ids.length; }); },
+    place: function (cat, size, x, z) { buildCat = cat; buildSize = size; buildRot = 0; placeBuilding({ px: x + G.sizes[size].w / 2, pz: z + G.sizes[size].d / 2 }); },
+    bulk: function (n) { // тест: мгновенно застроить карту n зданиями
+      var cats = Object.keys(G.cats), sz = ['1x1', '2x1', '2x2'], made = 0;
+      for (var tries = 0; tries < n * 20 && made < n; tries++) {
+        var cat = cats[made % cats.length], s = sz[made % 3], f = foot(s, 0), x = Math.floor(Math.random() * (N - f.w)), z = Math.floor(Math.random() * (N - f.d));
+        if (!canPlace(s, 0, x, z, 0)) continue;
+        var b = { id: state.nextId++, cat: cat, size: s, x: x, z: z, rot: 0, seed: newSeed() };
+        state.buildings.push(b); markOcc(b, b.id); addBuildingMesh(b); made++;
+      }
+      updateStats(); save(); return made;
+    }
+  };
 })();

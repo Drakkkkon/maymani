@@ -16,13 +16,14 @@
   <div class="stats">
     <span class="money" title="Доллары">$ <b id="stMoney">∞</b></span>
     <span title="Жители">👥 <b id="stPeople">0</b></span>
-    <span title="Рабочие места">💼 <b id="stJobs">0</b></span>
+    <span id="stJobsWrap" title="Рабочие места">💼 <b id="stJobs">0</b></span>
     <span title="Здания">🏢 <b id="stBuild">0</b></span>
   </div>
   <button class="icon-btn" id="btnMenu" aria-label="Меню">☰</button>
 </header>
 
 <div class="cam-btns">
+  <button class="icon-btn mode-btn" id="camMode" aria-label="Вид: 3D или изометрия">ИЗО</button>
   <button class="icon-btn" id="camRotL" aria-label="Повернуть камеру влево">⟲</button>
   <button class="icon-btn" id="camRotR" aria-label="Повернуть камеру вправо">⟳</button>
   <button class="icon-btn" id="camIn" aria-label="Приблизить">＋</button>
@@ -77,8 +78,11 @@
   </div>
 </div>
 
-<script src="js/three.min.js"></script>
+<div class="loading" id="loading">Загрузка города…</div>
+
+<script src="js/babylon.js"></script>
 <script src="js/data.js"></script>
+<script src="js/sim.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

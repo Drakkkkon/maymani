@@ -14,8 +14,15 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: #9fc6e8; color: var(--fg);
   font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; user-select: none; -webkit-user-select: none; }
 #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+/* Изометрия: крупные пиксели, как в старых SimCity */
+#scene.iso { image-rendering: pixelated; image-rendering: crisp-edges; }
+body.iso { background: #10141c; }
 button { font: inherit; color: inherit; cursor: pointer; }
 [hidden] { display: none !important; }
+
+.loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 20;
+  background: #20324a; color: var(--mut); font-size: 16px; transition: opacity .4s; }
+.loading.done { opacity: 0; pointer-events: none; }
 
 .topbar { position: fixed; left: 8px; right: 8px; top: calc(8px + var(--safet)); display: flex; align-items: center; gap: 10px;
   padding: 6px 8px 6px 14px; background: var(--bg); border-radius: var(--r); backdrop-filter: blur(8px); z-index: 5; }
@@ -31,6 +38,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .cam-btns { position: fixed; right: 8px; top: calc(66px + var(--safet)); display: flex; flex-direction: column; gap: 6px; z-index: 4; }
 .cam-btns .icon-btn { background: var(--bg); }
+.cam-btns .mode-btn { font-size: 12px; font-weight: 800; letter-spacing: .3px; color: var(--acc); }
 
 .hint { position: fixed; left: 50%; top: calc(66px + var(--safet)); transform: translateX(-50%); max-width: calc(100% - 120px);
   padding: 6px 12px; border-radius: 10px; background: var(--bg); font-size: 13px; color: var(--mut); text-align: center;
@@ -109,6 +117,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .card details { background: rgba(255,255,255,.05); border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
 .card summary { cursor: pointer; font-weight: 600; }
 .card p { margin: 6px 0; color: #d5deea; }
+.card .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; margin: 6px 0 12px; }
+.card .kv span:nth-child(odd) { color: var(--mut); }
+.card .kv b { color: var(--acc); }
 
 .size-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin: 10px 0 12px; }
 .size-opt { border: 1px solid var(--line); background: rgba(255,255,255,.06); border-radius: 12px; padding: 10px 8px 8px;
