@@ -24,7 +24,7 @@
 Файлы сайта
 index.html, money.html, ilife.html, polka.html, topsecret.html, oldbook.html, cows.html, grabber.html, nakleyki.html, gorod.html, limity.html, memy.html
 gorod/ — сама игра «Мое_город» (открывается по адресу https://drakkkkon.github.io/maymani/gorod/)
-memy/ — сам сайт «Мое_мемы» (открывается по адресу https://drakkkkon.github.io/maymani/memy/)
+memy/ — запасная копия сайта «Мое_мемы»; основной сайт — репозиторий Drakkkkon/My-memes, https://drakkkkon.github.io/My-memes/
 css/site.css, js/site.js (поведение страниц), js/data.js (все версии и журналы)
 icons/ (иконки), shots/ (скриншоты версий), .nojekyll, .gitignore
 
