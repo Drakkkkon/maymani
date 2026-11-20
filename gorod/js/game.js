@@ -531,26 +531,76 @@
     hint();
   }
 
+  // --- миниатюры зданий (рисуются один раз в маленьком отдельном рендере) ---
+  var thumbs = {}, thumbR = null;
+  function thumbUrl(cat, size) {
+    var k = cat + size; if (thumbs[k]) return thumbs[k];
+    try {
+      if (!thumbR) {
+        var tc = document.createElement('canvas'); tc.width = tc.height = 128;
+        thumbR = { r: new THREE.WebGLRenderer({ canvas: tc, antialias: true, alpha: true, preserveDrawingBuffer: true }), s: new THREE.Scene(), c: new THREE.PerspectiveCamera(30, 1, 0.1, 100) };
+        thumbR.r.setSize(128, 128, false);
+        thumbR.s.add(new THREE.HemisphereLight('#e6f2ff', '#6d8a55', 1.0));
+        var dl = new THREE.DirectionalLight('#fff3dc', 1.5); dl.position.set(-3, 6, 4); thumbR.s.add(dl);
+      }
+      var T = thumbR, g = buildModel(cat, size, 12345 + size.length);
+      var s0 = G.sizes[size], pad = new THREE.Mesh(new THREE.BoxGeometry(s0.w, 0.06, s0.d), mat('#8cc068'));
+      pad.position.y = -0.03; g.add(pad);
+      T.s.add(g);
+      var box = new THREE.Box3().setFromObject(g), sph = box.getBoundingSphere(new THREE.Sphere());
+      var dist = sph.radius / Math.sin(THREE.MathUtils.degToRad(T.c.fov / 2)) * 1.02;
+      T.c.position.set(sph.center.x + dist * 0.55, sph.center.y + dist * 0.5, sph.center.z + dist * 0.67);
+      T.c.lookAt(sph.center); T.c.updateProjectionMatrix();
+      T.r.render(T.s, T.c);
+      thumbs[k] = T.r.domElement.toDataURL('image/png');
+      T.s.remove(g); g.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
+    } catch (e) { thumbs[k] = ''; }
+    return thumbs[k];
+  }
+  function workText(cat, size) {
+    var c = G.cats[cat];
+    if (cat === 'res') { var f = c.families[size]; return '👥 ' + f + ' ' + plural(f, 'семья', 'семьи', 'семей'); }
+    var n = c.staff[size]; return '👷 ~' + n.toLocaleString('ru-RU') + '<span class="wl"> работают</span><span class="ws"> чел.</span>';
+  }
+  var buildFilter = 'all';
   function renderChips() {
-    $('catChips').innerHTML = Object.keys(G.cats).map(function (k) {
+    $('catChips').innerHTML = '<button class="chip' + (buildFilter === 'all' ? ' on' : '') + '" data-cat="all">Все</button>' + Object.keys(G.cats).map(function (k) {
       var c = G.cats[k];
-      return '<button class="chip' + (k === buildCat ? ' on' : '') + '" data-cat="' + k + '"><span class="sw" style="background:' + c.tag + '"></span>' + c.label + '</button>';
-    }).join('');
-    $('sizeChips').innerHTML = Object.keys(G.sizes).map(function (k) {
-      return '<button class="chip' + (k === buildSize ? ' on' : '') + '" data-size="' + k + '" title="' + G.cats[buildCat].names[k] + '">' + G.sizes[k].label + '</button>';
+      return '<button class="chip' + (k === buildFilter ? ' on' : '') + '" data-cat="' + k + '"><span class="sw" style="background:' + c.tag + '"></span>' + c.label + '</button>';
     }).join('');
     $('roadChips').innerHTML = Object.keys(G.roads).map(function (k) {
       return '<button class="chip' + (k === roadType ? ' on' : '') + '" data-road="' + k + '"><span class="sw" style="background:' + G.roads[k].color + '"></span>' + G.roads[k].label + '</button>';
     }).join('');
+    renderCards();
+  }
+  function renderCards() {
+    var cats = buildFilter === 'all' ? Object.keys(G.cats) : [buildFilter], h = '';
+    cats.forEach(function (ck) {
+      var c = G.cats[ck];
+      Object.keys(G.sizes).forEach(function (sk) {
+        var on = ck === buildCat && sk === buildSize, src = thumbUrl(ck, sk);
+        h += '<button class="bcard' + (on ? ' on' : '') + '" data-cat="' + ck + '" data-size="' + sk + '">' +
+          (src ? '<img class="th" alt="" src="' + src + '">' : '<span class="th"></span>') +
+          '<span class="tx"><b>' + esc(c.names[sk]) + '</b><small>' + workText(ck, sk) + '</small>' +
+          '<span class="sz"><i style="background:' + c.tag + '"></i>' + G.sizes[sk].label + '</span></span></button>';
+      });
+    });
+    $('bGrid').innerHTML = h;
+    var sel = $('bGrid').querySelector('.bcard.on');
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
   }
   function buildHint() { hint('Строим: ' + G.cats[buildCat].names[buildSize] + ' (' + G.sizes[buildSize].label + '). ' + HINTS.build); }
   $('catChips').addEventListener('click', function (e) {
     var b = e.target.closest('[data-cat]'); if (!b) return;
-    buildCat = b.dataset.cat; buildSeed = newSeed(); renderChips(); setGhost(buildCat, buildSize, buildSeed); buildHint();
+    buildFilter = b.dataset.cat;
+    if (buildFilter !== 'all' && buildCat !== buildFilter) { buildCat = buildFilter; buildSeed = newSeed(); setGhost(buildCat, buildSize, buildSeed); buildHint(); }
+    renderChips(); $('bGrid').scrollTop = 0;
   });
-  $('sizeChips').addEventListener('click', function (e) {
-    var b = e.target.closest('[data-size]'); if (!b) return;
-    buildSize = b.dataset.size; buildSeed = newSeed(); renderChips(); setGhost(buildCat, buildSize, buildSeed); buildHint();
+  $('bGrid').addEventListener('click', function (e) {
+    var b = e.target.closest('.bcard'); if (!b) return;
+    buildCat = b.dataset.cat; buildSize = b.dataset.size; buildSeed = newSeed();
+    $('bGrid').querySelectorAll('.bcard').forEach(function (x) { x.classList.toggle('on', x === b); });
+    setGhost(buildCat, buildSize, buildSeed); buildHint();
   });
   $('roadChips').addEventListener('click', function (e) {
     var b = e.target.closest('[data-road]'); if (!b) return;
