@@ -471,19 +471,20 @@
     var bt = batches[k];
     if (bt) return bt;
     var mesh = make();
+    holdSSAO();
     mesh.isPickable = false; mesh.receiveShadows = true; mesh.alwaysSelectAsActiveMesh = true;
     mesh.setEnabled(false);
     shadowGen.addShadowCaster(mesh, false);
     bt = batches[k] = { key: k, mesh: mesh, h: mesh.getBoundingInfo().boundingBox.maximumWorld.y, ids: [], at: {}, buf: new Float32Array(16 * 8) };
     return bt;
   }
-  function batchSet(bt, id, x, y, z, yaw, sx, sy, sz, roll) {
+  function batchSet(bt, id, x, y, z, yaw, sx, sy, sz, roll, pitch) {
     var i = bt.at[id];
     if (i === undefined) {
       i = bt.at[id] = bt.ids.length; bt.ids.push(id);
       if (bt.buf.length < bt.ids.length * 16) { var nb = new Float32Array(bt.buf.length * 2); nb.set(bt.buf); bt.buf = nb; }
     }
-    B.Quaternion.FromEulerAnglesToRef(0, yaw, roll || 0, tmpQ);
+    B.Quaternion.FromEulerAnglesToRef(pitch || 0, yaw, roll || 0, tmpQ);
     tmpS.set(sx, sy, sz); tmpT.set(x, y, z);
     B.Matrix.ComposeToRef(tmpS, tmpQ, tmpT, tmpM);
     tmpM.copyToArray(bt.buf, i * 16);
@@ -623,48 +624,423 @@
   function refreshRoadAround(x, z) { markRoad(x, z); DIRS.forEach(function (d) { markRoad(x + d[0], z + d[1]); }); }
 
   // ---------- Здания и стройплощадки на сцене ----------
-  var placed = {}, sites = {}; // id -> batch; id -> узел стройки
+  var placed = {}, sites = {}; // id -> batch; id -> стройплощадка
   function bPos(b) { var f = foot(b.size, b.rot); return { x: b.x + f.w / 2 - N / 2, z: b.z + f.d / 2 - N / 2, yaw: -b.rot * Math.PI / 2 }; }
   function writeBuilding(b) {
     var bt = placed[b.id]; if (!bt) return;
     var p = bPos(b), hide = moving && moving.b.id === b.id;
-    var sy = isSite(b) ? Math.max(0.04, clamp(b.prog, 0, 1)) : 1;
-    if (hide) batchSet(bt, b.id, p.x, -50, p.z, p.yaw, 0.001, 0.001, 0.001);
-    else batchSet(bt, b.id, p.x, 0, p.z, p.yaw, 1, sy, 1);
-    var st = sites[b.id];
-    if (st) { st.node.position.set(p.x, 0, p.z); st.node.rotation.y = p.yaw; st.node.setEnabled(!hide); }
+    if (isSite(b)) {
+      // готовое здание на стройке не рисуется пачкой — у площадки своя модель с отсечением по высоте
+      batchRemove(bt, b.id);
+      var st = sites[b.id];
+      if (st && (st.bx !== b.x || st.bz !== b.z || st.rot !== b.rot)) { disposeSite(b.id); addSite(b); updateSite(b, 0); st = sites[b.id]; }
+      if (st) { st.node.setEnabled(!hide); if (st.crane) st.crane.root.setEnabled(!hide); st.hidden = hide; }
+    } else if (hide) batchSet(bt, b.id, p.x, -50, p.z, p.yaw, 0.001, 0.001, 0.001);
+    else batchSet(bt, b.id, p.x, 0, p.z, p.yaw, 1, 1, 1);
     dirty();
   }
-  function addSiteParts(b) {
-    var s = G.sizes[b.size], W = s.w, D = s.d, node = new B.TransformNode('site' + b.id, scene), S = Shapes(kit, 0, 0), e = 0.03;
-    S.box(W - 0.1, 0.04, D - 0.1, kit.mat('#a39d92'), 0, 0.02, 0);                   // фундамент
-    S.box(W - 0.02, 0.05, e, kit.mat('#ff8a1f'), 0, 0.13, -D / 2 + e); S.box(W - 0.02, 0.05, e, kit.mat('#ff8a1f'), 0, 0.13, D / 2 - e);
-    S.box(e, 0.05, D - 0.02, kit.mat('#ff8a1f'), -W / 2 + e, 0.13, 0); S.box(e, 0.05, D - 0.02, kit.mat('#ff8a1f'), W / 2 - e, 0.13, 0);
-    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (c) { S.box(0.04, 0.18, 0.04, kit.mat('#f2f2ea'), c[0] * (W / 2 - e), 0.09, c[1] * (D / 2 - e)); });
-    var fence = S.merge(); fence.parent = node; fence.receiveShadows = true; fence.isPickable = false;
+
+  // Этапы стройки — как в жизни. to — до какой доли прогресса длится этап.
+  var STAGES = [
+    { to: 0.10, name: 'Подготовка площадки', about: 'забор, котлован, монтаж крана' },
+    { to: 0.20, name: 'Фундамент', about: 'бетонная плита' },
+    { to: 0.84, name: 'Возведение этажей', about: 'этаж за этажом, леса растут вместе с домом' },
+    { to: 0.95, name: 'Отделка и снятие лесов', about: 'леса разбирают сверху вниз' },
+    { to: 1.00, name: 'Уборка площадки', about: 'разбирают кран, рабочие уезжают' }
+  ];
+  function stageOf(p) { for (var i = 0; i < STAGES.length; i++) if (p < STAGES[i].to) return i; return STAGES.length - 1; }
+  function seg(p, a, b) { return clamp((p - a) / (b - a), 0, 1); }
+  function smooth(x) { return x * x * (3 - 2 * x); }
+  function mix(a, b, k) { return a + (b - a) * k; }
+  function mixAng(a, b, k) { return a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k; }
+  var LH = 0.3; // высота яруса лесов ≈ один этаж
+
+  // Отрезок-балка от p0 до p1 (для кранов и лесов)
+  function beam(S, color, x0, y0, z0, x1, y1, z1, th) {
+    var dx = x1 - x0, dy = y1 - y0, dz = z1 - z0, len = Math.hypot(dx, dy, dz);
+    var m = S.box(th, th, len, kit.mat(color), 0, 0, 0);
+    S.bake(m, -Math.asin(dy / len), Math.atan2(dx, dz), 0);
+    m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    return m;
+  }
+  function finishMesh(m, shadow) {
+    m.isPickable = false; m.receiveShadows = true;
+    if (shadow) shadowGen.addShadowCaster(m, false);
+    return m;
+  }
+
+  // Модель будущего здания: свои копии материалов с плоскостью отсечения — дом «вырастает» снизу вверх.
+  function siteModel(b, plane) {
+    var m = buildModel(kit, b.cat, b.size, modelSeed(b.cat, variantOf(b.cat, b.seed))), pairs = [];
+    function copy(src) {
+      var d = new B.StandardMaterial('sm' + b.id, scene);
+      pairs.push({ s: src, d: d }); syncMat(src, d); d.clipPlane = plane; return d;
+    }
+    if (m.material && m.material.subMaterials) {
+      var mm = new B.MultiMaterial('smm' + b.id, scene);
+      mm.subMaterials = m.material.subMaterials.map(copy);
+      var old = m.material; m.material = mm; old.subMaterials = []; old.dispose();
+    } else if (m.material) m.material = copy(m.material);
+    m.isPickable = false; m.receiveShadows = true;
+    return { mesh: m, pairs: pairs };
+  }
+  function syncMat(s, d) {
+    d.diffuseColor = s.diffuseColor.clone(); d.diffuseTexture = s.diffuseTexture || null;
+    d.specularColor = s.specularColor.clone(); d.specularPower = s.specularPower;
+  }
+  function syncSiteMats() { for (var id in sites) if (sites[id].model) sites[id].model.pairs.forEach(function (p) { syncMat(p.s, p.d); }); }
+
+  // Ярус строительных лесов: стойки в два ряда, настил из досок, перила и зелёная сетка.
+  var netMat = null;
+  function scaffoldLevel(hx, hz) {
+    var S = Shapes(kit, 0, 0), PIPE = '#b8c0c8', PLANK = '#c49a5c';
+    var ri = 0.015, ro = 0.11, ax = hx + ri, bx = hx + ro, az = hz + ri, bz = hz + ro;
+    function posts(x0, z0, x1, z1) { // стойки вдоль стороны
+      var len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.ceil(len / 0.45));
+      for (var i = 0; i <= n; i++) { var k = i / n; S.box(0.012, LH, 0.012, kit.mat(PIPE), mix(x0, x1, k), LH / 2, mix(z0, z1, k)); }
+      return n;
+    }
+    [[ax, az], [bx, bz]].forEach(function (r) {
+      posts(-r[0], -r[1], r[0], -r[1]); posts(-r[0], r[1], r[0], r[1]);
+      posts(-r[0], -r[1] + 0.45, -r[0], r[1] - 0.45); posts(r[0], -r[1] + 0.45, r[0], r[1] - 0.45);
+    });
+    var mx = (ax + bx) / 2, mz = (az + bz) / 2, w = ro - ri + 0.02;
+    // настил
+    S.box(2 * bx, 0.012, w, kit.mat(PLANK), 0, LH - 0.006, -mz); S.box(2 * bx, 0.012, w, kit.mat(PLANK), 0, LH - 0.006, mz);
+    S.box(w, 0.012, 2 * az, kit.mat(PLANK), -mx, LH - 0.006, 0); S.box(w, 0.012, 2 * az, kit.mat(PLANK), mx, LH - 0.006, 0);
+    // перила снаружи и горизонтали
+    [LH * 0.5, LH - 0.03].forEach(function (y) {
+      S.box(2 * bx, 0.008, 0.008, kit.mat(PIPE), 0, y, -bz); S.box(2 * bx, 0.008, 0.008, kit.mat(PIPE), 0, y, bz);
+      S.box(0.008, 0.008, 2 * bz, kit.mat(PIPE), -bx, y, 0); S.box(0.008, 0.008, 2 * bz, kit.mat(PIPE), bx, y, 0);
+    });
+    // диагональные связи на каждой стороне
+    beam(S, PIPE, -bx, 0.01, -bz, -bx + Math.min(0.5, bx), LH - 0.02, -bz, 0.007);
+    beam(S, PIPE, bx, 0.01, bz, bx - Math.min(0.5, bx), LH - 0.02, bz, 0.007);
+    beam(S, PIPE, -bx, 0.01, bz, -bx, LH - 0.02, bz - Math.min(0.5, bz), 0.007);
+    beam(S, PIPE, bx, 0.01, -bz, bx, LH - 0.02, -bz + Math.min(0.5, bz), 0.007);
+    var frame = S.merge();
+    // сетка — отдельная прозрачная сетка-оболочка
+    if (!netMat) {
+      netMat = new B.StandardMaterial('net', scene); netMat.diffuseColor = hex('#3f9a52'); netMat.specularColor = B.Color3.Black();
+      netMat.alpha = 0.24; netMat.backFaceCulling = false;
+    }
+    var N2 = Shapes(kit, 0, 0), nh = LH * 0.62, ny = LH * 0.5 + 0.004;
+    N2.box(2 * bx, nh, 0.002, netMat, 0, ny, -bz - 0.004); N2.box(2 * bx, nh, 0.002, netMat, 0, ny, bz + 0.004);
+    N2.box(0.002, nh, 2 * bz, netMat, -bx - 0.004, ny, 0); N2.box(0.002, nh, 2 * bz, netMat, bx + 0.004, ny, 0);
+    var net = B.Mesh.MergeMeshes(N2.parts, true, true); net.material = netMat; net.isPickable = false;
+    net.parent = frame;
+    return frame;
+  }
+
+  // Башенный кран. Стрела смотрит по +z, поворот — rotation.y.
+  var SW = 0.1, SH = 0.16, YEL = '#f2b705';
+  function craneSection() {
+    var S = Shapes(kit, 0, 0), t = 0.012, h = SW / 2;
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (c) { S.box(t, SH, t, kit.mat(YEL), c[0] * h, SH / 2, c[1] * h); });
+    S.box(SW, 0.008, 0.008, kit.mat(YEL), 0, 0.006, -h); S.box(SW, 0.008, 0.008, kit.mat(YEL), 0, 0.006, h);
+    S.box(0.008, 0.008, SW, kit.mat(YEL), -h, 0.006, 0); S.box(0.008, 0.008, SW, kit.mat(YEL), h, 0.006, 0);
+    beam(S, YEL, -h, 0.006, -h, h, SH, -h, 0.007); beam(S, YEL, h, 0.006, h, -h, SH, h, 0.007);
+    beam(S, YEL, -h, 0.006, h, -h, SH, -h, 0.007); beam(S, YEL, h, 0.006, -h, h, SH, h, 0.007);
+    return S.merge();
+  }
+  function craneTop(JL, CJ) {
+    var S = Shapes(kit, 0, 0), y0 = 0.05;
+    S.box(0.15, 0.05, 0.15, kit.mat('#d79c07'), 0, 0.025, 0);                         // поворотный круг
+    S.box(0.08, 0.075, 0.085, kit.mat(YEL), 0.085, 0.0, 0.07);                      // кабина
+    S.box(0.082, 0.04, 0.06, kit.mat('#9cc3dd'), 0.085, 0.01, 0.09);
+    // оголовок
+    beam(S, YEL, -0.04, y0, -0.04, 0, 0.36, 0, 0.012); beam(S, YEL, 0.04, y0, -0.04, 0, 0.36, 0, 0.012);
+    beam(S, YEL, -0.04, y0, 0.04, 0, 0.36, 0, 0.012); beam(S, YEL, 0.04, y0, 0.04, 0, 0.36, 0, 0.012);
+    // стрела: треугольная ферма
+    var a = 0.035, top = y0 + 0.075;
+    S.box(0.009, 0.009, JL, kit.mat(YEL), -a, y0 + 0.005, JL / 2); S.box(0.009, 0.009, JL, kit.mat(YEL), a, y0 + 0.005, JL / 2);
+    S.box(0.009, 0.009, JL, kit.mat(YEL), 0, top, JL / 2);
+    var bay = 0.12, n = Math.max(2, Math.round(JL / bay)); bay = JL / n;
+    for (var i = 0; i < n; i++) {
+      var z0 = i * bay, z1 = z0 + bay / 2, z2 = z0 + bay;
+      beam(S, YEL, -a, y0 + 0.005, z0, 0, top, z1, 0.006); beam(S, YEL, 0, top, z1, -a, y0 + 0.005, z2, 0.006);
+      beam(S, YEL, a, y0 + 0.005, z0, 0, top, z1, 0.006); beam(S, YEL, 0, top, z1, a, y0 + 0.005, z2, 0.006);
+      S.box(2 * a, 0.006, 0.006, kit.mat(YEL), 0, y0 + 0.005, z2);
+    }
+    // противовесная консоль с бетонными блоками
+    S.box(0.1, 0.025, CJ, kit.mat(YEL), 0, y0 + 0.012, -CJ / 2);
+    S.box(0.12, 0.09, 0.1, kit.mat('#9a9a92'), 0, y0 - 0.02, -CJ + 0.07);
+    S.box(0.12, 0.004, 0.004, kit.mat('#6d6d66'), 0, y0 - 0.02, -CJ + 0.07 + 0.051);
+    // ванты от оголовка
+    beam(S, '#7c6a2a', 0, 0.36, 0, 0, top, JL * 0.62, 0.005);
+    beam(S, '#7c6a2a', 0, 0.36, 0, 0, y0 + 0.025, -CJ + 0.02, 0.005);
+    var m = S.merge(); return m;
+  }
+  function craneLoad(kind) {
+    var S = Shapes(kit, 0, 0);
+    if (kind === 0) { // поддон с кирпичом
+      S.box(0.15, 0.018, 0.11, kit.mat('#a8844f'), 0, -0.1, 0);
+      S.box(0.13, 0.07, 0.095, kit.mat('#b5563c'), 0, -0.056, 0);
+      for (var i = 0; i < 3; i++) S.box(0.132, 0.004, 0.097, kit.mat('#d9cbb5'), 0, -0.08 + i * 0.022, 0);
+    } else if (kind === 1) { // двутавровая балка
+      S.box(0.36, 0.008, 0.035, kit.mat('#5f6f80'), 0, -0.09, 0); S.box(0.36, 0.008, 0.035, kit.mat('#5f6f80'), 0, -0.06, 0);
+      S.box(0.36, 0.03, 0.007, kit.mat('#5f6f80'), 0, -0.075, 0);
+    } else { // бадья с бетоном
+      S.cyl(0.045, 0.03, 0.08, 10, '#7a8088', 0, -0.06, 0); S.cyl(0.042, 0.042, 0.004, 10, '#b9b4a8', 0, -0.019, 0);
+    }
+    beam(S, '#3a3a3a', 0, 0, 0, kind === 1 ? -0.15 : -0.05, -0.05, 0, 0.004);
+    beam(S, '#3a3a3a', 0, 0, 0, kind === 1 ? 0.15 : 0.05, -0.05, 0, 0.004);
+    return S.merge();
+  }
+  // Место для крана: угол участка, снаружи — если соседняя клетка свободна.
+  function cranePlace(b) {
+    var f = foot(b.size, b.rot), c = siteCenter(b), best = null, score = -1;
+    [[1, -1], [-1, 1], [-1, -1], [1, 1]].forEach(function (s) {
+      var cx = s[0] > 0 ? b.x + f.w : b.x - 1, cz = s[1] > 0 ? b.z + f.d : b.z - 1, sc = 0;
+      if (inMap(cx, cz) && !occ[idx(cx, cz)]) sc = state.roads[key(cx, cz)] ? 1 : 2;
+      if (sc > score) { score = sc; best = s; }
+    });
+    var out = score > 0 ? 0.13 : -0.12;
+    return { x: c.x + best[0] * (f.w / 2 + out), z: c.z + best[1] * (f.d / 2 + out), sx: best[0], sz: best[1] };
+  }
+  function buildCrane(b, st) {
+    var cp = cranePlace(b), c = siteCenter(b), f = foot(b.size, b.rot);
+    var mastH = Math.max(1.0, st.h + 0.55), nSec = Math.ceil(mastH / SH); mastH = nSec * SH + 0.05;
+    var reach = Math.hypot(c.x - cp.x, c.z - cp.z), JL = Math.max(1.1, reach + 0.45), CJ = Math.min(0.55, 0.25 + JL * 0.12);
+    var root = new B.TransformNode('crane' + b.id, scene); root.position.set(cp.x, 0, cp.z);
+    var base = B.MeshBuilder.CreateBox('cbase', { width: 0.24, height: 0.05, depth: 0.24 }, scene);
+    base.material = kit.mat('#8f8b82'); base.position.y = 0.025; base.parent = root; finishMesh(base, true);
+    var sec0 = craneSection(); finishMesh(sec0, true); sec0.parent = root; sec0.position.y = 0.05;
+    var secs = [sec0];
+    for (var i = 1; i < nSec; i++) { var s = sec0.createInstance('cs'); s.parent = root; s.position.y = 0.05 + i * SH; s.isPickable = false; secs.push(s); }
+    var slew = new B.TransformNode('slew', scene); slew.parent = root; slew.position.y = 0.05 + nSec * SH;
+    var top = craneTop(JL, CJ); finishMesh(top, true); top.parent = slew;
+    var trolley = B.MeshBuilder.CreateBox('trol', { width: 0.06, height: 0.025, depth: 0.07 }, scene);
+    trolley.material = kit.mat('#3d4148'); trolley.parent = slew; trolley.position.y = 0.035; finishMesh(trolley, true);
+    var cable = B.MeshBuilder.CreateBox('cab', { width: 0.005, height: 1, depth: 0.005 }, scene);
+    cable.material = kit.mat('#2b2b2b'); cable.parent = trolley; finishMesh(cable, false);
+    var hook = B.MeshBuilder.CreateBox('hook', { width: 0.034, height: 0.03, depth: 0.024 }, scene);
+    hook.material = kit.mat('#e0402a'); hook.parent = trolley; finishMesh(hook, true);
+    var loads = [0, 1, 2].map(function (k) { var l = craneLoad(k); l.parent = hook; finishMesh(l, true); l.setEnabled(false); return l; });
+    // откуда берём груз: середина стороны участка у крана — там встаёт грузовик
+    var pick = { x: c.x + cp.sx * 0, z: c.z + cp.sz * (f.d / 2 + 0.5) };
+    var cr = { root: root, secs: secs, slew: slew, trolley: trolley, cable: cable, hook: hook, loads: loads, JL: JL,
+      topY: slew.position.y, mast: { x: cp.x, z: cp.z }, pick: pick, drop: { x: c.x, z: c.z }, yaw: Math.atan2(c.x - cp.x, c.z - cp.z), r: Math.min(reach, JL - 0.05), hy: 0 };
+    cr.hy = cr.topY - 0.25; placeHook(cr, -1);
+    return cr;
+  }
+  function placeHook(cr, load) {
+    cr.slew.rotation.y = cr.yaw;
+    cr.trolley.position.z = clamp(cr.r, 0.22, cr.JL - 0.04);
+    var drop = Math.max(0.05, cr.topY + 0.035 - cr.hy);
+    cr.hook.position.y = -drop; cr.cable.scaling.y = drop; cr.cable.position.y = -drop / 2;
+    cr.loads.forEach(function (l, i) { l.setEnabled(i === load); });
+  }
+  // Цикл крана: опустить крюк к грузовику → поднять → повернуть к дому → опустить на этаж → отцепить → вернуться.
+  function animCrane(st, workH) {
+    var cr = st.crane, PER = 8, u = (st.clock / PER) % 1, cyc = Math.floor(st.clock / PER);
+    var A = cr.pick, Bp = cr.drop, M = cr.mast;
+    var yA = Math.atan2(A.x - M.x, A.z - M.z), rA = Math.hypot(A.x - M.x, A.z - M.z);
+    var yB = Math.atan2(Bp.x - M.x, Bp.z - M.z), rB = Math.hypot(Bp.x - M.x, Bp.z - M.z);
+    var hiY = cr.topY - 0.25, loA = 0.3, loB = Math.min(hiY - 0.05, workH + 0.14), k;
+    if (u < 0.12) { k = smooth(u / 0.12); cr.yaw = yA; cr.r = rA; cr.hy = mix(hiY, loA, k); }
+    else if (u < 0.24) { cr.hy = mix(loA, hiY, smooth((u - 0.12) / 0.12)); }
+    else if (u < 0.46) { k = smooth((u - 0.24) / 0.22); cr.yaw = mixAng(yA, yB, k); cr.r = mix(rA, rB, k); cr.hy = hiY; }
+    else if (u < 0.58) { cr.yaw = yB; cr.r = rB; cr.hy = mix(hiY, loB, smooth((u - 0.46) / 0.12)); }
+    else if (u < 0.66) { cr.hy = loB; }
+    else if (u < 0.78) { cr.hy = mix(loB, hiY, smooth((u - 0.66) / 0.12)); }
+    else { k = smooth((u - 0.78) / 0.22); cr.yaw = mixAng(yB, yA, k); cr.r = mix(rB, rA, k); cr.hy = hiY; }
+    placeHook(cr, u > 0.1 && u < 0.62 ? cyc % 3 : -1);
+  }
+
+  // Рабочие-миниатюры: тело и ноги — пачки (thin instances), ноги шагают.
+  function workerBody(K, carry) {
+    var S = Shapes(K, 0, 0), VEST = '#ff7a1a', PANTS = '#2e3a55';
+    S.box(0.046, 0.016, 0.028, K.mat(PANTS), 0, 0.074, 0);
+    S.box(0.05, 0.056, 0.03, K.mat(VEST), 0, 0.108, 0);
+    S.box(0.052, 0.006, 0.032, K.mat('#eef0d8'), 0, 0.098, 0);
+    [-1, 1].forEach(function (s) {
+      var arm = S.box(0.014, 0.05, 0.016, K.mat(VEST), s * 0.032, 0.105, 0);
+      if (carry) { S.bake(arm, -1.1, 0, 0); arm.position.set(s * 0.032, 0.112, 0.018); }
+    });
+    if (carry) S.box(0.056, 0.024, 0.032, K.mat('#b5563c'), 0, 0.118, 0.042);
+    var head = B.MeshBuilder.CreateSphere('hd', { diameter: 0.03, segments: 6 }, K.scene); head.material = K.mat('#e9b48f'); head.position.set(0, 0.148, 0); S.parts.push(head);
+    var hel = B.MeshBuilder.CreateSphere('hl', { diameter: 0.036, segments: 6, slice: 0.5 }, K.scene); hel.material = K.mat(carry ? '#f6c623' : '#f4f4ee'); hel.position.set(0, 0.153, 0); S.parts.push(hel);
+    S.cyl(0.023, 0.023, 0.004, 10, carry ? '#f6c623' : '#f4f4ee', 0, 0.153, 0.004);
+    return S.merge();
+  }
+  function workerLeg(K) {
+    var S = Shapes(K, 0, 0);
+    S.box(0.018, 0.064, 0.022, K.mat('#2e3a55'), 0, -0.032, 0);
+    S.box(0.02, 0.012, 0.03, K.mat('#3a2a1e'), 0, -0.064, 0.004);
+    return S.merge();
+  }
+  function wBody(carry) { return getBatch(carry ? 'wbody1' : 'wbody0', function () { return workerBody(kit, carry); }); }
+  function wLeg() { return getBatch('wleg', function () { return workerLeg(kit); }); }
+  function removeWorker(id, k) {
+    var wid = 'w' + id + '_' + k;
+    batchRemove(wBody(0), wid); batchRemove(wBody(1), wid); batchRemove(wLeg(), wid + 'L'); batchRemove(wLeg(), wid + 'R');
+  }
+  var WS = 1.25; // масштаб человечков: чуть крупнее «настоящего», чтобы их было видно
+  // поставить рабочего: x, z — в осях участка (до поворота), yaw — куда смотрит, walk — фаза шага
+  function putWorker(st, k, carry, lx, y, lz, yaw, walk, bend) {
+    var th = st.yaw, cs = Math.cos(th), sn = Math.sin(th), wx = st.cx + lx * cs + lz * sn, wz = st.cz - lx * sn + lz * cs, wy = yaw + th;
+    var wid = 'w' + st.id + '_' + k, sw = walk === null ? 0 : Math.sin(walk) * 0.6, bob = walk === null ? 0 : Math.abs(Math.sin(walk)) * 0.008;
+    batchRemove(wBody(!carry), wid);
+    batchSet(wBody(carry), wid, wx, y + bob, wz, wy, WS, WS, WS, 0, bend || 0);
+    var c2 = Math.cos(wy), s2 = Math.sin(wy);
+    [[-1, 'L'], [1, 'R']].forEach(function (L) {
+      var ox = L[0] * 0.012 * WS;
+      batchSet(wLeg(), wid + L[1], wx + ox * c2, y + 0.07 * WS + bob, wz - ox * s2, wy, WS, WS, WS, 0, L[0] * sw);
+    });
+  }
+  // точка на прямоугольном обходе (полупериметры hx, hz), s — пройденный путь
+  function loopAt(hx, hz, s) {
+    var P = 4 * (hx + hz); s = ((s % P) + P) % P;
+    if (s < 2 * hx) return { x: -hx + s, z: hz, yaw: Math.PI / 2 };
+    s -= 2 * hx; if (s < 2 * hz) return { x: hx, z: hz - s, yaw: Math.PI };
+    s -= 2 * hz; if (s < 2 * hx) return { x: hx - s, z: -hz, yaw: -Math.PI / 2 };
+    s -= 2 * hx; return { x: -hx, z: -hz + s, yaw: 0 };
+  }
+  function animWorkers(st, stage, levels, workH, here, moving) {
+    var cap = { '1x1': 4, '2x1': 5, '2x2': 7, '4x4': 10 }[st.size] || 5;
+    var n = here ? Math.min(cap, 2 + here * 2) : 0;
+    if (stage === 4) n = Math.min(n, 2);
+    for (var k = n; k < st.wn; k++) removeWorker(st.id, k);
+    st.wn = n;
+    var hx = st.hx, hz = st.hz, gx = hx + 0.155, gz = hz + 0.155, t = st.clock;
+    for (k = 0; k < n; k++) {
+      var role = stage >= 2 && stage <= 3 ? k % 3 : (k % 2 ? 1 : 2);
+      var deck = Math.min(levels - 1, Math.floor(workH / LH) - 1) - (role === 2 ? 1 : 0);
+      if (role !== 1 && deck >= 0 && stage >= 2 && stage <= 3) { // на лесах
+        var side = (k + st.id) % 4, len = side % 2 ? hz : hx, dk = (deck + 1) * LH;
+        if (role === 0) { // ходит по настилу туда-сюда
+          var ph = (t * 0.22 + k * 0.37) % 2, pos = ph < 1 ? ph : 2 - ph, along = mix(-len + 0.06, len - 0.06, pos), dir = ph < 1 ? 1 : -1;
+          var o = side % 2 ? hx + 0.062 : hz + 0.062;
+          var P = [[along, o, dir > 0 ? Math.PI / 2 : -Math.PI / 2], [o, -along, dir > 0 ? Math.PI : 0], [-along, -o, dir > 0 ? -Math.PI / 2 : Math.PI / 2], [-o, along, dir > 0 ? 0 : Math.PI]][side];
+          putWorker(st, k, false, P[0], dk, P[1], P[2], moving ? t * 9 + k : null, 0);
+        } else { // стоит у стены и работает (кладёт кирпич)
+          var a2 = (k * 0.29) % 1, o2 = (side % 2 ? hx : hz) + 0.05, al = mix(-len + 0.1, len - 0.1, a2);
+          var Q = [[al, o2, Math.PI], [o2, -al, -Math.PI / 2], [-al, -o2, 0], [-o2, al, Math.PI / 2]][side];
+          putWorker(st, k, false, Q[0], dk, Q[1], Q[2], null, moving ? 0.35 * Math.max(0, Math.sin(t * 5 + k * 2)) : 0);
+        }
+      } else if (role === 2 && stage <= 1) { // копает / заливает в центре площадки
+        var a3 = k * 2.1 + st.id;
+        putWorker(st, k, false, Math.cos(a3) * hx * 0.45, stage === 1 ? 0.05 : 0, Math.sin(a3) * hz * 0.45, a3 + Math.PI / 2, null,
+          moving ? 0.45 * Math.max(0, Math.sin(t * 4 + k)) : 0);
+      } else { // носит кирпич по кругу вдоль забора
+        var L2 = loopAt(gx, gz, t * 0.2 + k * (gx + gz) * 1.3);
+        putWorker(st, k, true, L2.x, 0, L2.z, L2.yaw, moving ? t * 9 + k : null, 0);
+      }
+    }
+  }
+
+  function addSite(b) {
+    var s = G.sizes[b.size], W = s.w, D = s.d, p = bPos(b), c = siteCenter(b);
+    var node = new B.TransformNode('site' + b.id, scene); node.position.set(p.x, 0, p.z); node.rotation.y = p.yaw;
+    var hx = W / 2 - 0.08, hz = D / 2 - 0.08, h = Math.max(0.45, placed[b.id].h);
+    var st = { id: b.id, size: b.size, node: node, bx: b.x, bz: b.z, rot: b.rot, yaw: p.yaw, cx: c.x, cz: c.z, W: W, D: D, hx: hx, hz: hz, h: h,
+      levels: Math.max(1, Math.round(h * 0.85 / LH)), clock: (b.id * 1.7) % 8, wn: 0, stage: -1 };
+    // забор (снаружи участка), котлован, фундамент
+    var S = Shapes(kit, 0, 0), fx = W / 2 + 0.12, fz = D / 2 + 0.12, e = 0.014, OR = '#ff8a1f';
+    [0.05, 0.11].forEach(function (y) {
+      S.box(2 * fx, 0.022, e, kit.mat(OR), 0, y, -fz); S.box(2 * fx, 0.022, e, kit.mat(OR), 0, y, fz);
+      S.box(e, 0.022, 2 * fz, kit.mat(OR), -fx, y, 0); S.box(e, 0.022, 2 * fz, kit.mat(OR), fx, y, 0);
+    });
+    for (var i = 0; i <= Math.round(2 * fx / 0.4); i++) { var xx = -fx + i * 2 * fx / Math.round(2 * fx / 0.4); S.box(0.016, 0.14, 0.016, kit.mat('#f2f2ea'), xx, 0.07, -fz); S.box(0.016, 0.14, 0.016, kit.mat('#f2f2ea'), xx, 0.07, fz); }
+    for (i = 1; i < Math.round(2 * fz / 0.4); i++) { var zz = -fz + i * 2 * fz / Math.round(2 * fz / 0.4); S.box(0.016, 0.14, 0.016, kit.mat('#f2f2ea'), -fx, 0.07, zz); S.box(0.016, 0.14, 0.016, kit.mat('#f2f2ea'), fx, 0.07, zz); }
+    S.box(2 * fx, 0.006, 2 * fz, kit.mat('#b49a74'), 0, 0.003, 0);             // утоптанная земля
+    var fence = finishMesh(S.merge(), true); fence.parent = node;
+    var pit = B.MeshBuilder.CreateBox('pit', { width: 2 * hx + 0.04, height: 0.01, depth: 2 * hz + 0.04 }, scene);
+    pit.material = kit.mat('#5a3e26'); pit.position.y = 0.008; pit.parent = node; finishMesh(pit, false);
+    var mound = B.MeshBuilder.CreateCylinder('mnd', { diameterTop: 0, diameterBottom: Math.min(0.5, W * 0.35), height: 0.14, tessellation: 7 }, scene);
+    mound.material = kit.mat('#7b5a3c'); mound.position.set(-hx + 0.18, 0.07, -hz + 0.18); mound.parent = node; finishMesh(mound, true);
+    var slabF = B.MeshBuilder.CreateBox('fnd', { width: 2 * hx + 0.02, height: 1, depth: 2 * hz + 0.02 }, scene);
+    slabF.setEnabled(false); slabF.material = kit.mat('#a7a29a'); slabF.parent = node; finishMesh(slabF, true);
+    st.fence = fence; st.pit = pit; st.mound = mound; st.slab = slabF;
+    // полоска прогресса
     var bw = Math.min(W, 2.4) * 0.8, bar = new B.TransformNode('bar', scene); bar.parent = node;
-    var bg = B.MeshBuilder.CreateBox('bbg', { width: bw + 0.08, height: 0.11, depth: 0.11 }, scene); bg.material = kit.mat('#26303d'); bg.parent = bar;
-    var fill = B.MeshBuilder.CreateBox('bfill', { width: bw, height: 0.075, depth: 0.13 }, scene);
+    var bg = B.MeshBuilder.CreateBox('bbg', { width: bw + 0.06, height: 0.07, depth: 0.07 }, scene); bg.material = kit.mat('#26303d'); bg.parent = bar;
+    var fill = B.MeshBuilder.CreateBox('bfill', { width: bw, height: 0.045, depth: 0.08 }, scene);
     fill.setPivotPoint(new B.Vector3(-bw / 2, 0, 0)); fill.material = kit.mat('#5fd35a'); fill.parent = bar;
     [bg, fill].forEach(function (m) { m.isPickable = false; });
-    sites[b.id] = { node: node, fill: fill, bar: bar };
+    st.bar = bar; st.fill = fill;
+    sites[b.id] = st;
   }
-  function updateSite(b) {
+  // Тяжёлые части (модель, леса, кран) создаются, когда стройка реально началась.
+  function siteHeavy(b, st) {
+    if (st.model) return;
+    st.plane = new B.Plane(0, 1, 0, 0);
+    st.model = siteModel(b, st.plane); st.model.mesh.parent = st.node;
+    shadowGen.addShadowCaster(st.model.mesh, false);
+    // «крышки» на срезе стен — перекрытие этажа, который сейчас строят
+    st.caps = []; var wallTop = 0.3;
+    st.model.mesh.subMeshes.forEach(function (sm) {
+      var bb = sm.getBoundingInfo().boundingBox, mn = bb.minimum, mx = bb.maximum, w = mx.x - mn.x, d = mx.z - mn.z, mat = st.model.mesh.material.subMaterials ? st.model.mesh.material.subMaterials[sm.materialIndex] : null;
+      if (sm.verticesCount !== 24 || w * d < 0.12 || mx.y - mn.y < 0.2 || !(mat && mat.diffuseTexture || w * d > 0.3)) return; // только коробки-стены
+      if (mat && mat.diffuseTexture) wallTop = Math.max(wallTop, mx.y);
+      var cap = B.MeshBuilder.CreateBox('cap', { width: w - 0.01, height: 0.022, depth: d - 0.01 }, scene);
+      cap.material = kit.mat('#b8b3aa'); cap.parent = st.node; cap.position.set((mn.x + mx.x) / 2, 0, (mn.z + mx.z) / 2); finishMesh(cap, false);
+      cap.setEnabled(false); st.caps.push({ m: cap, y0: mn.y, y1: mx.y });
+    });
+    st.levels = Math.max(1, Math.ceil((wallTop - 0.05) / LH));
+    var lv = scaffoldLevel(st.hx, st.hz); finishMesh(lv, true); lv.parent = st.node;
+    st.scaf = [lv];
+    for (var i = 1; i < st.levels; i++) { var c = lv.createInstance('sl'); c.parent = st.node; c.position.y = i * LH; c.isPickable = false; st.scaf.push(c);
+      var nc = lv.getChildMeshes()[0].createInstance('sn'); nc.parent = c; }
+    st.crane = buildCrane(b, st);
+    if (st.hidden) { st.crane.root.setEnabled(false); }
+  }
+  function disposeSite(id) {
+    var st = sites[id]; if (!st) return;
+    for (var k = 0; k < st.wn; k++) removeWorker(id, k);
+    if (st.model) st.model.pairs.forEach(function (p) { p.d.dispose(); });
+    if (st.crane) st.crane.root.dispose(false, false);
+    st.node.dispose(false, false);
+    delete sites[id];
+  }
+  // Показать стройку в нужном этапе. moving — идёт ли работа (рабочие шагают, кран крутится).
+  function updateSite(b, dt) {
     var st = sites[b.id]; if (!st) return;
-    var p = clamp(b.prog, 0, 1), sy = Math.max(0.04, p), h = Math.max(0.45, placed[b.id].h);
+    var p = clamp(b.prog, 0, 1), stage = stageOf(p), crew = siteCrew(b.id), working = crew.here > 0;
+    if (p > 0 || working) siteHeavy(b, st);
     st.fill.scaling.x = Math.max(0.001, p);
-    st.bar.position.y = h * sy + 0.35;
-    writeBuilding(b);
+    st.bar.position.y = st.h + 0.5;
+    // котлован и фундамент
+    var f1 = seg(p, 0.10, 0.20);
+    st.pit.setEnabled(stage <= 1); st.mound.setEnabled(stage === 0);
+    st.slab.setEnabled(p >= 0.10); st.slab.scaling.y = Math.max(0.001, 0.05 * f1); st.slab.position.y = 0.025 * f1;
+    if (!st.model) return;
+    // дом растёт этажами; леса на ярус впереди
+    var f2 = seg(p, 0.20, 0.84), clipH = stage <= 1 ? 0 : stage === 2 ? mix(0.05, st.h + 0.02, f2) : st.h + 5;
+    st.plane.d = -clipH; st.model.mesh.setEnabled(stage >= 2);
+    var lv = 0;
+    if (stage === 2) lv = Math.min(st.levels, Math.floor(clipH / LH) + 2);
+    else if (stage === 3) lv = Math.round(st.levels * (1 - seg(p, 0.86, 0.95)));
+    st.scaf.forEach(function (m, i) { m.setEnabled(i < lv); });
+    st.caps.forEach(function (c) {
+      var on = stage === 2 && clipH > c.y0 + 0.02 && clipH < c.y1 - 0.01;
+      c.m.setEnabled(on); if (on) c.m.position.y = clipH - 0.011;
+    });
+    // кран: монтаж секций в начале, демонтаж в конце
+    var cr = st.crane, ns = cr.secs.length, vis = ns, slewOn = true;
+    if (stage === 0) { vis = Math.ceil(ns * seg(p, 0.005, 0.08)); slewOn = p >= 0.08; }
+    else if (stage === 4) { var g = seg(p, 0.955, 0.995); vis = Math.ceil(ns * (1 - g)); slewOn = g <= 0; }
+    cr.secs.forEach(function (m, i) { m.setEnabled(i < vis); });
+    cr.slew.setEnabled(slewOn && vis === ns);
+    if (working && dt) st.clock += dt;
+    var workH = stage === 2 ? clipH : stage === 3 ? lv * LH : 0;
+    if (working && slewOn && stage >= 1 && stage <= 3) animCrane(st, stage === 1 ? 0.05 : workH);
+    else if (stage !== st.stage) placeHook(cr, -1);
+    animWorkers(st, stage, lv, workH, crew.here, working);
+    st.stage = stage;
+    dirty();
   }
+  function siteTop(b) { var st = sites[b.id]; if (!st) return 0.3; if (!st.model || st.stage < 2) return 0.3; return Math.max(0.3, Math.min(st.h, -st.plane.d)); }
   function addBuildingMesh(b) {
     byId[b.id] = b;
     placed[b.id] = buildingBatch(b);
-    if (isSite(b)) { addSiteParts(b); updateSite(b); }
+    if (isSite(b)) { addSite(b); updateSite(b, 0); }
     writeBuilding(b);
   }
   function removeBuildingMesh(id) {
     if (placed[id]) { batchRemove(placed[id], id); delete placed[id]; }
-    if (sites[id]) { sites[id].node.dispose(); delete sites[id]; }
+    disposeSite(id);
     dirty();
   }
 
@@ -680,7 +1056,7 @@
     for (var lap = 0; lap < 30; lap++) for (var s = 0; s < 4; s++) {
       var sd = sides[s], len = sd[2], cap = Math.max(1, Math.floor(len / 0.75));
       if (k < cap) {
-        var t = -len / 2 + (k + 0.5) * len / cap, out = sd[3] / 2 + 0.38 + lap * 0.62;
+        var t = -len / 2 + (k + 0.5) * len / cap, out = sd[3] / 2 + 0.5 + lap * 0.62;
         return { x: c.x + sd[0] * out + (sd[1] !== 0 ? t : 0), z: c.z + sd[1] * out + (sd[0] !== 0 ? t : 0), yaw: sd[0] !== 0 ? 0 : Math.PI / 2 };
       }
       k -= cap;
@@ -769,9 +1145,10 @@
     });
     var done = [];
     state.buildings.forEach(function (b) {
-      var a = arrived[b.id]; if (!a || !isSite(b)) return;
-      b.prog = Math.min(1, b.prog + dt * a * u.power / buildTime(b));
-      updateSite(b);
+      if (!isSite(b)) return;
+      var a = arrived[b.id], st = sites[b.id];
+      if (a) b.prog = Math.min(1, b.prog + dt * a * u.power / buildTime(b));
+      if (a || (st && st.wn)) updateSite(b, dt);
       if (b.prog >= 1) done.push(b);
     });
     done.forEach(finishSite);
@@ -951,9 +1328,22 @@
     };
     return hdMatCache;
   }
+  // Пачка, созданная при включённом SSAO, не рисуется (особенность Babylon): первые кадры новой пачки
+  // рисуем без SSAO, потом включаем его обратно.
+  var ssaoHold = 0;
+  function holdSSAO() {
+    if (!hdState || !hdState.ssao) return;
+    if (!ssaoHold) try { scene.postProcessRenderPipelineManager.detachCamerasFromRenderPipeline(hdState.ssao._name, camera); } catch (e) {}
+    ssaoHold = 3; dirty();
+  }
+  function releaseSSAO() {
+    if (!ssaoHold || !scene.isReady() || --ssaoHold > 0) return;
+    if (hdState && hdState.ssao) try { scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline(hdState.ssao._name, camera); } catch (e) {}
+  }
   function setQuality(hd) {
     if (!!hdState === hd) return;
-    kit.setHD(hd);
+    ssaoHold = 0;
+    kit.setHD(hd); syncSiteMats();
     if (hd) {
       var dpr = window.devicePixelRatio || 1;
       hdState = { hemi: hemi.intensity, sun: sun.intensity, sunC: sun.diffuse.clone(), ground: hemi.groundColor.clone() };
@@ -992,6 +1382,9 @@
       shadowGen.getShadowMap().resize(2048);
       shadowGen.filteringQuality = B.ShadowGenerator.QUALITY_MEDIUM;
       shadowGen.darkness = 0;
+      // убрать цветокоррекцию HD, иначе она остаётся в материалах и «ИЗО»/3D становятся контрастными
+      var ipc = scene.imageProcessingConfiguration;
+      ipc.toneMappingEnabled = false; ipc.exposure = 1; ipc.contrast = 1; ipc.vignetteEnabled = false; ipc.applyByPostProcess = false;
       hdState = null;
     }
     dirty();
@@ -1070,7 +1463,7 @@
     var r = rayAt(sx, sy), best = null, bt = Infinity;
     state.buildings.forEach(function (b) {
       var f = foot(b.size, b.rot), x0 = b.x - N / 2, z0 = b.z - N / 2, bh = placed[b.id] ? placed[b.id].h : 1;
-      var h = isSite(b) ? Math.max(0.2, bh * b.prog) : bh;
+      var h = isSite(b) ? siteTop(b) : bh;
       var t = rayBox(r.origin, r.direction, x0 + 0.05, 0, z0 + 0.05, x0 + f.w - 0.05, h, z0 + f.d - 0.05);
       if (t >= 0 && t < bt) { bt = t; best = b; }
     });
@@ -1506,7 +1899,7 @@
         '<button class="btn-sell" data-act="sell" id="mSell">Продать</button></div>';
     });
     h += '<h4>Стройки</h4><div id="mSites"></div>' +
-      '<p class="note">Как это работает: без бригады строить нельзя. Поставьте здание — бригада приедет, и дом начнёт расти. ' +
+      '<p class="note">Как это работает: без бригады строить нельзя. Поставьте здание — бригада приедет, поставит кран и леса, и дом начнёт расти этаж за этажом. ' +
       'Бригады делятся между стройками поровну; две бригады на одном доме строят вдвое быстрее. Деньги пока бесконечные (∞), продажа возвращает половину цены.</p>';
     $('mechBody').innerHTML = h;
     renderMech();
@@ -1523,7 +1916,7 @@
     var S = state.buildings.filter(isSite), h = '';
     S.forEach(function (b) {
       var crew = siteCrew(b.id), left = (1 - b.prog) * buildTime(b) / Math.max(1, crew.all), pct = Math.floor(b.prog * 100);
-      h += '<div class="site-row"><div class="sr-top"><b>' + esc(G.cats[b.cat].names[b.size]) + '</b><span>' + pct + '%</span></div>' +
+      h += '<div class="site-row"><div class="sr-top"><b>' + esc(G.cats[b.cat].names[b.size]) + '</b><span>' + esc(STAGES[stageOf(b.prog)].name.toLowerCase()) + ' · ' + pct + '%</span></div>' +
         '<div class="pbar"><i style="width:' + pct + '%"></i></div>' +
         '<div style="font-size:13px;color:#a9b6c8;margin:-4px 0 8px">' + (crew.all ? '🚚 ' + crew.all + ' ' + plural(crew.all, 'бригада', 'бригады', 'бригад') +
           (crew.here < crew.all ? ' (едут: ' + (crew.all - crew.here) + ')' : '') + ' · осталось ≈ ' + secText(left) : '<span class="wait">ждёт свободную бригаду</span>') + '</div></div>';
@@ -1631,7 +2024,11 @@
     h += '<div class="sub"><span class="tag" style="background:' + c.tag + '">' + esc(c.label) + '</span>' + esc(address(b)) + ' · ' + G.sizes[b.size].label + '</div>';
     if (isSite(b)) {
       var crew = siteCrew(b.id), pct = Math.floor(b.prog * 100), left = (1 - b.prog) * buildTime(b) / Math.max(1, crew.all);
+      var sg = stageOf(b.prog);
       h += '<div class="build-now">🏗️ Идёт стройка — ' + pct + '%</div><div class="pbar"><i style="width:' + pct + '%"></i></div>';
+      h += '<ol class="stages">' + STAGES.map(function (x, i) {
+        return '<li class="' + (i < sg ? 'done' : i === sg ? 'now' : '') + '"><b>' + (i < sg ? '✓ ' : '') + esc(x.name) + '</b>' + (i === sg ? '<small>' + esc(x.about) + '</small>' : '') + '</li>';
+      }).join('') + '</ol>';
       h += '<div class="kv"><span>Бригады</span><span>' + (crew.all ? crew.all + (crew.here < crew.all ? ' (в пути ' + (crew.all - crew.here) + ')' : ' на месте') : state.brigades.length ? 'ждёт свободную' : 'нет — купите в «Механизмы»') + '</span>' +
         (crew.all ? '<span>Осталось</span><span>≈ ' + secText(left) + '</span>' : '') +
         '<span>Цена</span><span>' + usd(costOf(b.cat, b.size)) + '</span>' +
@@ -1705,7 +2102,7 @@
       '<li>В изометрии ⟲ ⟳ поворачивают карту ровно на 90°. Вид можно выбрать и в меню ☰. На компьютере — клавиша I.</li></ul></details>' +
       '<details><summary>🚚 Бригады и стройка</summary><ul>' +
       '<li>Строить можно только с бригадой. Откройте 🚚 «Механизмы» → «Строительство» и купите «Бригаду» — зелёный грузовик.</li>' +
-      '<li>Поставьте здание: бригада приедет, дом начнёт расти, над ним — полоска прогресса.</li>' +
+      '<li>Поставьте здание — стройка идёт по этапам, как в жизни: забор и котлован, монтаж башенного крана, фундамент, этажи один за другим в строительных лесах, отделка и снятие лесов, разборка крана. Кран подаёт грузы с грузовика, по лесам ходят рабочие.</li><li>Нажмите на стройку — видно, какой сейчас этап.</li>' +
       '<li>Чем больше бригад, тем быстрее. Бригады делятся между стройками поровну.</li>' +
       '<li>Доллары — вверху экрана. Пока их бесконечно (∞), но у зданий и бригад уже есть цены.</li></ul></details>' +
       '<details><summary>👥 Жители и работа</summary><ul>' +
@@ -1853,6 +2250,7 @@
       needRender = false;
       scene.render();
       frames++;
+      if (ssaoHold) { releaseSSAO(); needRender = true; }
       if (!scene.isReady()) needRender = true; // шейдеры ещё собираются — дорисуем следующим кадром
     }
   }
@@ -1876,7 +2274,7 @@
   } catch (e) {}
   window.__gorod = {
     state: function () { return state; }, size: function () { return N; }, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam,
-    buy: buyBrigade, openMech: openMech, setView: setView, sim: function () { return sim; }, frames: function () { return frames; },
+    scene: scene, buy: buyBrigade, siteAt: function (id, p) { var b = getB(id); b.prog = p; writeBuilding(b); updateSite(b, 0.016); }, openMech: openMech, setView: setView, sim: function () { return sim; }, frames: function () { return frames; },
     batches: function () { return Object.keys(batches).map(function (k) { return k + ':' + batches[k].ids.length; }); },
     place: function (cat, size, x, z) { buildCat = cat; buildSize = size; buildRot = 0; placeBuilding({ px: x + G.sizes[size].w / 2, pz: z + G.sizes[size].d / 2 }); },
     bulk: function (n) { // тест: мгновенно застроить карту n зданиями
