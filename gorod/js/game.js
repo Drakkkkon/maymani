@@ -61,7 +61,7 @@
     return s;
   }
   // wear — износ асфальта по клеткам (0…1), rq — очередь ремонта, fql / fprog — очередь заказов завода, vehicles — машины завода
-  function emptyState(n) { return { v: 1, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fql: [], fprog: 0, vehicles: [], nextVeh: 1 }; }
+  function emptyState(n) { return { v: 1, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fql: [], fprog: 0, vehicles: [], nextVeh: 1, stock: { boards: 0, dsp: 0 } }; }
   function fixState(s) {
     if (!sizeOk(s.size)) s.size = 48;
     if (!Array.isArray(s.brigades)) s.brigades = [];
@@ -77,6 +77,8 @@
     s.vehicles = s.vehicles.filter(function (v) { return v && G.vehicles[v.kind]; });
     s.nextVeh = s.nextVeh || s.vehicles.reduce(function (m, v) { return Math.max(m, v.id); }, 0) + 1;
     s.buildings = s.buildings.filter(function (b) { return G.cats[b.cat] && G.sizes[b.size]; });
+    if (!s.stock || typeof s.stock !== 'object') s.stock = {};
+    s.stock.boards = +s.stock.boards || 0; s.stock.dsp = +s.stock.dsp || 0; // склад досок и ДСП (с 0.11.0)
     return s;
   }
   function catSizes(ck) { return G.cats[ck].sizes || ['1x1', '2x1', '2x2', '4x4']; }
@@ -484,6 +486,106 @@
       [0.25, 0.45, 0.65].forEach(function (x) {
         S.cyl(0.006, 0.04, 0.1, 8, '#ff7a1a', x, 0.05, D - 0.16); S.cyl(0.022, 0.026, 0.02, 8, '#ffffff', x, 0.055, D - 0.16);
       });
+    } else if (cat === 'saw') {
+      // Лесопилки (с 0.11.0). Брёвна — цилиндры вдоль x.
+      var LOG = '#8a5a33', LOGE = '#d8b07a', BRD = '#e2c48c', DSP = '#c9a06a';
+      function log(x0, x1, y, z, rr) { S.bake(S.cyl(rr, rr, x1 - x0, 10, LOG, (x0 + x1) / 2, y, z), 0, 0, Math.PI / 2); S.bake(S.cyl(rr * 0.8, rr * 0.8, 0.005, 10, LOGE, x1 + 0.002, y, z), 0, 0, Math.PI / 2); }
+      function logPile(x0, x1, z0, rows, rr) { for (var a = 0; a < rows; a++) for (var q = 0; q < rows - a; q++) log(x0, x1, rr + a * rr * 1.7, z0 + (q + a / 2) * rr * 2.02, rr); }
+      function boards(x0, z0, x1, z1, n) { for (var q = 0; q < n; q++) { cube(x0, z0, x1, z1, q * 0.045, 0.035, BRD); if (q % 3 === 2) cube(x0 + 0.02, z0 - 0.005, x0 + 0.05, z1 + 0.005, q * 0.045 + 0.035, 0.01, '#7a5a3a'); } }
+      function shed(x0, z0, x1, z1, h, roof) {
+        [[x0, z0], [x1 - 0.05, z0], [x0, z1 - 0.05], [x1 - 0.05, z1 - 0.05]].forEach(function (pp) { cube(pp[0], pp[1], pp[0] + 0.05, pp[1] + 0.05, 0, h, '#6b4a2e'); });
+        S.bake(S.box(x1 - x0 + 0.1, 0.03, z1 - z0 + 0.12, K.mat(roof), (x0 + x1) / 2, h + 0.05, (z0 + z1) / 2), 0.12, 0, 0);
+      }
+      function blade(x, y, z, rr) { S.bake(S.cyl(rr, rr, 0.015, 18, '#cfd3d8', x, y, z), 0, 0, Math.PI / 2); S.bake(S.cyl(rr * 0.25, rr * 0.25, 0.02, 10, '#4a4e55', x, y, z), 0, 0, Math.PI / 2); }
+      cube(m, m, W - m, D - m, 0, 0.012, '#b8a07a');                                              // утоптанная площадка
+      if (size === '2x2') {
+        shed(0.15, 0.2, 1.2, 1.25, 0.55, '#7f8a6a');                                               // навес
+        cube(0.3, 0.55, 1.05, 0.85, 0, 0.2, '#6d5b4a');                                            // станок
+        blade(0.68, 0.3, 0.7, 0.15);
+        log(0.35, 0.95, 0.26, 0.7, 0.06);
+        logPile(1.32, 1.9, 0.25, 3, 0.075);                                                        // штабель брёвен
+        boards(0.25, 1.45, 1.05, 1.75, 5); boards(1.25, 1.45, 1.85, 1.75, 3);                     // готовые доски
+        cube(1.4, 1.3, 1.44, 1.34, 0, 0.5, '#6b4a2e'); cube(1.3, 1.31, 1.75, 1.33, 0.4, 0.14, '#f0c040'); // вывеска
+      } else {
+        // цех распиловки (слева) и цех ДСП (справа), двор с брёвнами и складом
+        part(0.15, 0.15, 2.0, 1.7, 0, 0.8, 2, 'plain', '#a87a4e', '#6f5a48', 'hip', 0.32);
+        cube(0.7, 1.69, 1.45, 1.72, 0, 0.55, '#4f3a28');                                            // ворота
+        cube(0.14, 0.9, 2.01, 1.0, 0.45, 0.05, '#e2c48c');                                         // пояс
+        part(2.2, 0.15, 3.85, 1.9, 0, 1.1, 3, 'office', '#cfc7b8', '#7a8089', 'flat');             // цех ДСП
+        cube(2.6, 1.89, 3.4, 1.92, 0, 0.62, '#5b6068');
+        S.cyl(0.08, 0.11, 1.6, 12, '#9a4a36', 3.6, 1.1 + 0.8, 0.45);                               // труба сушилки
+        S.cyl(0.085, 0.085, 0.08, 12, '#f2f2ea', 3.6, 2.5, 0.45);
+        S.cyl(0.22, 0.22, 0.5, 14, '#8f9aa6', 2.55, 1.35, 0.6);                                    // бункер стружки
+        S.cyl(0, 0.23, 0.15, 14, '#6d7782', 2.55, 1.67, 0.6);
+        cube(1.95, 0.9, 2.25, 1.1, 0.95, 0.08, '#7d838c');                                         // конвейер между цехами
+        logPile(0.2, 1.4, 2.2, 4, 0.08); logPile(0.2, 1.4, 3.0, 3, 0.08);                          // склад брёвен
+        S.cyl(0.035, 0.035, 1.3, 8, '#e0a25a', 1.65, 0.65, 2.6);                                   // кран-балка
+        cube(1.6, 2.1, 1.7, 3.55, 1.25, 0.07, '#e0a25a');
+        boards(2.2, 2.25, 3.0, 2.6, 6); boards(2.2, 2.8, 3.0, 3.15, 4);                           // доски
+        for (var q = 0; q < 6; q++) cube(3.15, 2.25, 3.8, 3.1, q * 0.05, 0.04, q % 2 ? DSP : '#d6b27c'); // листы ДСП
+        cube(2.2, 3.35, 2.55, 3.7, 0.04, 0.12, '#f0c040'); cube(2.32, 3.55, 2.36, 3.7, 0.16, 0.16, '#3b3f45'); // погрузчик
+        [[2.23, 3.4], [2.52, 3.4], [2.23, 3.65], [2.52, 3.65]].forEach(function (w) { cube(w[0] - 0.02, w[1] - 0.03, w[0] + 0.02, w[1] + 0.03, 0, 0.06, '#1c1c1c'); });
+      }
+    } else if (cat === 'park' || cat === 'upark') {
+      // Парковки (с 0.11.0): места поперёк длинной стороны, проезд посередине
+      var under = cat === 'upark', CARC = ['#c0392b', '#3d8fd6', '#e8dcc0', '#2e2e33', '#f2f2ea', '#5aa05a', '#d9a33a'];
+      function pcar(cx, cz, rotZ, col) {
+        var lw = rotZ ? 0.36 : 0.2, ld = rotZ ? 0.2 : 0.36;
+        cube(cx - lw / 2, cz - ld / 2, cx + lw / 2, cz + ld / 2, 0.03, 0.09, col);
+        cube(cx - lw * 0.38, cz - ld * 0.38, cx + lw * 0.38, cz + ld * 0.38, 0.12, 0.07, '#9cc3dd');
+        cube(cx - lw * 0.36, cz - ld * 0.36, cx + lw * 0.36, cz + ld * 0.36, 0.19, 0.012, col);
+      }
+      if (!under) {
+        cube(m, m, W - m, D - m, 0, 0.014, '#4a4e55');                                               // асфальт
+        cube(m - 0.005, m - 0.005, W - m + 0.005, m + 0.03, 0, 0.05, '#cfcabd');                   // бордюр сзади
+        // ряды мест вдоль длинной стороны (D), шаг 0.5 клетки
+        var nz = Math.round((D - 2 * m) / 0.5), rows = W >= 2 ? [[m, m + 0.5], [W - m - 0.5, W - m]] : [[m, W - m]], gz;
+        rows.forEach(function (rw, ri) {
+          for (gz = 0; gz <= nz; gz++) cube(rw[0], m + gz * 0.5 - 0.008, rw[1], m + gz * 0.5 + 0.008, 0.014, 0.004, '#f1f1e6');
+          for (gz = 0; gz < nz; gz++) if (r() < 0.65) pcar((rw[0] + rw[1]) / 2, m + gz * 0.5 + 0.25, W >= 2, pick(r, CARC));
+        });
+        if (W >= 3) for (var col = 1; col < W - 1; col++) { // средние ряды у больших парковок
+          for (gz = 0; gz <= nz; gz++) cube(col + 0.05, m + gz * 0.5 - 0.008, col + 0.95, m + gz * 0.5 + 0.008, 0.014, 0.004, '#f1f1e6');
+          for (gz = 0; gz < nz; gz++) if (r() < 0.6) pcar(col + 0.5, m + gz * 0.5 + 0.25, true, pick(r, CARC));
+        }
+        if (W >= 2) {                                                                                // будка и шлагбаум у въезда
+          cube(W - m - 0.32, D - m - 0.3, W - m - 0.04, D - m - 0.04, 0, 0.32, '#e9e4d6'); cube(W - m - 0.34, D - m - 0.32, W - m - 0.02, D - m - 0.02, 0.32, 0.03, '#3a6ea5');
+          cube(W - m - 0.3, D - m - 0.05, W - m - 0.06, D - m - 0.03, 0.14, 0.1, '#9cc3dd');
+          cube(m + 0.05, D - m - 0.08, W - m - 0.35, D - m - 0.05, 0.22, 0.03, '#e03b3b');
+          S.cyl(0.03, 0.03, 0.25, 8, '#d0d6dc', W - m - 0.38, 0.12, D - m - 0.06);
+        }
+        if (W >= 3) [[0.1, 0.3], [W - 0.1, 0.3], [0.1, D - 0.6], [W - 0.1, D * 0.5]].forEach(function (lp) { // фонари
+          S.cyl(0.015, 0.02, 0.9, 6, '#7c828b', lp[0], 0.45, lp[1]); cube(lp[0] - 0.06, lp[1] - 0.03, lp[0] + 0.06, lp[1] + 0.03, 0.88, 0.03, '#fff4c2');
+        });
+        S.cyl(0.012, 0.012, 0.45, 6, '#c9ccd1', 0.12, 0.22, D - 0.12);                            // знак «P»
+        S.box(0.16, 0.16, 0.01, K.mat('#2f6fc2'), 0.12, 0.52, D - 0.12); S.box(0.06, 0.1, 0.012, K.mat('#ffffff'), 0.12, 0.52, D - 0.12);
+      } else {
+        // подземная: газон сверху, бетонный пандус въезда у фасада, вентиляция, лифт
+        var rw0 = W >= 2 ? W / 2 - 0.42 : 0.12, rw1 = W >= 2 ? W / 2 + 0.42 : 0.88, rz0 = D - m - Math.min(1.2, D * 0.45);
+        cube(m - 0.005, m - 0.005, W - m + 0.005, D - m + 0.005, 0, 0.03, '#b9b2a6');              // бетонный край
+        cube(m, m, W - m, rz0, 0.03, 0.025, '#6fae5a');                                            // газон (без пандуса)
+        if (rw0 - 0.06 > m) cube(m, rz0, rw0 - 0.06, D - m, 0.03, 0.025, '#6fae5a');
+        if (rw1 + 0.06 < W - m) cube(rw1 + 0.06, rz0, W - m, D - m, 0.03, 0.025, '#6fae5a');
+        cube(rw0, rz0, rw1, D - m, 0, 0.031, '#1d1f22');                                           // тёмная яма въезда
+        cube(rw0 - 0.06, rz0, rw0, D - m, 0, 0.2, '#a9a49a'); cube(rw1, rz0, rw1 + 0.06, D - m, 0, 0.2, '#a9a49a'); // стенки пандуса
+        var rl = (D - m - rz0) * 0.6;                                                              // наклонный асфальт уходит вниз
+        S.bake(S.box(rw1 - rw0, 0.02, rl, K.mat('#4a4e55'), (rw0 + rw1) / 2, 0.035, D - m - rl / 2), -0.08, 0, 0);
+        for (var st2 = 0; st2 < 3; st2++) cube((rw0 + rw1) / 2 - 0.015, D - m - rl + 0.05 + st2 * rl / 3, (rw0 + rw1) / 2 + 0.015, D - m - rl + 0.05 + st2 * rl / 3 + rl / 6, 0.05, 0.004, '#f1f1e6');
+        cube(rw0 - 0.06, rz0 - 0.06, rw1 + 0.06, rz0, 0, 0.32, '#8c8a84');                          // портал
+        cube(rw0 - 0.08, rz0 - 0.08, rw1 + 0.08, rz0 + 0.18, 0.32, 0.04, '#2f6fc2');               // козырёк
+        S.box(0.14, 0.14, 0.01, K.mat('#ffffff'), (rw0 + rw1) / 2, 0.24, rz0 + 0.005);
+        cube(rw0, rz0 + 0.002, rw1, rz0 + 0.004, 0.02, 0.22, '#1d1f22');                           // тёмный проём
+        var vz = W >= 2 ? 0.35 : 0.3;
+        [[W >= 2 ? 0.35 : 0.5, vz], [W - 0.35, vz]].slice(0, W >= 2 ? 2 : 1).forEach(function (v) { // вентиляция
+          cube(v[0] - 0.09, v[1] - 0.09, v[0] + 0.09, v[1] + 0.09, 0.05, 0.22, '#a6acb3'); cube(v[0] - 0.11, v[1] - 0.11, v[0] + 0.11, v[1] + 0.11, 0.27, 0.03, '#7c828b');
+        });
+        if (W >= 2) {                                                                                // лифт-павильон, деревья, лавочки
+          part(m + 0.05, D * 0.4, m + 0.4, D * 0.4 + 0.35, 0.05, 0.42, 1, 'glass', '#5a8fbf', '#5c6b7a', 'flat');
+          tree(W - 0.3, D * 0.45, 0.7); tree(0.7, 0.75, 0.6);
+          cube(W / 2 - 0.2, D * 0.42, W / 2 + 0.2, D * 0.42 + 0.07, 0.05, 0.06, '#8a6b4a');
+        }
+        if (W >= 3) { tree(1.2, 1.5, 0.8); tree(2.2, 2.3, 0.75); tree(0.6, 2.6, 0.7); S.cyl(0.25, 0.28, 0.06, 16, '#c9c2b3', 1.5, 0.08, 2.9); S.cyl(0.18, 0.18, 0.02, 16, '#6fb6e0', 1.5, 0.11, 2.9); }
+      }
     }
     return S.merge();
   }
@@ -1372,7 +1474,7 @@
     state.buildings.forEach(function (b) {
       if (!isSite(b)) return;
       var a = arrived[b.id], st = sites[b.id];
-      if (a) b.prog = Math.min(1, b.prog + dt * a * u.power / buildTime(b));
+      if (a) b.prog = Math.min(1, b.prog + dt * a * u.power * (1 + useStock(dt)) / buildTime(b));
       if (a || (st && st.wn)) updateSite(b, dt);
       if (b.prog >= 1) done.push(b);
     });
@@ -1392,6 +1494,40 @@
 
 
   // ---------- Механический завод: выпуск машин (с 0.9.0; общая очередь и 7 новых машин — с 0.10.0) ----------
+  // ---------- Склад города: доски и ДСП (с 0.11.0) ----------
+  // Лесопилки производят, стройки берут. Возвращает прибавку к скорости стройки (0, 0.25 или 0.5).
+  function useStock(dt) {
+    var U = G.buildUse, st = state.stock, k = 0, nb = U.boards * dt, nd = U.dsp * dt;
+    if (st.boards >= nb) { st.boards -= nb; k += U.bonus; stockDirty = true;
+      if (st.dsp >= nd) { st.dsp -= nd; k += U.bonus; } }
+    return k;
+  }
+  function sawRate() { // штук в минуту от всех работающих лесопилок
+    var o = { boards: 0, dsp: 0 };
+    working('saw').forEach(function (b) { var p = G.sawmill[b.size]; o.boards += p.boards; o.dsp += p.dsp; });
+    return o;
+  }
+  var stockDirty = true, sawCache = null, sawT = 0;
+  function tickSawmills(dt) {
+    sawT -= dt; if (!sawCache || sawT <= 0) { sawCache = sawRate(); sawT = 1; }
+    if (!sawCache.boards && !sawCache.dsp) return;
+    state.stock.boards += sawCache.boards * dt / 60; state.stock.dsp += sawCache.dsp * dt / 60; stockDirty = true;
+  }
+  function stockText(n) { return Math.floor(n).toLocaleString('ru-RU'); }
+  function updateStock() {
+    if (!stockDirty) return; stockDirty = false;
+    var st = state.stock, R = sawCache || sawRate(), show = st.boards >= 1 || st.dsp >= 1 || R.boards > 0 || state.buildings.some(function (b) { return b.cat === 'saw'; });
+    $('stStockWrap').hidden = !show; if (!show) return;
+    $('stBoards').textContent = stockText(st.boards); $('stDsp').textContent = stockText(st.dsp);
+    $('stStockWrap').title = 'Склад: доски ' + stockText(st.boards) + ', ДСП ' + stockText(st.dsp) + '. Лесопилки дают ' + R.boards + ' досок и ' + R.dsp + ' ДСП в минуту. Стройка с досками на 25% быстрее, с досками и ДСП — на 50%.';
+    var e = $('iStock'); if (e) e.innerHTML = '🪵 ' + stockText(st.boards) + ' · 🟫 ' + stockText(st.dsp);
+  }
+  // Парковки: сколько машин жителей стоит рядом (дома в радиусе 8 клеток)
+  function parkUse(b) {
+    var c = siteCenter(b), n = 0, places = G.parkSpots[b.cat][b.size];
+    for (var id in carAgents) { var a = carAgents[id], h = getB(a.home); if (!h) continue; var hc = siteCenter(h); if (Math.abs(hc.x - c.x) + Math.abs(hc.z - c.z) <= 8) n++; }
+    return { places: places, near: n };
+  }
   function working(cat) { return state.buildings.filter(function (b) { return b.cat === cat && isWorking(b); }); }
   // точка здания в его собственных координатах (lx, lz от центра; +z — фасад) → мир
   function localPos(b, lx, lz) {
@@ -2307,14 +2443,18 @@
   function workText(cat, size) {
     var c = G.cats[cat];
     if (cat === 'res') { var f = c.families[size]; return '👥 ' + f + ' ' + plural(f, 'семья', 'семьи', 'семей'); }
+    if (cat === 'saw') { var sp = G.sawmill[size]; return sp.dsp ? '🪵 ' + sp.boards + ' + 🟫 ' + sp.dsp + ' ДСП/мин' : '🪵 ' + sp.boards + ' досок/мин'; }
+    if (cat === 'park' || cat === 'upark') { var ps = G.parkSpots[cat][size]; return '🅿️ ' + ps + ' ' + plural(ps, 'место', 'места', 'мест') + (cat === 'upark' ? '<span class="wl"> под землёй</span>' : ''); }
     var n = c.staff[size]; return '👷 ~' + n.toLocaleString('ru-RU') + '<span class="wl"> работают</span><span class="ws"> чел.</span>';
   }
   var buildFilter = 'all';
   function renderChips() {
-    $('catChips').innerHTML = '<button class="chip' + (buildFilter === 'all' ? ' on' : '') + '" data-cat="all">Все</button>' + Object.keys(G.cats).filter(function (k) { return !G.cats[k].mech; }).map(function (k) {
+    $('catChips').innerHTML = '<button class="chip' + (buildFilter === 'all' ? ' on' : '') + '" data-cat="all">Все</button>' + Object.keys(G.cats).filter(function (k) { return !G.cats[k].mech && !G.cats[k].group; }).map(function (k) {
       var c = G.cats[k];
       return '<button class="chip' + (k === buildFilter ? ' on' : '') + '" data-cat="' + k + '"><span class="sw" style="background:' + c.tag + '"></span>' + c.label + '</button>';
-    }).join('') + '<button class="chip' + (buildFilter === 'mech' ? ' on' : '') + '" data-cat="mech"><span class="sw" style="background:#e0a25a"></span>🏭 Механизмы</button>';
+    }).join('') + G.buildGroups.map(function (g) {
+      return '<button class="chip' + (buildFilter === g.id ? ' on' : '') + '" data-cat="' + g.id + '"><span class="sw" style="background:' + g.tag + '"></span>' + g.label + '</button>';
+    }).join('');
     $('roadChips').innerHTML = Object.keys(G.roads).map(function (k) {
       return '<button class="chip' + (k === roadType ? ' on' : '') + '" data-road="' + k + '"><span class="sw" style="background:' + G.roads[k].color + '"></span>' + G.roads[k].label + '</button>';
     }).join('');
@@ -2344,7 +2484,8 @@
   }
   function filterCats(f) {
     var all = Object.keys(G.cats);
-    return f === 'all' ? all : f === 'mech' ? all.filter(function (k) { return G.cats[k].mech; }) : [f];
+    return f === 'all' ? all : f === 'mech' ? all.filter(function (k) { return G.cats[k].mech; }) :
+      f === 'resrc' ? all.filter(function (k) { return G.cats[k].group === 'resrc'; }) : [f];
   }
   $('catChips').addEventListener('click', function (e) {
     var b = e.target.closest('[data-cat]'); if (!b) return;
@@ -2924,6 +3065,17 @@
           '<span>«Бригада»</span><span>' + usd(u.factoryPrice) + ', ' + secText(u.makeTime) + '</span><span>Другие машины</span><span>7 моделей, от ' + secText(3) + '</span></div>' +
           '<div class="ubtns wrap"><button class="btn-buy alt" data-act="order">🚚 Заказать «Бригаду»</button><button class="btn-sell" data-act="cancel" id="iCancel"' + (queued('brigade') ? '' : ' disabled') + '>Отменить</button>' +
           '<button class="btn-buy" data-act="cars">🚗 Другие машины</button></div></div>';
+      } else if (b.cat === 'saw') {
+        var sp = G.sawmill[b.size], R0 = sawRate();
+        h += '<div class="pbox"><b>🪵 Производство</b><div class="kv"><span>Доски</span><span><b>' + sp.boards + '</b> в минуту</span>' +
+          (sp.dsp ? '<span>ДСП</span><span><b>' + sp.dsp + '</b> листов в минуту</span>' : '<span>ДСП</span><span>нет — делает только Большая лесопилка</span>') +
+          '<span>Все лесопилки города</span><span>' + R0.boards + ' досок + ' + R0.dsp + ' ДСП / мин</span>' +
+          '<span>На складе</span><span id="iStock">—</span></div>' +
+          '<div class="unote">Стройка берёт материалы со склада: с досками бригады строят на 25% быстрее, с досками и ДСП — на 50%.</div></div>';
+      } else if (b.cat === 'park' || b.cat === 'upark') {
+        var pu = parkUse(b);
+        h += '<div class="pbox"><b>🅿️ ' + (b.cat === 'upark' ? 'Подземная парковка' : 'Наземная парковка') + '</b><div class="kv"><span>Мест</span><span><b>' + pu.places + '</b>' + (b.cat === 'upark' ? ' (под землёй, сверху газон)' : '') + '</span>' +
+          '<span>Машин жителей рядом</span><span>🚗 ' + pu.near + (pu.near > pu.places ? ' — мест не хватает' : pu.near ? ' — все помещаются' : '') + '</span></div></div>';
       } else if (b.cat === 'depot') {
         h += '<div class="pbox"><b>🛠️ Ремонт дорог</b><div class="kv"><span>Каток</span><span id="iRoller">' + rollerText(b.id) + '</span>' +
           '<span>Асфальт</span><span id="iRs">—</span><span>Средний / почти изношен</span><span id="iWornN">—</span><span>Очередь</span><span id="iQ">—</span></div>' +
@@ -2932,7 +3084,7 @@
       }
       h += '<div class="kv">' + (w.company ? '<span>Компания</span><span>«' + esc(w.company) + '»</span>' : '') +
         '<span>' + esc(headLabel) + '</span><span>' + esc(w.head) + '</span>' +
-        '<span>Мест</span><span><b>' + w.staff + '</b></span>' +
+        '<span>' + (b.cat === 'park' || b.cat === 'upark' ? 'Рабочих мест' : 'Мест') + '</span><span><b>' + w.staff + '</b></span>' +
         '<span>Из горожан</span><span>' + (filled === undefined ? '…считаем' : filled + ' чел.' + (filled < w.staff ? ' — свободно ' + (w.staff - filled) : ' — все места заняты')) + '</span>' +
         '<span>' + esc(cap(c.visitors[b.size])) + '</span><span>' + w.visits + '</span>' +
         (servingText(b.cat) ? '<span>Машины в городе</span><span>' + esc(servingText(b.cat)) + '</span>' : '') +
@@ -2944,6 +3096,7 @@
     }
     $('infoBody').innerHTML = h; $('info').hidden = false; if (!keepScroll) $('info').scrollTop = 0;
     highlight(b.id);
+    stockDirty = true; updateStock();
     refreshLive();
   }
   // Справка о клетке дороги (с 0.9.0): износ, цена ремонта, кнопка ремонта
@@ -2995,7 +3148,7 @@
     $('stBuild').textContent = built;
     $('stOff').textContent = off; $('stOffWrap').hidden = !off;
     $('stOffWrap').title = 'Без дороги: ' + off + ' ' + plural(off, 'здание', 'здания', 'зданий') + ' не работают. Подведите к ним дорогу.';
-    rebuildTraffic(); syncRollers(); syncCars();
+    rebuildTraffic(); syncRollers(); syncCars(); sawCache = null; stockDirty = true; updateStock();
     if (infoId) { var ib = getB(infoId); if (ib) renderInfo(ib, true); }
     simRequest();
   }
@@ -3175,13 +3328,13 @@
     var t = performance.now(), dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
     keyPan(dt); tickCam(dt);
     var active = tickBrigades(dt, t);
-    tickFactory(dt); tickWear(dt); tickTraffic(dt);
+    tickFactory(dt); tickWear(dt); tickTraffic(dt); tickSawmills(dt);
     var fixingNow = tickRepair(dt, t);
     if ((active || fixingNow) && t - lastSave > 2000) { saveNow(); lastSave = t; }
     if (t - lastUi > 400) {
       lastUi = t;
       if (infoId) { var ib = getB(infoId); if (ib && isSite(ib)) renderInfo(ib, true); }
-      renderMech(); refreshLive();
+      renderMech(); refreshLive(); updateStock();
     }
     flushRoads(); flushBatches();
     if (needRender) {
