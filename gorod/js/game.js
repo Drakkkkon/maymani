@@ -1,5 +1,5 @@
 // «Мое_город» — градостроитель на Babylon.js.
-// Один вид — качественная изометрия («ИЗО HD», с 0.12.0): полное разрешение экрана, сглаживание, SSAO
+// Один вид — качественная изометрия («ИЗО HD», с 0.12.0): полное разрешение экрана, сглаживание
 // и подробные текстуры. Свободный 3D-вид и пиксельная изометрия убраны.
 // Одинаковые здания рисуются пачками (thin instances): тысячи домов — это десятки вызовов отрисовки.
 (function () {
@@ -750,7 +750,6 @@
     var bt = batches[k];
     if (bt) return bt;
     var mesh = make();
-    holdSSAO();
     mesh.isPickable = false; mesh.receiveShadows = true; mesh.alwaysSelectAsActiveMesh = true;
     mesh.setEnabled(false);
     shadowGen.addShadowCaster(mesh, false);
@@ -2088,14 +2087,13 @@
     var far = N * 2 + 60;
     camera.mode = B.Camera.ORTHOGRAPHIC_CAMERA;
     camera.orthoTop = halfH; camera.orthoBottom = -halfH;
-    // Компьютер и планшет: слева панель — центр города сдвигаем в середину свободной части экрана
+    // Компьютер и планшет: панель справа — центр города сдвигаем в середину свободной части экрана (влево)
     var shift = 0;
     if (SIDE && SIDE.matches) shift = (12 + $('dock').offsetWidth) / 2 * (2 * halfH / Math.max(1, window.innerHeight));
-    camera.orthoLeft = -halfH * aspect() - shift; camera.orthoRight = halfH * aspect() - shift;
+    camera.orthoLeft = -halfH * aspect() + shift; camera.orthoRight = halfH * aspect() + shift;
     camera.position.set(cam.tx + far * dx, far * sp, cam.tz + far * dz);
     camera.minZ = 1; camera.maxZ = far * 2.5;
     var ext = halfH * Math.max(1, aspect()) * 1.6;
-    if (hdState && hdState.ssao) hdState.ssao.maxZ = camera.maxZ;
     camera.setTarget(new B.Vector3(cam.tx, 0, cam.tz));
     // солнце и тени следуют за камерой
     sun.position.set(cam.tx + SUN_OFF.x * 2, SUN_OFF.y * 2, cam.tz + SUN_OFF.z * 2);
@@ -2105,7 +2103,7 @@
   }
 
   // ---------- Качество картинки («ИЗО HD») ----------
-  // Полное разрешение экрана, сглаживание (MSAA + FXAA), мягкое затенение углов (SSAO),
+  // Полное разрешение экрана, сглаживание (MSAA + FXAA),
   // тени 4096, кинематографичная цветокоррекция (ACES), окна 256 px, трава и срез земли с фактурой.
   var hdState = null, hdMatCache = null;
   function canvasTex(name, c, uS, vS) {
@@ -2162,21 +2160,8 @@
     };
     return hdMatCache;
   }
-  // Пачка, созданная при включённом SSAO, не рисуется (особенность Babylon): первые кадры новой пачки
-  // рисуем без SSAO, потом включаем его обратно.
-  var ssaoHold = 0;
-  function holdSSAO() {
-    if (!hdState || !hdState.ssao) return;
-    if (!ssaoHold) try { scene.postProcessRenderPipelineManager.detachCamerasFromRenderPipeline(hdState.ssao._name, camera); } catch (e) {}
-    ssaoHold = 3; dirty();
-  }
-  function releaseSSAO() {
-    if (!ssaoHold || !scene.isReady() || --ssaoHold > 0) return;
-    if (hdState && hdState.ssao) try { scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline(hdState.ssao._name, camera); } catch (e) {}
-  }
   function enableHD() {
     if (hdState) return;
-    ssaoHold = 0;
     kit.setHD(true); syncSiteMats();
     hdState = {};
     hemi.intensity = 0.7; hemi.groundColor = hex('#66745a');
@@ -2187,13 +2172,6 @@
     shadowGen.getShadowMap().resize(TOUCH ? 2048 : 4096);
     shadowGen.filteringQuality = B.ShadowGenerator.QUALITY_HIGH;
     shadowGen.darkness = 0.04;
-    try {
-      // мягкие тени в углах и у основания домов
-      var ssao = new B.SSAO2RenderingPipeline('ssao', scene, { ssaoRatio: TOUCH ? 0.5 : 1, blurRatio: TOUCH ? 0.5 : 1 }, [camera], true);
-      ssao.radius = 0.9; ssao.totalStrength = 1.15; ssao.base = 0.08; ssao.samples = TOUCH ? 8 : 16;
-      ssao.expensiveBlur = !TOUCH; ssao.maxZ = 400; ssao.minZAspect = 0.2;
-      hdState.ssao = ssao;
-    } catch (e) { hdState.ssao = null; }
     var pp = new B.DefaultRenderingPipeline('hd', true, scene, [camera]);
     pp.samples = 4; pp.fxaaEnabled = true;
     pp.imageProcessingEnabled = true;
@@ -2291,6 +2269,7 @@
   }
 
   function setTool(t) {
+    var was = tool;
     tool = t;
     document.querySelectorAll('.tool').forEach(function (b) { b.classList.toggle('on', b.dataset.tool === t); });
     $('panelBuild').hidden = t !== 'build';
@@ -2299,13 +2278,14 @@
     if (moving) cancelMove();
     if (t !== 'view') closeInfo();
     if (t === 'build') { setGhost(buildCat, buildSize, buildSeed); refreshNeed(); }
+    if (t !== 'build') catsOpen(false); else if (was !== 'build') catsOpen(true);   // «Строить» — сразу открываются категории
     if (t === 'build' && !state.brigades.length) hint(NO_BRIGADE, true); else hint();
     fitGrid();
   }
   function refreshNeed() { $('needBr').hidden = state.brigades.length > 0; fitGrid(); }
   $('needBuy').addEventListener('click', function () { openMech('build'); });
 
-  // Компьютер и планшет: меню построек — боковая панель, 2 колонки × 10 рядов (с 0.12.0).
+  // Компьютер и планшет: меню построек — боковая панель справа (с 0.13.0; в 0.12.0 была слева), 2 колонки × 10 рядов.
   // Высота карточки подбирается так, чтобы 10 рядов поместились в экран (от 50 до 72 px);
   // если экран совсем низкий — лишнее прокручивается.
   var SIDE = window.matchMedia('(min-width: 700px) and (min-height: 500px)');
@@ -2319,12 +2299,6 @@
     g.classList.toggle('scroll', g.scrollHeight > g.clientHeight + 1);
   }
   if (SIDE.addEventListener) SIDE.addEventListener('change', fitGrid);
-  // мышью ряд категорий листается колесом (на тач-экране — пальцем)
-  $('catChips').addEventListener('wheel', function (e) {
-    var c = $('catChips'); if (c.scrollWidth <= c.clientWidth) return;
-    e.preventDefault(); c.scrollLeft += e.deltaY + e.deltaX;
-  }, { passive: false });
-
   // --- миниатюры: отдельный маленький движок, рисуются по очереди и подставляются в карточки ---
   var thumbs = {}, tq = [], T = null, tBusy = false;
   function thumbReq(k, make) {
@@ -2390,13 +2364,21 @@
     var n = c.staff[size]; return '👷 ~' + n.toLocaleString('ru-RU') + '<span class="wl"> работают</span><span class="ws"> чел.</span>';
   }
   var buildFilter = 'all';
+  function catLabel(f) {
+    if (f === 'all') return { t: 'Все', c: '#c9d3e0' };
+    if (G.cats[f]) return { t: G.cats[f].label, c: G.cats[f].tag };
+    for (var i = 0; i < G.buildGroups.length; i++) if (G.buildGroups[i].id === f) return { t: G.buildGroups[i].label, c: G.buildGroups[i].tag };
+    return { t: 'Все', c: '#c9d3e0' };
+  }
+  function catCount(f) { return filterCats(f).reduce(function (n, ck) { return n + catSizes(ck).length; }, 0); }
+  function catItem(id) {
+    var l = catLabel(id);
+    return '<button class="chip' + (buildFilter === id ? ' on' : '') + '" data-cat="' + id + '" role="menuitem"><span class="sw" style="background:' + l.c + '"></span><span class="nm">' + l.t + '</span><em>' + catCount(id) + '</em></button>';
+  }
   function renderChips() {
-    $('catChips').innerHTML = '<button class="chip' + (buildFilter === 'all' ? ' on' : '') + '" data-cat="all">Все</button>' + Object.keys(G.cats).filter(function (k) { return !G.cats[k].mech && !G.cats[k].group; }).map(function (k) {
-      var c = G.cats[k];
-      return '<button class="chip' + (k === buildFilter ? ' on' : '') + '" data-cat="' + k + '"><span class="sw" style="background:' + c.tag + '"></span>' + c.label + '</button>';
-    }).join('') + G.buildGroups.map(function (g) {
-      return '<button class="chip' + (buildFilter === g.id ? ' on' : '') + '" data-cat="' + g.id + '"><span class="sw" style="background:' + g.tag + '"></span>' + g.label + '</button>';
-    }).join('');
+    $('catChips').innerHTML = catItem('all') + Object.keys(G.cats).filter(function (k) { return !G.cats[k].mech && !G.cats[k].group; }).map(catItem).join('') +
+      G.buildGroups.map(function (g) { return catItem(g.id); }).join('');
+    var cl = catLabel(buildFilter); $('catCur').textContent = cl.t; $('catSw').style.background = cl.c;
     $('roadChips').innerHTML = Object.keys(G.roads).map(function (k) {
       return '<button class="chip' + (k === roadType ? ' on' : '') + '" data-road="' + k + '"><span class="sw" style="background:' + G.roads[k].color + '"></span>' + G.roads[k].label + '</button>';
     }).join('');
@@ -2430,6 +2412,14 @@
     return f === 'all' ? all : f === 'mech' ? all.filter(function (k) { return G.cats[k].mech; }) :
       f === 'resrc' ? all.filter(function (k) { return G.cats[k].group === 'resrc'; }) : [f];
   }
+  // Меню категорий: кнопка «Категория» под главными кнопками, по нажатию открывается список (с 0.13.0)
+  function catsOpen(on) {
+    var l = $('catChips'); if (l.hidden === !on) return;
+    l.hidden = !on; $('catBtn').setAttribute('aria-expanded', on ? 'true' : 'false');
+  }
+  $('catBtn').addEventListener('click', function () { catsOpen($('catChips').hidden); });
+  document.addEventListener('pointerdown', function (e) { if (!$('catChips').hidden && !e.target.closest('#catRow')) catsOpen(false); }, true);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('catChips').hidden) { catsOpen(false); e.stopPropagation(); } }); // Esc сначала закрывает список
   $('catChips').addEventListener('click', function (e) {
     var b = e.target.closest('[data-cat]'); if (!b) return;
     buildFilter = b.dataset.cat;
@@ -2437,12 +2427,12 @@
     if (fc.indexOf(buildCat) < 0) { buildCat = fc[0]; ch = true; }
     if (catSizes(buildCat).indexOf(buildSize) < 0) { buildSize = catSizes(buildCat)[0]; ch = true; }
     if (ch) { buildSeed = newSeed(); setGhost(buildCat, buildSize, buildSeed); buildHint(); }
-    renderChips(); $('bGrid').scrollTop = 0;
+    renderChips(); $('bGrid').scrollTop = 0; catsOpen(false);
   });
   // Кнопка «Построить» на странице «Механизмы» → «Здания»
   function startPlace(ck) {
     buildCat = ck; buildSize = catSizes(ck)[0]; buildFilter = 'mech'; buildSeed = newSeed();
-    closeMech(); setTool('build'); renderChips();
+    closeMech(); setTool('build'); renderChips(); catsOpen(false);
     if (state.brigades.length) hint('Поставьте «' + G.cats[ck].names[buildSize] + '» вплотную к дороге · ' + usd(costOf(ck, buildSize)));
   }
   $('bGrid').addEventListener('click', function (e) {
@@ -3270,7 +3260,6 @@
       needRender = false;
       scene.render();
       frames++;
-      if (ssaoHold) { releaseSSAO(); needRender = true; }
       if (!scene.isReady()) needRender = true; // шейдеры ещё собираются — дорисуем следующим кадром
     }
   }

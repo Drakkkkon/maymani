@@ -51,9 +51,12 @@
 
   <section class="subpanel" id="panelBuild" hidden>
     <div class="need" id="needBr" hidden>🚚 <span>Нет бригады — строить некому.</span><button id="needBuy">Купить бригаду</button></div>
-    <div class="row">
-      <div class="chips" id="catChips"></div>
+    <div class="row catrow" id="catRow">
+      <button class="catbtn" id="catBtn" aria-haspopup="true" aria-expanded="false" title="Категории зданий">
+        <span class="cl">Категория</span><span class="sw" id="catSw"></span><b id="catCur">Все</b><i>▾</i>
+      </button>
       <button class="chip rot" id="btnRotate" title="Повернуть (R)">↻</button>
+      <div class="catlist" id="catChips" role="menu" hidden></div>
     </div>
     <div class="bgrid" id="bGrid"></div>
   </section>

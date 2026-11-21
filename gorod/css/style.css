@@ -63,6 +63,24 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .chip.on { background: var(--acc); color: #2a2205; border-color: var(--acc); font-weight: 600; }
 .chip .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
 .chip.rot { flex: none; font-size: 18px; padding: 4px 12px; }
+/* меню категорий (0.13.0): кнопка «Категория ▾», по нажатию — список */
+.catrow { position: relative; }
+.catbtn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--bg2);
+  border-radius: 12px; padding: 7px 12px; font-size: 14px; text-align: left; color: inherit; }
+.catbtn .cl { color: var(--mut); font-size: 12px; flex: none; }
+.catbtn .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.catbtn b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.catbtn i { font-style: normal; color: var(--mut); flex: none; transition: transform .15s; }
+.catbtn[aria-expanded="true"] { border-color: var(--acc); }
+.catbtn[aria-expanded="true"] i { transform: rotate(180deg); color: var(--acc); }
+.catlist { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 9; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px;
+  padding: 6px; background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  max-height: 60vh; overflow-y: auto; }
+.catlist .chip { display: flex; align-items: center; gap: 6px; border-radius: 10px; padding: 8px 10px; text-align: left; white-space: normal; line-height: 1.15; }
+.catlist .chip .sw { flex: none; margin-right: 0; }
+.catlist .chip .nm { flex: 1; min-width: 0; }
+.catlist .chip em { font-style: normal; font-size: 11.5px; opacity: .6; flex: none; }
+.catlist .chip.on em { opacity: .75; }
 
 /* Плашка «нет бригады» в панели стройки */
 .need { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 6px 6px 10px; border-radius: 11px;
@@ -243,14 +261,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .stats .stock { color: #e2c48c; }
 .stats .stock b { color: #e2c48c; }
 
-/* ---------- 0.12.0: компьютер и планшет — панель сбоку ----------
-   Слева одна панель: сверху главные кнопки, ниже меню построек — 2 колонки × 10 рядов.
+/* ---------- 0.12.0 / 0.13.0: компьютер и планшет — панель сбоку (с 0.13.0 — справа) ----------
+   Справа одна панель: сверху главные кнопки, под ними меню категорий (список открывается по нажатию),
+   ниже карточки построек — 2 колонки × 10 рядов.
    Высоту карточек подгоняет game.js (переменная --bh), чтобы все 10 рядов помещались в экран.
    Телефон (узкий или низкий экран) остаётся как был: кнопки внизу. */
 @media (min-width: 700px) and (min-height: 500px) {
   :root { --dockw: clamp(336px, 26vw, 380px); --gap: 6px; }
   .dock { display: flex; flex-direction: column; gap: 8px; position: fixed; z-index: 5;
-    left: calc(12px + env(safe-area-inset-left, 0px)); top: calc(12px + var(--safet)); width: var(--dockw);
+    right: calc(12px + env(safe-area-inset-right, 0px)); top: calc(12px + var(--safet)); width: var(--dockw);
     max-height: calc(100% - 24px - var(--safet) - var(--safeb)); padding: 8px;
     background: var(--bg); border-radius: 18px; backdrop-filter: blur(8px); box-shadow: 0 6px 24px rgba(0,0,0,.28); }
 
@@ -267,7 +286,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .dock .subpanel { position: static; transform: none; width: auto; z-index: auto; min-height: 0; gap: 6px;
     padding: 8px 0 0; background: none; border-radius: 0; border-top: 1px solid var(--line); }
   .dock .chip { padding: 5px 10px; font-size: 13px; }
-  .dock .chip.rot { padding: 3px 11px; font-size: 17px; }
+  .dock .chip.rot { padding: 3px 11px; font-size: 17px; align-self: stretch; }
+  .dock .catbtn { padding: 6px 11px; font-size: 13px; }
+  .dock .catlist { bottom: auto; top: calc(100% + 6px); max-height: calc(100vh - 190px); }
+  .dock .catlist .chip { font-size: 13px; padding: 8px 10px; }
   .dock .need { font-size: 12px; padding: 4px 4px 4px 9px; gap: 6px; line-height: 1.2; }
   .dock .need button { padding: 6px 10px; font-size: 12px; }
   /* ровно 10 рядов: выше — прокрутка (если экран низкий, ряды ужимаются и список листается) */
@@ -284,14 +306,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .dock .bcard .wl { display: none; }
   .dock .bcard .ws { display: inline; }
 
-  /* остальное — правее панели */
-  .topbar { left: calc(var(--dockw) + 24px + env(safe-area-inset-left, 0px)); right: auto; top: calc(12px + var(--safet)); min-width: 0;
-    max-width: calc(100% - var(--dockw) - 24px - 64px); }
-  .cam-btns { top: calc(12px + var(--safet)); right: 12px; }
-  .hint { left: calc(var(--dockw) + 24px); top: auto; bottom: calc(14px + var(--safeb)); transform: none; text-align: left;
-    max-width: min(560px, calc(100% - var(--dockw) - 110px)); }
-  .info { left: auto; right: 64px; top: calc(72px + var(--safet)); bottom: auto; width: min(360px, calc(100% - var(--dockw) - 110px));
-    max-height: calc(100% - 84px - var(--safet) - var(--safeb)); }
+  /* остальное — левее панели */
+  .topbar { left: calc(12px + env(safe-area-inset-left, 0px)); right: auto; top: calc(12px + var(--safet)); min-width: 0;
+    max-width: calc(100% - var(--dockw) - 96px - env(safe-area-inset-left, 0px)); }
+  .cam-btns { top: calc(12px + var(--safet)); right: calc(var(--dockw) + 24px + env(safe-area-inset-right, 0px)); }
+  .hint { left: calc(12px + env(safe-area-inset-left, 0px)); top: auto; bottom: calc(14px + var(--safeb)); transform: none; text-align: left;
+    max-width: min(560px, calc(100% - var(--dockw) - 60px)); }
+  .info { left: auto; right: calc(var(--dockw) + 24px + 56px + env(safe-area-inset-right, 0px)); top: calc(72px + var(--safet)); bottom: auto;
+    width: min(360px, calc(100% - var(--dockw) - 130px)); max-height: calc(100% - 84px - var(--safet) - var(--safeb)); }
 }
 /* планшет в вертикальном положении: верхней строке тесно */
 @media (min-width: 700px) and (max-width: 899px) and (min-height: 500px) {
