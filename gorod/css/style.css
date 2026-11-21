@@ -371,3 +371,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sb-body details.guide li { margin: 4px 0; line-height: 1.45; }
 .sb-body .noroad { background: rgba(232,53,43,.16); border: 1px solid rgba(232,53,43,.55); border-radius: 12px; padding: 8px 12px; margin: 8px 0 10px; font-size: 14px; line-height: 1.4; }
 .sb-body .size-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* оформление зданий (0.18.0): строка выбора A / B / C / D в «Строить» и в справке о доме */
+.strow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; align-items: stretch; }
+.strow .stl { grid-column: 1 / -1; color: var(--mut); font-size: 12px; line-height: 1.25; }
+.strow .stl b { color: inherit; font-weight: 600; }
+.strow .chip { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 3px; border-radius: 10px; white-space: normal; line-height: 1.1; min-width: 0; }
+.strow .chip b { font-weight: 700; font-size: 14px; }
+.strow .chip small { font-size: 10.5px; opacity: .85; }
+.strow.info { margin: 8px 0 4px; padding-top: 8px; border-top: 1px solid var(--line); }
+#roadChips { flex-wrap: wrap; overflow: visible; }

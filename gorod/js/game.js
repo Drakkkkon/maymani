@@ -56,7 +56,9 @@
     list.forEach(function (b) {
       var f = foot(b[1], b[4]), bx = b[2] + o, bz = b[3] + o;
       if (bx < 0 || bz < 0 || bx + f.w > n || bz + f.d > n) return;
-      s.buildings.push({ id: s.nextId++, cat: b[0], size: b[1], x: bx, z: bz, rot: b[4], seed: newSeed() });
+      // в городе-примере показаны все четыре оформления: корпорации — B, армия — D, нижний ряд домов — C, остальное — A
+      var th = b[0] === 'corp' ? 1 : b[0] === 'army' ? 3 : (b[0] === 'res' && b[3] === 30) ? 2 : 0;
+      s.buildings.push({ id: s.nextId++, cat: b[0], size: b[1], x: bx, z: bz, rot: b[4], seed: newSeed(), th: th });
     });
     return s;
   }
@@ -77,6 +79,7 @@
     s.vehicles = s.vehicles.filter(function (v) { return v && G.vehicles[v.kind]; });
     s.nextVeh = s.nextVeh || s.vehicles.reduce(function (m, v) { return Math.max(m, v.id); }, 0) + 1;
     s.buildings = s.buildings.filter(function (b) { return G.cats[b.cat] && G.sizes[b.size]; });
+    s.buildings.forEach(function (b) { b.th = G.themes[b.th | 0] ? b.th | 0 : 0; }); // оформление здания (с 0.18.0); у старых сохранений — A
     if (!s.stock || typeof s.stock !== 'object') s.stock = {};
     s.stock.boards = +s.stock.boards || 0; s.stock.dsp = +s.stock.dsp || 0; // склад досок и ДСП (с 0.11.0)
     return s;
@@ -154,7 +157,8 @@
   // gov — камень с классическими окнами, arcade — рустованный цоколь с арками, shop — витрина лавки,
   // iron — большие окна в чугунном переплёте, dorm — слуховое окно мансарды, clock — башенные часы.
   var FH = 0.3; // высота одного этажа
-  var TILE = { euro: [0.5, 0.3], brick: [0.5, 0.3], archb: [0.6, 0.3], gov: [0.6, 0.3], arcade: [0.6, 0.3], shop: [0.7, 0.3], iron: [0.5, 0.3], dorm: [0.3, 0.3], clock: [0.6, 0.6] };
+  var TILE = { euro: [0.5, 0.3], brick: [0.5, 0.3], archb: [0.6, 0.3], gov: [0.6, 0.3], arcade: [0.6, 0.3], shop: [0.7, 0.3], iron: [0.5, 0.3], dorm: [0.3, 0.3], clock: [0.6, 0.6],
+    deco: [0.5, 0.3], decot: [0.6, 0.3], decobase: [0.6, 0.3], indb: [0.5, 0.3], indw: [0.6, 0.3], indbase: [0.6, 0.3], panel: [0.6, 0.3], panelw: [0.6, 0.3], panelbase: [0.6, 0.3] };
   function shade(c, k) { // осветлить (k>0) или затемнить (k<0) цвет #rrggbb
     var n = parseInt(c.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
     function f(v) { return Math.round(k > 0 ? v + (255 - v) * k : v * (1 + k)); }
@@ -271,13 +275,108 @@
       for (i = 0; i < 12; i++) { var a = i * Math.PI / 6, rr = i % 3 ? 0.17 : 0.155; line(cx + Math.sin(a) * rr, 0.3 - Math.cos(a) * rr, cx + Math.sin(a) * 0.19, 0.3 - Math.cos(a) * 0.19, '#26282c', 0.012); }
       line(cx, 0.3, cx - 0.09, 0.3 - 0.07, '#26282c', 0.016); line(cx, 0.3, cx + 0.03, 0.3 - 0.15, '#26282c', 0.012);
       g.fillStyle = '#26282c'; g.beginPath(); g.ellipse(cx * kx, 0.3 * ky, 0.012 * kx, 0.012 * ky, 0, 0, 7); g.fill();
+    } else if (style === 'deco') { // ар-деко: белая штукатурка, ленточное окно, золотая полоса
+      R(0, 0, tw, th, wl); grain(1500, 0.05); R(0, 0, tw, 0.012, shade(wl, 0.3));
+      R(0, 0.07, tw, 0.175, '#2f3a40'); glassRect(0, 0.082, tw, 0.15, GL0, GL1);
+      line(0, 0.082, 0, 0.232, '#2f3a40', 0.014); line(cx, 0.082, cx, 0.232, '#2f3a40', 0.01); line(0, 0.157, tw, 0.157, '#2f3a40', 0.006);
+      R(0, 0.245, tw, 0.02, shade(wl, -0.14)); R(0, 0.288, tw, 0.008, '#c9a24a');
+    } else if (style === 'decot') { // ар-деко: узкие высокие окна и пилястры
+      R(0, 0, tw, th, wl); grain(1300, 0.05); R(0, 0, tw, 0.012, shade(wl, 0.3));
+      [0.15, 0.45].forEach(function (x) {
+        R(x - 0.075, 0.03, 0.15, 0.25, shade(wl, -0.1)); glassRect(x - 0.06, 0.045, 0.12, 0.22, GL0, GL1);
+        line(x, 0.045, x, 0.265, '#2f3a40', 0.008); line(x - 0.06, 0.12, x + 0.06, 0.12, '#2f3a40', 0.006);
+        R(x - 0.075, 0.27, 0.15, 0.012, '#c9a24a');
+      });
+      R(0.3 - 0.012, 0, 0.024, th, shade(wl, 0.28)); R(0, 0, 0.012, th, shade(wl, 0.28)); R(tw - 0.012, 0, 0.012, th, shade(wl, 0.28));
+    } else if (style === 'decobase') { // ар-деко: тёмный каменный цоколь с золотыми окнами
+      R(0, 0, tw, th, shade(wl, -0.3)); grain(1000, 0.06); R(0, 0, tw, 0.01, '#c9a24a');
+      for (i = 1; i < 6; i++) R(0, i * th / 6, tw, 0.003, 'rgba(0,0,0,.2)');
+      [0.12, 0.3, 0.48].forEach(function (x) { R(x - 0.055, 0.065, 0.11, 0.17, '#c9a24a'); glassRect(x - 0.045, 0.075, 0.09, 0.15, '#6a7e88', '#1f2a31'); line(x, 0.075, x, 0.225, '#c9a24a', 0.006); });
+    } else if (style === 'indb') { // закопчённый кирпич, арочное окно со стальным переплётом
+      bricks(wl); R(0, 0, tw, th, 'rgba(22,17,14,.11)'); grain(1800, 0.07);
+      archWin(cx, 0.265, 0.2, 0.24, '#8f857a', '#a3b6c0', '#3b4b55', '#1a1f23', '#8f857a');
+      for (i = 1; i < 4; i++) line(cx - 0.1 + i * 0.05, 0.05, cx - 0.1 + i * 0.05, 0.265, '#1a1f23', 0.005);
+      line(cx - 0.1, 0.2, cx + 0.1, 0.2, '#1a1f23', 0.005);
+    } else if (style === 'indw') { // кирпич, широкое окно цеха в стальной раме
+      bricks(wl); R(0, 0, tw, th, 'rgba(22,17,14,.11)'); grain(1800, 0.07);
+      R(0.04, 0.052, tw - 0.08, 0.026, '#8f857a'); R(0.05, 0.078, tw - 0.1, 0.16, '#1a1f23'); glassRect(0.06, 0.088, tw - 0.12, 0.14, '#a9bcc6', '#3a4a54');
+      for (i = 1; i < 6; i++) line(0.06 + i * (tw - 0.12) / 6, 0.088, 0.06 + i * (tw - 0.12) / 6, 0.228, '#1a1f23', 0.006);
+      line(0.06, 0.158, tw - 0.06, 0.158, '#1a1f23', 0.006); R(0.04, 0.238, tw - 0.08, 0.016, '#8f857a');
+    } else if (style === 'indbase') { // гранитный цоколь с арками
+      ashlar('#77726b'); band('#77726b'); R(0, 0, tw, th, 'rgba(20,18,16,.12)');
+      archWin(cx, 0.3, 0.22, 0.26, '#948f86', '#3a424a', '#161a1f', '#1a1f23', null);
+      for (i = 1; i < 5; i++) line(cx - 0.11 + i * 0.044, 0.18, cx - 0.11 + i * 0.044, 0.3, '#1a1f23', 0.004);
+    } else if (style === 'panel' || style === 'panelw' || style === 'panelbase') { // бетонные панели со швами
+      var pb = style === 'panelbase';
+      R(0, 0, tw, th, pb ? shade(wl, -0.12) : wl); grain(1800, 0.06);
+      R(0, 0, tw, 0.007, 'rgba(45,45,42,.5)'); R(0, 0, 0.006, th, 'rgba(45,45,42,.5)');
+      if (style === 'panel') {
+        R(cx - 0.12, 0.065, 0.24, 0.18, '#46586c'); glassRect(cx - 0.105, 0.08, 0.1, 0.15, GL0, GL1);
+        glassRect(cx + 0.005, 0.08, 0.1, 0.068, GL0, GL1); glassRect(cx + 0.005, 0.162, 0.1, 0.068, GL0, GL1);
+        R(cx - 0.14, 0.245, 0.28, 0.014, shade(wl, 0.3)); R(cx - 0.11, 0.259, 0.22, 0.03, 'rgba(0,0,0,.07)');
+      } else if (style === 'panelw') {
+        R(0.04, 0.07, tw - 0.08, 0.17, '#46586c');
+        for (i = 0; i < 4; i++) glassRect(0.052 + i * (tw - 0.1) / 4, 0.082, (tw - 0.1) / 4 - 0.012, 0.146, GL0, GL1);
+        R(0.03, 0.245, tw - 0.06, 0.014, shade(wl, 0.3));
+      } else {
+        glassRect(0.07, 0.06, 0.2, 0.23, '#cfe2ee', '#476b8a'); line(0.17, 0.06, 0.17, 0.29, '#2c3a47', 0.012); R(0.06, 0.05, 0.22, 0.012, '#2c3a47');
+        glassRect(0.34, 0.1, 0.2, 0.15, GL0, GL1); R(0.34, 0.25, 0.2, 0.012, shade(wl, 0.3));
+      }
     } else { R(0, 0, tw, th, wl); }
+    return c;
+  }
+  // ---------- Оформления зданий (с 0.18.0): A — Belle époque, B — ар-деко и Баухаус, C — индустриальный кирпич, D — послевоенные панели ----------
+  // Модель здания рисуется одна и та же; оформление меняет только текстуры стен (стиль окон и цвет) и крыш.
+  var TH_WALL = [null,
+    ['#efece4', '#e8e2d2', '#f2ead8', '#dcd8cc', '#e9dcc0'],
+    ['#96523d', '#8a4a38', '#a05d44', '#7e4333', '#8c5a3e', '#9a6a48'],
+    ['#b9b8b2', '#c2bfb3', '#aeb0ab', '#c9c0aa', '#b4b9b6']];
+  var TH_ROOF = [null,
+    ['#4e6f66', '#5a6068', '#7a4a3a', '#3f4448'],
+    ['#6a4636', '#7d7873', '#8a6a4a', '#555b60', '#9a5238'],
+    ['#8d9188', '#9a9c94', '#7e8580', '#a09c8c']];
+  var TH_STYLE = [null,
+    { euro: 'deco', brick: 'deco', archb: 'decot', gov: 'decot', arcade: 'decobase' },
+    { euro: 'indb', brick: 'indb', archb: 'indb', gov: 'indw', arcade: 'indbase', iron: 'indw' },
+    { euro: 'panel', brick: 'panel', archb: 'panel', gov: 'panelw', arcade: 'panelbase', iron: 'panelw' }];
+  function hashStr(t) { var h = 7; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0; return h; }
+  function themeWall(style, col, th) {
+    if (!th || !TH_WALL[th]) return [style, col];
+    var st = TH_STYLE[th][style] || style;
+    if (style === 'shop' || style === 'dorm' || style === 'clock') return [st, style === 'shop' ? col : TH_WALL[th][hashStr(col) % TH_WALL[th].length]];
+    return [st, TH_WALL[th][hashStr(col) % TH_WALL[th].length]];
+  }
+  function themeRoof(col, th) { return !th || !TH_ROOF[th] ? col : TH_ROOF[th][hashStr(col) % TH_ROOF[th].length]; }
+  // Текстура крыши: светлая, чтобы цвет материала красил её; одна плитка = 1/3 клетки.
+  function paintRoof(th) {
+    var S = 128, c = document.createElement('canvas'); c.width = c.height = S; var g = c.getContext('2d'), r = rng(500 + th), i, j;
+    function tone(v) { var k = Math.round(255 * v); return 'rgb(' + k + ',' + k + ',' + k + ')'; }
+    g.fillStyle = tone(0.9); g.fillRect(0, 0, S, S);
+    if (th === 0) { // черепица / шифер: ряды с разбежкой швов
+      var rows = 6, rh = S / rows, nc = 3, cw = S / nc;
+      for (i = 0; i < rows; i++) for (j = 0; j < nc; j++) {
+        var x0 = j * cw + (i % 2 ? cw / 2 : 0);
+        [x0, x0 - S].forEach(function (xx) { g.fillStyle = tone(0.8 + r() * 0.2); g.fillRect(xx + 1, i * rh + 1, cw - 2, rh - 2); });
+        g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(0, i * rh + rh - 3, S, 3);
+      }
+    } else if (th === 1) { // стоячий фальц: вертикальные швы и поперечные стыки листов
+      for (i = 0; i < 4; i++) { var x = i * S / 4; g.fillStyle = tone(0.78 + (i % 2) * 0.08); g.fillRect(x, 0, S / 4, S); g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(x, 0, 3, S); g.fillStyle = 'rgba(255,255,255,.55)'; g.fillRect(x + 3, 0, 2, S); }
+      g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, S / 2, S, 2);
+    } else if (th === 2) { // рифлёное железо с ржавчиной
+      for (i = 0; i < 8; i++) { var gx = i * S / 8, gr = g.createLinearGradient(gx, 0, gx + S / 8, 0); gr.addColorStop(0, tone(1)); gr.addColorStop(0.55, tone(0.6)); gr.addColorStop(1, tone(0.82)); g.fillStyle = gr; g.fillRect(gx, 0, S / 8, S); }
+      for (i = 0; i < 26; i++) { g.fillStyle = 'rgba(120,60,20,' + (0.12 + r() * 0.2) + ')'; g.fillRect(r() * S, r() * S, 2 + r() * 8, 3 + r() * 10); }
+      g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(0, S - 3, S, 3);
+    } else { // волнистый шифер
+      for (i = 0; i < 4; i++) { var wx = i * S / 4, wg = g.createLinearGradient(wx, 0, wx + S / 4, 0); wg.addColorStop(0, tone(0.98)); wg.addColorStop(0.5, tone(0.7)); wg.addColorStop(1, tone(0.95)); g.fillStyle = wg; g.fillRect(wx, 0, S / 4, S); }
+      g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(0, S / 2 - 1, S, 3);
+    }
+    for (i = 0; i < 500; i++) { g.fillStyle = r() > 0.5 ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)'; g.fillRect(r() * S, r() * S, 2, 2); }
     return c;
   }
   function windowCanvas(style, wall) { return paintWall(style, wall, 64); }
   function windowCanvasHD(style, wall) { return paintWall(style, wall, 256); }
   function makeKit(sc) {
-    var mats = {}, wallM = {}, wallInfo = [], kitHD = false;
+    var mats = {}, wallM = {}, wallInfo = [], kitHD = false, roofM = {}, roofT = {};
     function base(name) { var m = new B.StandardMaterial(name, sc); m.specularColor = B.Color3.Black(); return m; }
     return {
       scene: sc,
@@ -291,6 +390,15 @@
         m.diffuseColor = B.Color3.White(); wallInfo.push(info);
         wallTex(info, kitHD);
         return (wallM[k] = m);
+      },
+      // оформление (с 0.18.0): стиль и цвет стены в выбранном оформлении th (0 — A, прежний вид)
+      wm: function (style, col, th) { return themeWall(style, col, th | 0); },
+      // крыша с текстурой своего оформления; цвет берётся из палитры оформления
+      roof: function (color, th) {
+        th = th | 0; var k = 'r' + th + color; if (roofM[k]) return roofM[k];
+        var m = base('rf' + k); m.diffuseColor = hex(themeRoof(color, th));
+        if (!roofT[th]) { roofT[th] = new B.DynamicTexture('rt' + th, paintRoof(th), sc, true); roofT[th].update(); roofT[th].wrapU = roofT[th].wrapV = B.Texture.WRAP_ADDRESSMODE; roofT[th].anisotropicFilteringLevel = 4; }
+        m.diffuseTexture = roofT[th]; return (roofM[k] = m);
       },
       // переключить окна всех домов между обычными (64 px) и HD (256 px)
       setHD: function (hd) { kitHD = hd; wallInfo.forEach(function (i) { wallTex(i, hd); }); }
@@ -319,11 +427,11 @@
   var STONE = '#e6ddc9', STONE2 = '#cfc5af', TRIM = '#f4efe2', ZINC = '#56616c', ZINC2 = '#66717c', SLATE = '#3d444c', TILEC = '#b04a2f',
     PAT = '#5aa593', IRON = '#2b2f35', GOLD = '#d9b04a', BRK = '#a2503a', RED = '#c8342c', WOODC = '#6e4a2e';
 
-  function Shapes(K, ox, oz) {
+  function Shapes(K, ox, oz, th) {
     var sc = K.scene, parts = [];
     function put(m, material, x, y, z) { m.position.set(x - ox, y, z - oz); m.material = material; parts.push(m); return m; }
     // Произвольная грань-многоугольник: faces — списки точек [x,y,z] в координатах здания, ins — точка внутри тела (чтобы повернуть нормали наружу).
-    function solid(faces, color, ins) {
+    function solid(faces, color, ins, roof) {
       var pos = [], nor = [], uv = [], ind = [];
       faces.forEach(function (f) {
         var a = f[0], b = f[1], c = f[2];
@@ -331,12 +439,15 @@
         var cx = 0, cy = 0, cz = 0; f.forEach(function (p) { cx += p[0]; cy += p[1]; cz += p[2]; }); cx /= f.length; cy /= f.length; cz /= f.length;
         if ((cx - ins[0]) * nx + (cy - ins[1]) * ny + (cz - ins[2]) * nz < 0) { f = f.slice().reverse(); nx = -nx; ny = -ny; nz = -nz; }
         var l = Math.hypot(nx, ny, nz) || 1, o = pos.length / 3;
-        f.forEach(function (p) { pos.push(p[0] - ox, p[1], p[2] - oz); nor.push(nx / l, ny / l, nz / l); uv.push(p[0] * 0.3, p[2] * 0.3); });
+        // текстурные координаты: u — вдоль горизонтали грани, v — вдоль ската (по настоящей длине); одна плитка = 1/3 клетки
+        var tx = nx / l, ty = ny / l, tz = nz / l, hl = Math.hypot(tx, tz), ux = hl > 1e-4 ? -tz / hl : 1, uz = hl > 1e-4 ? tx / hl : 0;
+        var vx = ty * uz, vy = tz * ux - tx * uz, vz = -ty * ux;
+        f.forEach(function (p) { pos.push(p[0] - ox, p[1], p[2] - oz); nor.push(tx, ty, tz); uv.push((p[0] * ux + p[2] * uz) * 3, (p[0] * vx + p[1] * vy + p[2] * vz) * 3); });
         for (var i = 1; i < f.length - 1; i++) ind.push(o, o + i + 1, o + i); // порядок вершин под правостороннюю сцену (0.17.0)
       });
       var mesh = new B.Mesh('s', sc), vd = new B.VertexData();
       vd.positions = pos; vd.normals = nor; vd.uvs = uv; vd.indices = ind; vd.applyToMesh(mesh);
-      mesh.material = K.mat(color); parts.push(mesh); return mesh;
+      mesh.material = roof ? K.roof(color, th) : K.mat(color); parts.push(mesh); return mesh;
     }
     // усечённая пирамида: низ — прямоугольник, верх — он же, сдвинутый внутрь на i
     function frust(x0, z0, x1, z1, y0, i, h, color, noTop) {
@@ -348,7 +459,7 @@
         [[x1, y0, z0], [x1, y0, z1], [x1 - i, y1, z1 - i], [x1 - i, y1, z0 + i]]
       ];
       if (!noTop) fs.push([[x0 + i, y1, z0 + i], [x1 - i, y1, z0 + i], [x1 - i, y1, z1 - i], [x0 + i, y1, z1 - i]]);
-      return solid(fs, color, ins);
+      return solid(fs, color, ins, true);
     }
     var api = {
       parts: parts,
@@ -384,7 +495,7 @@
         var vc = (v0 + v1) / 2, k = rh / ((v1 - v0) / 2), yE = y0 - k * ov, ua = u0 - ov * 0.6, ub = u1 + ov * 0.6, yr = y0 + rh;
         function P(u, v, y) { return ax === 'x' ? [u, y, v] : [v, y, u]; }
         var ins = P((u0 + u1) / 2, vc, y0 + rh * 0.3);
-        solid([[P(ua, v0 - ov, yE), P(ub, v0 - ov, yE), P(ub, vc, yr), P(ua, vc, yr)], [P(ua, v1 + ov, yE), P(ub, v1 + ov, yE), P(ub, vc, yr), P(ua, vc, yr)]], color, ins);
+        solid([[P(ua, v0 - ov, yE), P(ub, v0 - ov, yE), P(ub, vc, yr), P(ua, vc, yr)], [P(ua, v1 + ov, yE), P(ub, v1 + ov, yE), P(ub, vc, yr), P(ua, vc, yr)]], color, ins, true);
         if (endColor) solid([[P(u0, v0, y0), P(u0, v1, y0), P(u0, vc, yr)], [P(u1, v0, y0), P(u1, v1, y0), P(u1, vc, yr)]], endColor, ins);
       },
       // вальмовая крыша (у квадрата — шатёр-пирамида)
@@ -397,7 +508,7 @@
           [[xa, yE, za], [xb, yE, za], [cx + rx, yr, cz - rz], [cx - rx, yr, cz - rz]],
           [[xa, yE, za], [xa, yE, zb], [cx - rx, yr, cz + rz], [cx - rx, yr, cz - rz]],
           [[xb, yE, za], [xb, yE, zb], [cx + rx, yr, cz + rz], [cx + rx, yr, cz - rz]]
-        ], color, ins);
+        ], color, ins, true);
       },
       // мансардная крыша: крутой нижний скат (hl, вглубь на i1) и пологий верхний (hu, ещё на i2)
       mansard: function (x0, z0, x1, z1, y0, hl, hu, i1, i2, c1, c2) {
@@ -413,16 +524,19 @@
     return api;
   }
 
-  function buildModel(K, cat, size, seed) {
+  function buildModel(K, cat, size, seed, th) {
+    th = th | 0;
     var s = G.sizes[size], W = s.w, D = s.d, m = 0.08;
-    var r = rng(seed), S = Shapes(K, W / 2, D / 2), cube = S.cube;
+    var r = rng(seed), S = Shapes(K, W / 2, D / 2, th), cube = S.cube;
+    function kwall(style, col) { var q = K.wm(style, col, th); return K.wall(q[0], q[1]); } // стена в выбранном оформлении
     var F = [m, m, W - m, D - m];
     function V4(a, b, c, d) { return new B.Vector4(a, b, c, d); }
     var CAP = V4(0.02, 0.02, 0.03, 0.03);
     // ---- общие детали ----
     // стены с окнами: этажи по fl штук, высота этажа fh; возвращает высоту верха
     function wallBox(x0, z0, x1, z1, y0, fl, style, col, fh) {
-      fh = fh || FH; var h = fl * fh, w = x1 - x0, d = z1 - z0, tw = TILE[style][0];
+      fh = fh || FH; var q = K.wm(style, col, th); style = q[0]; col = q[1];
+      var h = fl * fh, w = x1 - x0, d = z1 - z0, tw = TILE[style][0];
       var uw = Math.max(1, Math.round(w / tw)), ud = Math.max(1, Math.round(d / tw));
       S.box(w, h, d, K.wall(style, col), (x0 + x1) / 2, y0 + h / 2, (z0 + z1) / 2, [V4(0, 0, uw, fl), V4(0, 0, uw, fl), V4(0, 0, ud, fl), V4(0, 0, ud, fl), CAP, CAP]);
       return y0 + h;
@@ -456,7 +570,7 @@
       var w = 0.13, h = 0.14, dp = 0.1, dx = [0, 1, 0, -1][dir], dz = [1, 0, -1, 0][dir];
       var cx = fx - dx * dp / 2, cz = fz - dz * dp / 2, bw = dir % 2 ? dp : w, bd = dir % 2 ? w : dp, fu = [0, 2, 1, 3][dir], uv = [CAP, CAP, CAP, CAP, CAP, CAP];
       uv[fu] = V4(0, 0, 1, 1);
-      S.box(bw, h, bd, K.wall('dorm', wc), cx, yb + h / 2, cz, uv);
+      S.box(bw, h, bd, kwall('dorm', wc), cx, yb + h / 2, cz, uv);
       S.gable(cx - bw / 2, cz - bd / 2, cx + bw / 2, cz + bd / 2, yb + h, 0.07, rc, dir % 2 ? 'x' : 'z', 0.02, wc);
     }
     // ряд слуховых окон по скату мансарды (стороны sides), n — по шагу ≈ 0.46
@@ -545,7 +659,7 @@
         tree(1.35, 1.35, 0.9); tree(2.65, 1.35, 0.9); tree(1.35, 2.65, 0.9); tree(2.65, 2.65, 0.9);
         // угловые башенки в стиле ар-нуво
         [[0.17, 3.83], [3.83, 0.17]].forEach(function (p) {
-          S.twr(0.17, 1.0, 10, K.wall('euro', wc), p[0], 0.9, p[1], 2, 3);
+          S.twr(0.17, 1.0, 10, kwall('euro', wc), p[0], 0.9, p[1], 2, 3);
           S.cyl(0.19, 0.19, 0.03, 10, STONE, p[0], 1.9, p[1]); S.cyl(0, 0.2, 0.5, 10, PAT, p[0], 2.17, p[1]); S.sph(0.025, GOLD, p[0], 2.46, p[1], 1);
         });
         [[1.5, 0.55], [2.5, 0.55], [0.55, 1.5], [3.45, 1.5], [0.55, 2.5], [3.45, 2.5]].forEach(function (c) { chim(c[0], c[1], 1.5, 0.3); });
@@ -581,7 +695,7 @@
         S.gable(0.08, 0.95, 1.92, 1.92, ysc + 0.035, 0.3, SLATE, 'x', 0.05, BR);
         S.gable(0.08, 0.08, 0.7, 0.95, ysc + 0.035, 0.28, SLATE, 'z', 0.04, BR); S.gable(1.3, 0.08, 1.92, 0.95, ysc + 0.035, 0.28, SLATE, 'z', 0.04, BR);
         var yw = wallBox(0.78, 1.48, 1.22, 1.94, 0, 5, 'archb', BR); sband(0.78, 1.48, 1.22, 1.94, 0.29, STONE); sband(0.78, 1.48, 1.22, 1.94, 0.59, STONE);
-        S.box(0.4, 0.4, 0.5, K.wall('clock', '#e0d7c2'), 1.0, yw + 0.2, 1.71, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP, CAP, CAP]);
+        S.box(0.4, 0.4, 0.5, kwall('clock', '#e0d7c2'), 1.0, yw + 0.2, 1.71, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP, CAP, CAP]);
         cornice(0.78, 1.48, 1.22, 1.94, yw + 0.4, STONE); S.hip(0.76, 1.46, 1.24, 1.96, yw + 0.44, 0.5, PAT, 0.04);
         S.cyl(0.006, 0.012, 0.18, 6, GOLD, 1.0, yw + 0.44 + 0.5 + 0.08, 1.71); flag(1.0, yw + 1.05, 1.71, '#c8342c');
         door(0.9, 1.1, 1.945, 0.2); steps(0.84, 1.16, 1.94, 2, 0.03);
@@ -612,7 +726,7 @@
         var gp = wallBox(0.1, 0.16, 0.9, 0.84, 0, 1, 'arcade', '#e3dbc8', 0.34), yp = wallBox(0.1, 0.16, 0.9, 0.84, gp, 1, 'gov', '#e3dbc8');
         sband(0.1, 0.16, 0.9, 0.84, gp - 0.01, STONE); cube(0.3, 0.84, 0.7, 0.855, gp - 0.07, 0.06, '#2a4f8f');
         var ym = mans(0.1, 0.16, 0.9, 0.84, yp, 0.17, 0.05, 0.1, 0.16, ZINC, ZINC2, '#cfc6b2', 'f');
-        S.box(0.16, 0.16, 0.1, K.wall('clock', '#e3dbc8'), 0.5, yp + 0.12, 0.86, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP, CAP, CAP]);
+        S.box(0.16, 0.16, 0.1, kwall('clock', '#e3dbc8'), 0.5, yp + 0.12, 0.86, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP, CAP, CAP]);
         flag(0.14, ym - 0.04, 0.22, '#2a4f8f');
         S.cyl(0.045, 0.045, 0.16, 10, RED, 0.22, 0.08, 0.93); S.sph(0.045, RED, 0.22, 0.16, 0.93, 0.6);
         door(0.43, 0.57, 0.842, 0.22, '#3a2a1c');
@@ -622,7 +736,7 @@
         S.hip(0.1, 0.14, 1.9, 0.86, yq + 0.035, 0.34, SLATE, 0.05);
         wallBox(0.78, 0.72, 1.22, 0.96, 0, 3, 'archb', BP); cornice(0.78, 0.72, 1.22, 0.96, yq - 0.005, STONE); S.gable(0.78, 0.72, 1.22, 0.96, yq + 0.035, 0.2, SLATE, 'z', 0.03, BP);
         door(0.9, 1.1, 0.962, 0.22, '#2c3a52'); steps(0.84, 1.16, 0.96, 1, 0.02);
-        S.twr(0.14, 0.9, 8, K.wall('archb', BP), 0.2, 0, 0.74, 2, 3); S.cyl(0.16, 0.16, 0.03, 8, STONE, 0.2, 0.915, 0.74); S.cyl(0, 0.18, 0.32, 8, SLATE, 0.2, 1.09, 0.74);
+        S.twr(0.14, 0.9, 8, kwall('archb', BP), 0.2, 0, 0.74, 2, 3); S.cyl(0.16, 0.16, 0.03, 8, STONE, 0.2, 0.915, 0.74); S.cyl(0, 0.18, 0.32, 8, SLATE, 0.2, 1.09, 0.74);
         S.cyl(0.006, 0.006, 0.22, 6, IRON, 0.74, 0.11, 0.97); S.sph(0.035, '#3f8cf0', 0.74, 0.28, 0.97, 1.2);
         chim(0.45, 0.4, yq, 0.4); chim(1.55, 0.4, yq, 0.4); flag(1.0, yq + 0.2, 0.5, '#2a4f8f');
       } else if (size === '2x2') { // здание суда: неоклассика, портик из шести колонн с фронтоном, купол-фонарь
@@ -643,13 +757,13 @@
         mans(0.9, 0.5, 3.1, 3.8, yt1, 0.3, 0.08, 0.3, 0.4, SLATE, '#5a636d', '#cfc6b2', 'fbrl');
         var ytw2 = wallBox(1.7, 3.0, 2.3, 3.7, yt1 - 0.4 + 0.4, 5, 'gov', HC);          // башня
         cornice(1.7, 3.0, 2.3, 3.7, ytw2 - 0.005, STONE);
-        S.box(0.5, 0.42, 0.5, K.wall('clock', '#e8dfc9'), 2.0, ytw2 + 0.21, 3.35, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP]);
+        S.box(0.5, 0.42, 0.5, kwall('clock', '#e8dfc9'), 2.0, ytw2 + 0.21, 3.35, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP]);
         cornice(1.72, 3.02, 2.28, 3.68, ytw2 + 0.42, STONE);
         var ybf = wallBox(1.76, 3.06, 2.24, 3.64, ytw2 + 0.46, 1, 'arcade', '#e8dfc9', 0.3);
         S.hip(1.7, 3.0, 2.3, 3.7, ybf + 0.0, 0.75, PAT, 0.05); S.cyl(0.008, 0.014, 0.28, 6, GOLD, 2.0, ybf + 0.75 + 0.12, 3.35); S.sph(0.03, GOLD, 2.0, ybf + 0.75 + 0.06, 3.35, 1);
         steps(1.55, 2.45, 3.78, 3, 0.04); door(1.85, 2.15, 3.781, 0.34, '#3c2a1c'); balc(1.75, 3.7, 2.25, 3.78, 0.45, 'f');
         [[0.2, 3.7], [3.8, 3.7]].forEach(function (p) {
-          S.twr(0.14, 0.95, 10, K.wall('gov', HC), p[0], 0, p[1], 2, 3); S.cyl(0.16, 0.16, 0.03, 10, STONE, p[0], 0.965, p[1]); S.cyl(0, 0.18, 0.4, 10, PAT, p[0], 1.18, p[1]);
+          S.twr(0.14, 0.95, 10, kwall('gov', HC), p[0], 0, p[1], 2, 3); S.cyl(0.16, 0.16, 0.03, 10, STONE, p[0], 0.965, p[1]); S.cyl(0, 0.18, 0.4, 10, PAT, p[0], 1.18, p[1]);
         });
         flag(0.5, 1.3, 2.4, '#c8342c'); flag(3.5, 1.3, 2.4, '#c8342c');
         S.cyl(0.015, 0.02, 0.1, 6, '#6c6760', 2.0, 0.05, 3.95);
@@ -675,7 +789,7 @@
         [[0.08, 0.08, 1.92, 0.8], [0.08, 1.2, 1.92, 1.92], [0.08, 0.8, 0.5, 1.2]].forEach(function (q) { sband(q[0], q[1], q[2], q[3], 0.29, STONE); sband(q[0], q[1], q[2], q[3], 0.59, STONE); cornice(q[0], q[1], q[2], q[3], yb2 - 0.005, STONE); });
         S.hip(0.08, 0.08, 1.92, 0.8, yb2 + 0.035, 0.3, SLATE, 0.05); S.hip(0.08, 1.2, 1.92, 1.92, yb2 + 0.035, 0.3, SLATE, 0.05); S.gable(0.08, 0.8, 0.5, 1.2, yb2 + 0.035, 0.2, SLATE, 'z', 0.03, ARM);
         cube(0.5, 0.8, 1.92, 1.2, 0, 0.012, '#c8bb98'); S.cyl(0.012, 0.016, 0.55, 6, '#c9ccd1', 1.4, 0.275, 1.0); S.box(0.22, 0.13, 0.01, K.mat('#c8342c'), 1.51, 0.48, 1.0);
-        [[1.8, 1.8], [1.8, 0.2]].forEach(function (p) { S.twr(0.12, 1.2, 8, K.wall('archb', ARM), p[0], 0, p[1], 2, 4); S.cyl(0, 0.15, 0.3, 8, SLATE, p[0], 1.35, p[1]); });
+        [[1.8, 1.8], [1.8, 0.2]].forEach(function (p) { S.twr(0.12, 1.2, 8, kwall('archb', ARM), p[0], 0, p[1], 2, 4); S.cyl(0, 0.15, 0.3, 8, SLATE, p[0], 1.35, p[1]); });
         door(0.9, 1.1, 1.922, 0.22, '#2f3a2c');
       } else { // военная база: зубчатая каменная ограда, ворота между двумя круглыми башнями, казармы, плац, пушки
         var WALL = '#b8ae98', WH = 0.28, TH = 0.07;
@@ -686,7 +800,7 @@
         }
         wallRun(0.12, 0.12, 3.88, 0.12); wallRun(0.12, 0.12, 0.12, 3.88); wallRun(3.88, 0.12, 3.88, 3.88); wallRun(0.12, 3.88, 1.6, 3.88); wallRun(2.4, 3.88, 3.88, 3.88);
         cube(0.14, 0.14, 3.86, 3.86, 0, 0.008, '#b8ad92');
-        [[1.62, 3.88], [2.38, 3.88]].forEach(function (p) { S.twr(0.17, 0.72, 10, K.wall('archb', '#a89a82'), p[0], 0, p[1], 2, 2); S.cyl(0.19, 0.19, 0.03, 10, STONE2, p[0], 0.735, p[1]); S.cyl(0, 0.21, 0.4, 10, SLATE, p[0], 0.95, p[1]); });
+        [[1.62, 3.88], [2.38, 3.88]].forEach(function (p) { S.twr(0.17, 0.72, 10, kwall('archb', '#a89a82'), p[0], 0, p[1], 2, 2); S.cyl(0.19, 0.19, 0.03, 10, STONE2, p[0], 0.735, p[1]); S.cyl(0, 0.21, 0.4, 10, SLATE, p[0], 0.95, p[1]); });
         cube(1.6, 3.82, 2.4, 3.94, 0.4, 0.06, '#a89a82'); cube(1.6, 3.82, 2.4, 3.94, 0.46, 0.04, WALL);
         S.cyl(0.006, 0.006, 0.4, 6, '#c9ccd1', 2.0, 0.66, 3.88); S.box(0.2, 0.12, 0.01, K.mat('#c8342c'), 2.11, 0.78, 3.88);
         var yb4 = wallBox(0.45, 0.5, 3.55, 1.4, 0, 3, 'archb', ARM); sband(0.45, 0.5, 3.55, 1.4, 0.29, STONE); sband(0.45, 0.5, 3.55, 1.4, 0.59, STONE); cornice(0.45, 0.5, 3.55, 1.4, yb4 - 0.005, STONE);
@@ -699,7 +813,7 @@
           S.bake(S.cyl(0.05, 0.05, 0.02, 10, '#2a2c30', p[0] - 0.15, 0.06, p[1] - 0.045), 0, 0, Math.PI / 2); S.bake(S.cyl(0.05, 0.05, 0.02, 10, '#2a2c30', p[0] - 0.15, 0.06, p[1] + 0.045), 0, 0, Math.PI / 2);
         });
         for (var ib2 = 0; ib2 < 3; ib2++) for (var ic = 0; ic < 3 - ib2; ic++) S.sph(0.04, '#3a3d42', 0.5 + ic * 0.09 + ib2 * 0.045, 0.04 + ib2 * 0.07, 3.3, 1);
-        S.twr(0.16, 0.9, 8, K.wall('archb', '#a89a82'), 0.35, 0, 3.6, 2, 3); S.cyl(0.19, 0.19, 0.03, 8, STONE2, 0.35, 0.915, 3.6); S.cyl(0, 0.2, 0.35, 8, SLATE, 0.35, 1.11, 3.6);
+        S.twr(0.16, 0.9, 8, kwall('archb', '#a89a82'), 0.35, 0, 3.6, 2, 3); S.cyl(0.19, 0.19, 0.03, 8, STONE2, 0.35, 0.915, 3.6); S.cyl(0, 0.2, 0.35, 8, SLATE, 0.35, 1.11, 3.6);
         chim(1.0, 0.95, yb4 + 0.1, 0.32); chim(3.0, 0.95, yb4 + 0.1, 0.32);
       }
     } else if (cat === 'corp') {
@@ -721,7 +835,7 @@
         var gd = wallBox(0.08, 0.08, 1.92, 1.92, 0, 1, 'shop', '#2f3f58', 0.36), yd = wallBox(0.08, 0.08, 1.92, 1.92, gd, 5, 'iron', '#e6dcc4');
         sband(0.08, 0.08, 1.92, 1.92, gd - 0.01, STONE); cornice(0.08, 0.08, 1.92, 1.92, yd - 0.005, STONE); sband(0.08, 0.08, 1.92, 1.92, gd + 0.6, STONE);
         cube(0.08, 0.08, 1.92, 1.92, yd + 0.035, 0.02, '#8795a2');
-        [[0.12, 0.12], [1.88, 0.12], [0.12, 1.88], [1.88, 1.88]].forEach(function (p) { S.twr(0.15, 0.4, 10, K.wall('iron', '#e6dcc4'), p[0], yd + 0.03, p[1], 2, 1); S.cyl(0.17, 0.17, 0.03, 10, STONE, p[0], yd + 0.45, p[1]); S.cyl(0, 0.18, 0.32, 10, PAT, p[0], yd + 0.62, p[1]); S.sph(0.02, GOLD, p[0], yd + 0.8, p[1], 1); });
+        [[0.12, 0.12], [1.88, 0.12], [0.12, 1.88], [1.88, 1.88]].forEach(function (p) { S.twr(0.15, 0.4, 10, kwall('iron', '#e6dcc4'), p[0], yd + 0.03, p[1], 2, 1); S.cyl(0.17, 0.17, 0.03, 10, STONE, p[0], yd + 0.45, p[1]); S.cyl(0, 0.18, 0.32, 10, PAT, p[0], yd + 0.62, p[1]); S.sph(0.02, GOLD, p[0], yd + 0.8, p[1], 1); });
         S.cyl(0.5, 0.52, 0.18, 16, STONE2, 1.0, yd + 0.13, 1.0); S.dome(0.5, '#8fc3b4', 1.0, yd + 0.22, 1.0, 0.8); S.cyl(0.07, 0.09, 0.12, 10, STONE, 1.0, yd + 0.22 + 0.4 + 0.04, 1.0); S.sph(0.03, GOLD, 1.0, yd + 0.22 + 0.4 + 0.12, 1.0, 1);
         awning(0.2, 0.9, 1.92, 0.33, 0.1, '#a83a3a', '#f3ead3'); awning(1.1, 1.8, 1.92, 0.33, 0.1, '#a83a3a', '#f3ead3'); door(0.92, 1.08, 1.922, 0.26, '#2c241c');
       } else { // высотное здание начала века: арочный цоколь, ступенчатый башенный объём, часы, медный шпиль
@@ -731,7 +845,7 @@
         cube(0.08, 0.08, 3.92, 3.92, yt3 + 0.035, 0.015, '#8795a2');
         var yt4 = wallBox(0.95, 0.95, 3.05, 3.05, yt3 + 0.035, 9, 'iron', '#e4dac3'); cornice(0.95, 0.95, 3.05, 3.05, yt4 - 0.005, STONE);
         var yt5 = wallBox(1.4, 1.4, 2.6, 2.6, yt4 + 0.035, 4, 'iron', '#e4dac3'); cornice(1.4, 1.4, 2.6, 2.6, yt5 - 0.005, STONE);
-        S.box(0.7, 0.7, 0.7, K.wall('clock', '#e6ddc7'), 2.0, yt5 + 0.4, 2.0, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP]);
+        S.box(0.7, 0.7, 0.7, kwall('clock', '#e6ddc7'), 2.0, yt5 + 0.4, 2.0, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP]);
         cornice(1.65, 1.65, 2.35, 2.35, yt5 + 0.75, STONE);
         S.hip(1.65, 1.65, 2.35, 2.35, yt5 + 0.79, 0.85, PAT, 0.06); S.cyl(0.006, 0.014, 0.4, 6, GOLD, 2.0, yt5 + 0.79 + 0.85 + 0.15, 2.0); S.sph(0.04, GOLD, 2.0, yt5 + 0.79 + 0.85 + 0.0, 2.0, 1);
         for (var iw2 = 0; iw2 < 5; iw2++) awning(0.3 + iw2 * 0.7, 0.9 + iw2 * 0.7, 3.92, 0.35, 0.08, iw2 % 2 ? '#2f3f58' : '#a83a3a', '#f3ead3');
@@ -751,7 +865,7 @@
       for (var gl = 1; gl < 6; gl++) cube(1.5, ZB + 0.03, 2.75, ZB + 0.04, gl * 0.1, 0.012, '#7c828b');
       cube(1.45, ZB - 0.01, 2.8, ZB + 0.1, 0.66, 0.05, STONE2);
       var yoff = wallBox(m, ZB, 1.3, D - m, 0, 3, 'archb', FB); cornice(m, ZB, 1.3, D - m, yoff - 0.005, STONE2); S.hip(m, ZB, 1.3, D - m, yoff + 0.035, 0.3, SLATE, 0.05);
-      S.box(0.3, 0.3, 0.3, K.wall('clock', '#e0d7c2'), 0.69, yoff + 0.4, 2.42, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP]);
+      S.box(0.3, 0.3, 0.3, kwall('clock', '#e0d7c2'), 0.69, yoff + 0.4, 2.42, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP]);
       cube(1.3, ZB, W - m, D - m, 0, 0.012, '#6b6f74');                                              // двор
       cube(1.42, D - 0.2, 1.62, D - m, 0, 0.016, '#f1f1e6');
       // готовый зелёный грузовик во дворе (смотрит к выезду)
@@ -1081,10 +1195,10 @@
   var RES_VARIANTS = 6;
   function variantOf(cat, seed) { return cat === 'res' ? (seed >>> 0) % RES_VARIANTS : 0; }
   function modelSeed(cat, v) { return cat === 'res' ? 9001 + v * 7919 : 1; }
-  function tplKey(cat, size, seed) { return cat + '|' + size + '|' + variantOf(cat, seed); }
+  function tplKey(cat, size, seed, th) { return cat + '|' + size + '|' + variantOf(cat, seed) + '|' + (th | 0); }
   function buildingBatch(b) {
-    var v = variantOf(b.cat, b.seed);
-    return getBatch(tplKey(b.cat, b.size, b.seed), function () { return buildModel(kit, b.cat, b.size, modelSeed(b.cat, v)); });
+    var v = variantOf(b.cat, b.seed), th = b.th | 0;
+    return getBatch(tplKey(b.cat, b.size, b.seed, th), function () { return buildModel(kit, b.cat, b.size, modelSeed(b.cat, v), th); });
   }
 
   // ---------- Карта: земля, сетка, рамка, «срез» земли ----------
@@ -1156,6 +1270,25 @@
     var m = flatMat('#ffffff'), tx = new B.DynamicTexture('road' + t, c, scene, true); tx.update();
     m.diffuseTexture = tx; roadMat[t] = m;
   });
+  // Булыжник (с 0.18.0): мощёная мостовая — камни рядами с разбежкой швов
+  (function () {
+    var S2 = 128, c = document.createElement('canvas'); c.width = c.height = S2; var g = c.getContext('2d'), r = rng(77);
+    g.fillStyle = '#4a4741'; g.fillRect(0, 0, S2, S2);
+    var rows = 8, rh = S2 / rows, nc = 7, cw = S2 / nc;
+    for (var i = 0; i < rows; i++) for (var j = -1; j < nc; j++) {
+      var x0 = j * cw + (i % 2 ? cw / 2 : 0) + (r() - 0.5) * 3, y0 = i * rh + (r() - 0.5) * 2, k = r();
+      var base = k > 0.66 ? [150, 146, 136] : k > 0.33 ? [128, 124, 116] : [108, 105, 99], v = (r() - 0.5) * 18;
+      g.fillStyle = 'rgb(' + Math.round(base[0] + v) + ',' + Math.round(base[1] + v) + ',' + Math.round(base[2] + v - 2) + ')';
+      var rd = 4 + r() * 2, w2 = cw - 3, h2 = rh - 3;
+      g.beginPath(); g.moveTo(x0 + 1.5 + rd, y0 + 1.5); g.arcTo(x0 + 1.5 + w2, y0 + 1.5, x0 + 1.5 + w2, y0 + 1.5 + h2, rd); g.arcTo(x0 + 1.5 + w2, y0 + 1.5 + h2, x0 + 1.5, y0 + 1.5 + h2, rd);
+      g.arcTo(x0 + 1.5, y0 + 1.5 + h2, x0 + 1.5, y0 + 1.5, rd); g.arcTo(x0 + 1.5, y0 + 1.5, x0 + 1.5 + w2, y0 + 1.5, rd); g.closePath(); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(x0 + 4, y0 + 3, w2 * 0.55, 2);
+      g.fillStyle = 'rgba(0,0,0,.14)'; g.fillRect(x0 + 4, y0 + h2 - 1, w2 * 0.8, 2);
+    }
+    for (i = 0; i < 400; i++) { g.fillStyle = r() > 0.5 ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.1)'; g.fillRect(r() * S2, r() * S2, 2, 2); }
+    var m = flatMat('#ffffff'), tx = new B.DynamicTexture('roadcobble', c, scene, true); tx.update();
+    m.diffuseTexture = tx; roadMat.cobble = m;
+  })();
   roadMat.line = flatMat('#f1f1e6'); roadMat.curb = flatMat('#c4c4bc'); roadMat.rut = flatMat('#8a6a44');
   roadMat.line1 = flatMat('#b9b9ad'); // выцветшая разметка на изношенном асфальте
   // Изношенный асфальт (с 0.9.0): 1 — средний износ (трещины, светлее), 2 — почти изношен (ямы, заплатки, щебень).
@@ -1199,7 +1332,7 @@
   function markRoad(x, z) { dirtyChunks[Math.floor(x / CH) + ',' + Math.floor(z / CH)] = 1; }
   function buildChunk(ck) {
     (chunks[ck] || []).forEach(function (m) { m.dispose(); }); chunks[ck] = [];
-    var p = ck.split(','), X0 = +p[0] * CH, Z0 = +p[1] * CH, Q = { asphalt: [], asphalt1: [], asphalt2: [], dirt: [], line: [], line1: [], curb: [], rut: [] };
+    var p = ck.split(','), X0 = +p[0] * CH, Z0 = +p[1] * CH, Q = { asphalt: [], asphalt1: [], asphalt2: [], dirt: [], cobble: [], line: [], line1: [], curb: [], rut: [] };
     for (var z = Z0; z < Z0 + CH; z++) for (var x = X0; x < X0 + CH; x++) {
       var t = state.roads[key(x, z)]; if (!t || !inMap(x, z)) continue;
       var c = cellCenter(x, z), ws = t === 'asphalt' ? wearStage(wearOf(key(x, z))) : 0;
@@ -1209,6 +1342,8 @@
         if (t === 'asphalt') {
           if (n === 'asphalt') Q[ws ? 'line1' : 'line'].push(hx ? [c.x + sgn * 0.3, c.z, 0.22, 0.05, 0.016] : [c.x, c.z + sgn * 0.3, 0.05, 0.22, 0.016]);
           else if (!n) Q.curb.push(hx ? [c.x + sgn * 0.46, c.z, 0.08, 1, 0.018] : [c.x, c.z + sgn * 0.46, 1, 0.08, 0.018]);
+        } else if (t === 'cobble') {
+          if (!n) Q.curb.push(hx ? [c.x + sgn * 0.46, c.z, 0.08, 1, 0.018] : [c.x, c.z + sgn * 0.46, 1, 0.08, 0.018]);
         } else if (n) {
           Q.rut.push(hx ? [c.x + sgn * 0.25, c.z - 0.18, 0.5, 0.06, 0.015] : [c.x - 0.18, c.z + sgn * 0.25, 0.06, 0.5, 0.015]);
           Q.rut.push(hx ? [c.x + sgn * 0.25, c.z + 0.18, 0.5, 0.06, 0.015] : [c.x + 0.18, c.z + sgn * 0.25, 0.06, 0.5, 0.015]);
@@ -1272,7 +1407,7 @@
 
   // Модель будущего здания: свои копии материалов с плоскостью отсечения — дом «вырастает» снизу вверх.
   function siteModel(b, plane) {
-    var m = buildModel(kit, b.cat, b.size, modelSeed(b.cat, variantOf(b.cat, b.seed))), pairs = [];
+    var m = buildModel(kit, b.cat, b.size, modelSeed(b.cat, variantOf(b.cat, b.seed)), b.th | 0), pairs = [];
     function copy(src) {
       var d = new B.StandardMaterial('sm' + b.id, scene);
       pairs.push({ s: src, d: d }); syncMat(src, d); d.clipPlane = plane; return d;
@@ -2134,8 +2269,9 @@
     wearSaveT += step; if (wearSaveT >= 5 || broken.length) { wearSaveT = 0; save(); }
   }
   function roadStats() {
-    var r = { asphalt: 0, dirt: 0, mid: 0, worn: 0, sum: 0, todo: 0, todoCost: 0 }, qd = queuedSet();
+    var r = { asphalt: 0, dirt: 0, cobble: 0, mid: 0, worn: 0, sum: 0, todo: 0, todoCost: 0 }, qd = queuedSet();
     for (var k in state.roads) {
+      if (state.roads[k] === 'cobble') { r.cobble++; continue; }
       if (state.roads[k] !== 'asphalt') { r.dirt++; continue; }
       var w = state.wear[k] || 0, sg = wearStage(w);
       r.asphalt++; r.sum += w; if (sg === 1) r.mid++; else if (sg === 2) r.worn++;
@@ -2338,12 +2474,13 @@
     m.setEnabled(true); dirty();
   }
 
-  function setGhost(cat, size, seed) {
-    var k = tplKey(cat, size, seed);
+  function setGhost(cat, size, seed, th) {
+    th = th === undefined ? buildTheme : th;
+    var k = tplKey(cat, size, seed, th);
     if (k === ghostKey && ghost) return;
     if (ghost) { var mm = ghost.material; ghost.dispose(); if (mm) mm.dispose(); ghost = null; }
     ghostKey = k;
-    ghost = buildModel(kit, cat, size, modelSeed(cat, variantOf(cat, seed)));
+    ghost = buildModel(kit, cat, size, modelSeed(cat, variantOf(cat, seed)), th);
     ghost.visibility = 0.6; ghost.isPickable = false;
     ghost.setEnabled(false);
   }
@@ -2542,6 +2679,8 @@
 
   // ---------- Инструменты ----------
   var tool = 'view', buildCat = 'res', buildSize = '1x1', buildRot = 0, buildSeed = newSeed(), roadType = 'asphalt';
+  var THEME_KEY = 'moe_gorod_theme', buildTheme = 0;
+  try { buildTheme = clamp(parseInt(localStorage.getItem(THEME_KEY), 10) || 0, 0, G.themes.length - 1); } catch (e) {}
   var moving = null; // {b, offX, offZ, rot, x, z}
 
   var HINTS = {
@@ -2648,9 +2787,11 @@
     tq.shift();
     if (tq.length) requestAnimationFrame(thumbStep); else tBusy = false;
   }
+  function thumbKey(cat, size) { return cat + size + 't' + buildTheme; }
   function thumbUrl(cat, size) {
-    return thumbReq(cat + size, function (K) {
-      var root = new B.Mesh('thumb', K.scene), g = buildModel(K, cat, size, modelSeed(cat, 0)), s0 = G.sizes[size];
+    var th = buildTheme;
+    return thumbReq(thumbKey(cat, size), function (K) {
+      var root = new B.Mesh('thumb', K.scene), g = buildModel(K, cat, size, modelSeed(cat, 0), th), s0 = G.sizes[size];
       g.parent = root;
       var pad = B.MeshBuilder.CreateBox('pad', { width: s0.w, height: 0.06, depth: s0.d }, K.scene); pad.position.y = -0.03; pad.material = K.mat('#8cc068'); pad.parent = root;
       return root;
@@ -2684,6 +2825,16 @@
     var l = catLabel(id);
     return '<button class="chip' + (buildFilter === id ? ' on' : '') + '" data-cat="' + id + '" role="menuitem"><span class="sw" style="background:' + l.c + '"></span><span class="nm">' + l.t + '</span><em>' + catCount(id) + '</em></button>';
   }
+  // Оформление: A / B / C / D (с 0.18.0)
+  function themeChips(cur, act) {
+    return G.themes.map(function (t, i) {
+      return '<button class="chip' + (i === cur ? ' on' : '') + '" ' + act + '="' + i + '" title="' + esc(t.name + ', ' + t.era) + '"><b><span class="sw" style="background:' + t.color + '"></span>' + t.letter + '</b><small>' + esc(t.short) + '</small></button>';
+    }).join('');
+  }
+  function renderStyleRow() {
+    var t = G.themes[buildTheme];
+    $('styleRow').innerHTML = '<span class="stl">Оформление: <b>' + t.letter + ' · ' + esc(t.name) + '</b> · ' + esc(t.era) + '</span>' + themeChips(buildTheme, 'data-bth');
+  }
   function renderChips() {
     $('catChips').innerHTML = catItem('all') + Object.keys(G.cats).filter(function (k) { return !G.cats[k].mech && !G.cats[k].group; }).map(catItem).join('') +
       G.buildGroups.map(function (g) { return catItem(g.id); }).join('');
@@ -2691,6 +2842,7 @@
     $('roadChips').innerHTML = Object.keys(G.roads).map(function (k) {
       return '<button class="chip' + (k === roadType ? ' on' : '') + '" data-road="' + k + '"><span class="sw" style="background:' + G.roads[k].color + '"></span>' + G.roads[k].label + '</button>';
     }).join('');
+    renderStyleRow();
     renderCards();
   }
   function renderCards() {
@@ -2699,7 +2851,7 @@
       var c = G.cats[ck];
       catSizes(ck).forEach(function (sk) {
         var on = ck === buildCat && sk === buildSize;
-        h += '<button class="bcard' + (on ? ' on' : '') + '" data-cat="' + ck + '" data-size="' + sk + '">' + thumbImg('th', ck + sk, thumbUrl(ck, sk)) +
+        h += '<button class="bcard' + (on ? ' on' : '') + '" data-cat="' + ck + '" data-size="' + sk + '">' + thumbImg('th', thumbKey(ck, sk), thumbUrl(ck, sk)) +
           '<span class="tx"><b>' + esc(c.names[sk]) + '</b><small>' + workText(ck, sk) + '</small>' +
           '<span class="sz"><i style="background:' + c.tag + '"></i>' + G.sizes[sk].label + ' · <em>' + usd(costOf(ck, sk)) + '</em></span></span></button>';
       });
@@ -2750,6 +2902,13 @@
     $('bGrid').querySelectorAll('.bcard').forEach(function (x) { x.classList.toggle('on', x === b); });
     setGhost(buildCat, buildSize, buildSeed); buildHint();
   });
+  $('styleRow').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-bth]'); if (!b) return;
+    buildTheme = +b.dataset.bth; try { localStorage.setItem(THEME_KEY, String(buildTheme)); } catch (e2) {}
+    renderStyleRow(); renderCards(); setGhost(buildCat, buildSize, buildSeed);
+    if (lastHover && tool === 'build' && ghost && ghost.isEnabled()) buildGhostTo(lastHover);
+    hint('Оформление: ' + G.themes[buildTheme].name + ' · ' + G.themes[buildTheme].era);
+  });
   $('roadChips').addEventListener('click', function (e) {
     var b = e.target.closest('[data-road]'); if (!b) return;
     roadType = b.dataset.road; renderChips();
@@ -2778,7 +2937,7 @@
     if (!canPlace(buildSize, buildRot, o.x, o.z, 0)) { hint('Здесь занято или край карты', true); return; }
     if (!canPay(cost)) { hint('Не хватает долларов: нужно ' + usd(cost), true); return; }
     pay(cost);
-    var b = { id: state.nextId++, cat: buildCat, size: buildSize, x: o.x, z: o.z, rot: buildRot, seed: buildSeed, prog: 0 };
+    var b = { id: state.nextId++, cat: buildCat, size: buildSize, x: o.x, z: o.z, rot: buildRot, seed: buildSeed, th: buildTheme, prog: 0 };
     state.buildings.push(b); markOcc(b, b.id); addBuildingMesh(b);
     assignBrigades();
     buildSeed = newSeed(); setGhost(buildCat, buildSize, buildSeed);
@@ -2786,6 +2945,15 @@
     var crew = siteCrew(b.id).all;
     var msg = crew ? '🏗️ Стройка началась: ' + G.cats[b.cat].names[b.size] : '🏗️ Стройка ждёт: все бригады заняты — купите ещё, чтобы быстрее';
     hint(hasRoad(b) ? msg : msg + '. 🛣️ Не забудьте дорогу — без неё здание не заработает');
+  }
+  // Смена оформления готового здания (с 0.18.0): бесплатно, без новой стройки
+  function setBuildingTheme(b, th) {
+    if (isSite(b) || !G.themes[th] || (b.th | 0) === th) return;
+    b.th = th;
+    if (moving && moving.b.id === b.id) cancelMove();
+    removeBuildingMesh(b.id); addBuildingMesh(b);
+    save(); dirty();
+    if (infoId === b.id) renderInfo(b, true);
   }
   function deleteBuilding(b) {
     markOcc(b, 0); removeBuildingMesh(b.id); delete byId[b.id];
@@ -2823,7 +2991,7 @@
   function startMove(b, c) {
     moving = { b: b, offX: c.px - b.x, offZ: c.pz - b.z, rot: b.rot, x: b.x, z: b.z };
     writeBuilding(b);
-    setGhost(b.cat, b.size, b.seed);
+    setGhost(b.cat, b.size, b.seed, b.th | 0);
     moveGhostTo(c);
   }
   function moveGhostTo(c) {
@@ -3138,6 +3306,7 @@
     else if (a === 'fixone' && infoRoad) repairOneAct(infoRoad);
     else if (a === 'vorder') orderKind(el.dataset.kind); else if (a === 'vcancel') cancelKind(el.dataset.kind); else if (a === 'vsell') sellVehicle(el.dataset.kind);
     else if (a === 'cars') { openMech('cars'); return; }
+    else if (a === 'style') { var sb = getB(infoId); if (sb) setBuildingTheme(sb, +el.dataset.th); return; }
     renderMech();
   }
   $('mechClose').addEventListener('click', closeMech);
@@ -3207,14 +3376,13 @@
     }
     return seen;
   }
-  function hasRoad(b) { var s = roadsAt(b.size, b.rot, b.x, b.z); return !!(s.asphalt || s.dirt); }
+  function hasRoad(b) { var s = roadsAt(b.size, b.rot, b.x, b.z); return !!(s.asphalt || s.dirt || s.cobble); }
   function isWorking(b) { return !isSite(b) && hasRoad(b); }
   function roadNear(b) {
     var seen = roadsAt(b.size, b.rot, b.x, b.z);
-    if (seen.asphalt && seen.dirt) return 'асфальт и простая';
-    if (seen.asphalt) return 'асфальт';
-    if (seen.dirt) return 'простая дорога';
-    return '<span class="bad">нет</span>';
+    var nm = [];
+    if (seen.asphalt) nm.push('асфальт'); if (seen.cobble) nm.push('булыжник'); if (seen.dirt) nm.push('простая');
+    return nm.length ? nm.join(' и ') : '<span class="bad">нет</span>';
   }
 
   // ---------- Расчёт жителей в фоне (js/sim.js) ----------
@@ -3252,6 +3420,7 @@
     var c = G.cats[b.cat], name = c.names[b.size], h = '';
     h += '<h2>' + esc(name) + '</h2>';
     h += '<div class="sub"><span class="tag" style="background:' + c.tag + '">' + esc(c.label) + '</span>' + esc(address(b)) + ' · ' + G.sizes[b.size].label + '</div>';
+    if (!isSite(b)) var bt0 = G.themes[b.th | 0]; h += '<div class="strow info"><span class="stl">Оформление: <b>' + bt0.letter + ' · ' + esc(bt0.name) + '</b> · ' + esc(bt0.era) + ' — сменить можно бесплатно</span>' + themeChips(b.th | 0, 'data-act="style" data-th') + '</div>';
     if (isSite(b)) {
       var crew = siteCrew(b.id), pct = Math.floor(b.prog * 100), left = (1 - b.prog) * buildTime(b) / Math.max(1, crew.all);
       var sg = stageOf(b.prog);
@@ -3266,7 +3435,7 @@
         '<span>Дорога рядом</span><span>' + roadNear(b) + '</span></div>';
       if (!hasRoad(b)) h += '<div class="noroad">🛣️ К стройке нет дороги. Достроить можно, но работать здание начнёт, только когда к нему подведут дорогу.</div>';
     } else if (!hasRoad(b)) {
-      h += '<div class="noroad"><b>⛔ Не работает — нет дороги</b>Подведите к зданию любую дорогу (асфальт или простую): она должна касаться его стороны. ' +
+      h += '<div class="noroad"><b>⛔ Не работает — нет дороги</b>Подведите к зданию любую дорогу (асфальт, булыжник или простую): она должна касаться его стороны. ' +
         (b.cat === 'res' ? 'Тогда заедут ' + c.families[b.size] + ' ' + plural(c.families[b.size], 'семья', 'семьи', 'семей') + '.' : 'Тогда откроется ' + workplace(b).staff + ' рабочих мест.') + '</div>';
       if (b.cat !== 'res') h += '<div class="about">' + esc(c.about[b.size]) + '</div>';
       h += '<div class="kv"><span>Дорога рядом</span><span>' + roadNear(b) + '</span>' +
@@ -3335,7 +3504,7 @@
   function renderRoadInfo() {
     var k = infoRoad, t = state.roads[k]; if (!t) { closeInfo(); return; }
     infoRoadT = t;
-    var p = k.split(','), x = +p[0], z = +p[1], h = '<h2>' + (t === 'asphalt' ? '🛣️ Асфальт' : '🟫 Простая дорога') + '</h2>' +
+    var p = k.split(','), x = +p[0], z = +p[1], h = '<h2>' + (t === 'asphalt' ? '🛣️ Асфальт' : t === 'cobble' ? '🪨 Булыжник' : '🟫 Простая дорога') + '</h2>' +
       '<div class="sub">' + esc(G.streets[Math.floor(z / 4) % G.streets.length]) + ' · клетка ' + (x + 1) + ':' + (z + 1) + (traffic[k] ? ' · у работающего здания' : '') + '</div>';
     if (t === 'asphalt') {
       h += '<div class="kv"><span>Износ</span><span id="irWear">—</span><span>Состояние</span><span id="irState">—</span><span>Ремонт</span><span id="irCost">—</span></div>' +
@@ -3344,7 +3513,8 @@
         '<div class="noroad"><b>Ремонтировать некому</b>Постройте Дорожное депо: 🚚 Механизмы → 🏭 Здания. Без него асфальт будет только изнашиваться.</div>';
       h += '<p class="note">Асфальт стареет со временем, у работающих зданий — в ' + String(G.wear.traffic).replace('.', ',') + ' раза быстрее. С ' + pctText(G.wear.mid) +
         ' — трещины, с ' + pctText(G.wear.worn) + ' — ямы. При 100% он разбит и становится простой дорогой.</p>';
-    } else h += '<div class="about">Простая дорога не изнашивается и ремонта не требует. Здания у неё работают так же, как у асфальта. Чтобы положить асфальт: 🛣️ «Дорога» → «Асфальт» и проведите по клеткам.</div>';
+    } else if (t === 'cobble') h += '<div class="about">Булыжная мостовая: камни, уложенные рядами, с каменными бордюрами. Не изнашивается и ремонта не требует. Здания у неё работают так же, как у асфальта.</div>';
+    else h += '<div class="about">Простая дорога не изнашивается и ремонта не требует. Здания у неё работают так же, как у асфальта. Чтобы положить асфальт: 🛣️ «Дорога» → «Асфальт» и проведите по клеткам.</div>';
     $('infoBody').innerHTML = h; $('info').hidden = false; $('info').scrollTop = 0;
     var c = cellCenter(x, z); setOverlay(hl, c.x, c.z, 1.12, 1.12);
     refreshLive();
@@ -3416,6 +3586,7 @@
       (function () { var R = roadStats(); return '<span>Асфальт</span><span>' + f(R.asphalt) + ' кл., средний износ ' + pctText(R.avg) + '</span>' +
         '<span>Средний износ / почти изношен</span><span>' + f(R.mid) + ' / ' + (R.worn ? '<span class="bad">' + f(R.worn) + '</span>' : '0') + '</span>' +
         '<span>Простая дорога</span><span>' + f(R.dirt) + ' кл.</span>' +
+        '<span>Булыжник</span><span>' + f(R.cobble) + ' кл.</span>' +
         '<span>Автоматический ремонт</span><span>' + (state.autoRepair ? 'включён' : 'выключен') + '</span>' +
         '<span>Очередь завода</span><span>' + state.fql.length + '</span>' +
         '<span>Машины завода</span><span>' + f(state.vehicles.length) + '</span>' +
@@ -3619,7 +3790,7 @@
   } catch (e) {}
   window.__gorod = {
     state: function () { return state; }, size: function () { return N; }, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam,
-    road: function (x, z, t) { setRoad(x, z, t); }, stats: updateStats,
+    road: function (x, z, t) { setRoad(x, z, t); }, stats: updateStats, setTheme: function (id, th) { var b = getB(id); if (b) setBuildingTheme(b, th); }, allTheme: function (th) { state.buildings.forEach(function (b) { setBuildingTheme(b, th); }); },
     scene: scene, buy: buyBrigade, siteAt: function (id, p) { var b = getB(id); b.prog = p; writeBuilding(b); updateSite(b, 0.016); }, openMech: openMech, sim: function () { return sim; }, frames: function () { return frames; },
     batches: function () { return Object.keys(batches).map(function (k) { return k + ':' + batches[k].ids.length; }); },
     wearAll: function (w) { for (var k in state.roads) if (state.roads[k] === 'asphalt') { state.wear[k] = typeof w === 'function' ? w(k) : w; markRoadKey(k); } dirty(); },
