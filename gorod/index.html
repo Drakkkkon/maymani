@@ -25,7 +25,6 @@
 </header>
 
 <div class="cam-btns">
-  <button class="icon-btn mode-btn" id="camMode" aria-label="Вид: 3D или изометрия">ИЗО</button>
   <button class="icon-btn" id="camRotL" aria-label="Повернуть камеру влево">⟲</button>
   <button class="icon-btn" id="camRotR" aria-label="Повернуть камеру вправо">⟳</button>
   <button class="icon-btn" id="camIn" aria-label="Приблизить">＋</button>
@@ -34,27 +33,31 @@
 
 <div class="hint" id="hint"></div>
 
-<section class="subpanel" id="panelBuild" hidden>
-  <div class="need" id="needBr" hidden>🚚 <span>Нет бригады — строить некому.</span><button id="needBuy">Купить бригаду</button></div>
-  <div class="row">
-    <div class="chips" id="catChips"></div>
-    <button class="chip rot" id="btnRotate" title="Повернуть (R)">↻</button>
-  </div>
-  <div class="bgrid" id="bGrid"></div>
-</section>
+<!-- Панель: на телефоне кнопки внизу экрана, на компьютере и планшете — одна панель сбоку:
+     сверху главные кнопки, ниже меню построек (2 колонки × 10 рядов) -->
+<div class="dock" id="dock">
+  <nav class="toolbar" id="toolbar">
+    <button class="tool" data-tool="view"><span>👁️</span><small>Смотреть</small></button>
+    <button class="tool" data-tool="build"><span>🏠</span><small>Строить</small></button>
+    <button class="tool" data-tool="road"><span>🛣️</span><small>Дорога</small></button>
+    <button class="tool" data-tool="move"><span>✋</span><small>Перенести</small></button>
+    <button class="tool" data-tool="delete"><span>🗑️</span><small>Удалить</small></button>
+    <button class="tool mech" data-tool="mech"><span>🚚</span><small>Механизмы</small></button>
+  </nav>
 
-<section class="subpanel" id="panelRoad" hidden>
-  <div class="row chips" id="roadChips"></div>
-</section>
+  <section class="subpanel" id="panelRoad" hidden>
+    <div class="row chips" id="roadChips"></div>
+  </section>
 
-<nav class="toolbar" id="toolbar">
-  <button class="tool" data-tool="view"><span>👁️</span><small>Смотреть</small></button>
-  <button class="tool" data-tool="build"><span>🏠</span><small>Строить</small></button>
-  <button class="tool" data-tool="road"><span>🛣️</span><small>Дорога</small></button>
-  <button class="tool" data-tool="move"><span>✋</span><small>Перенести</small></button>
-  <button class="tool" data-tool="delete"><span>🗑️</span><small>Удалить</small></button>
-  <button class="tool mech" data-tool="mech"><span>🚚</span><small>Механизмы</small></button>
-</nav>
+  <section class="subpanel" id="panelBuild" hidden>
+    <div class="need" id="needBr" hidden>🚚 <span>Нет бригады — строить некому.</span><button id="needBuy">Купить бригаду</button></div>
+    <div class="row">
+      <div class="chips" id="catChips"></div>
+      <button class="chip rot" id="btnRotate" title="Повернуть (R)">↻</button>
+    </div>
+    <div class="bgrid" id="bGrid"></div>
+  </section>
+</div>
 
 <aside class="info" id="info" hidden>
   <button class="icon-btn close" id="infoClose" aria-label="Закрыть">✕</button>

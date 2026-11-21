@@ -11,13 +11,9 @@
   --safet: env(safe-area-inset-top, 0px);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: #9fc6e8; color: var(--fg);
+html, body { margin: 0; height: 100%; overflow: hidden; background: #141b27; color: var(--fg);
   font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; user-select: none; -webkit-user-select: none; }
 #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
-/* Изометрия: крупные пиксели, как в старых SimCity */
-#scene.iso { image-rendering: pixelated; image-rendering: crisp-edges; }
-body.iso { background: #10141c; }
-/* «ИЗО HD» — без пикселизации, полное разрешение и сглаживание */
 button { font: inherit; color: inherit; cursor: pointer; }
 [hidden] { display: none !important; }
 
@@ -39,15 +35,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .cam-btns { position: fixed; right: 8px; top: calc(66px + var(--safet)); display: flex; flex-direction: column; gap: 6px; z-index: 4; }
 .cam-btns .icon-btn { background: var(--bg); }
-.cam-btns .mode-btn { font-size: 12px; font-weight: 800; letter-spacing: .3px; color: var(--acc); }
-.cam-btns .mode-btn.hd { color: #1d2a3d; background: linear-gradient(135deg, #ffe48a, #ffc94a 55%, #ff9f4a); }
-.card .menu-btn.cur { outline: 2px solid var(--acc); }
 
 .hint { position: fixed; left: 50%; top: calc(66px + var(--safet)); transform: translateX(-50%); max-width: calc(100% - 120px);
   padding: 6px 12px; border-radius: 10px; background: var(--bg); font-size: 13px; color: var(--mut); text-align: center;
   z-index: 4; pointer-events: none; transition: opacity .3s; }
 .hint.warn { color: #ffb4a8; }
 
+/* Панель инструментов и меню построек. На телефоне она «растворена» — кнопки внизу экрана;
+   на компьютере и планшете (см. конец файла) это одна боковая панель: сверху кнопки, ниже меню построек. */
+.dock { display: contents; }
 .toolbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(8px + var(--safeb)); display: flex; gap: 4px;
   padding: 5px; background: var(--bg); border-radius: 18px; z-index: 5; width: min(600px, calc(100% - 16px)); }
 .tool { flex: 1; border: 0; background: transparent; border-radius: 13px; padding: 6px 2px 5px; display: flex; flex-direction: column;
@@ -246,3 +242,61 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* склад досок и ДСП (0.11.0) */
 .stats .stock { color: #e2c48c; }
 .stats .stock b { color: #e2c48c; }
+
+/* ---------- 0.12.0: компьютер и планшет — панель сбоку ----------
+   Слева одна панель: сверху главные кнопки, ниже меню построек — 2 колонки × 10 рядов.
+   Высоту карточек подгоняет game.js (переменная --bh), чтобы все 10 рядов помещались в экран.
+   Телефон (узкий или низкий экран) остаётся как был: кнопки внизу. */
+@media (min-width: 700px) and (min-height: 500px) {
+  :root { --dockw: clamp(336px, 26vw, 380px); --gap: 6px; }
+  .dock { display: flex; flex-direction: column; gap: 8px; position: fixed; z-index: 5;
+    left: calc(12px + env(safe-area-inset-left, 0px)); top: calc(12px + var(--safet)); width: var(--dockw);
+    max-height: calc(100% - 24px - var(--safet) - var(--safeb)); padding: 8px;
+    background: var(--bg); border-radius: 18px; backdrop-filter: blur(8px); box-shadow: 0 6px 24px rgba(0,0,0,.28); }
+
+  /* главные кнопки: 3 × 2 */
+  .dock .toolbar { position: static; transform: none; width: auto; padding: 0; background: none; border-radius: 0; z-index: auto;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; flex: none; }
+  .dock .tool { flex-direction: row; justify-content: center; gap: 4px; padding: 7px 2px; background: rgba(255,255,255,.06); border-radius: 12px; min-width: 0; }
+  .dock .tool span { font-size: 18px; }
+  .dock .tool small { font-size: 11.5px; max-width: none; text-overflow: clip; }
+  .dock .tool.on { background: var(--acc); }
+  .dock .tool.mech.open { background: rgba(95,191,79,.28); }
+
+  /* ниже — меню построек или выбор дороги */
+  .dock .subpanel { position: static; transform: none; width: auto; z-index: auto; min-height: 0; gap: 6px;
+    padding: 8px 0 0; background: none; border-radius: 0; border-top: 1px solid var(--line); }
+  .dock .chip { padding: 5px 10px; font-size: 13px; }
+  .dock .chip.rot { padding: 3px 11px; font-size: 17px; }
+  .dock .need { font-size: 12px; padding: 4px 4px 4px 9px; gap: 6px; line-height: 1.2; }
+  .dock .need button { padding: 6px 10px; font-size: 12px; }
+  /* ровно 10 рядов: выше — прокрутка (если экран низкий, ряды ужимаются и список листается) */
+  .dock .bgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: var(--bh, 62px); gap: var(--gap);
+    max-height: calc(var(--bh, 62px) * 10 + var(--gap) * 9); min-height: 0; flex: 0 1 auto; padding-right: 0; }
+  .dock .bgrid.scroll { padding-right: 3px; }
+  .dock .bcard { height: var(--bh, 62px); padding: 3px 5px 3px 3px; gap: 6px; overflow: hidden; }
+  .dock .bcard .th { width: min(calc(var(--bh, 62px) - 10px), 48px); height: min(calc(var(--bh, 62px) - 10px), 48px); border-radius: 8px; }
+  .dock .bcard .tx { gap: 1px; }
+  .dock .bcard b { font-size: 11.5px; line-height: 1.05; }
+  .dock .bcard small { font-size: 10.5px; line-height: 1.1; }
+  .dock .bcard .sz { font-size: 10px; line-height: 1.1; }
+  .dock .bcard .sz i { margin-right: 3px; }
+  .dock .bcard .wl { display: none; }
+  .dock .bcard .ws { display: inline; }
+
+  /* остальное — правее панели */
+  .topbar { left: calc(var(--dockw) + 24px + env(safe-area-inset-left, 0px)); right: auto; top: calc(12px + var(--safet)); min-width: 0;
+    max-width: calc(100% - var(--dockw) - 24px - 64px); }
+  .cam-btns { top: calc(12px + var(--safet)); right: 12px; }
+  .hint { left: calc(var(--dockw) + 24px); top: auto; bottom: calc(14px + var(--safeb)); transform: none; text-align: left;
+    max-width: min(560px, calc(100% - var(--dockw) - 110px)); }
+  .info { left: auto; right: 64px; top: calc(72px + var(--safet)); bottom: auto; width: min(360px, calc(100% - var(--dockw) - 110px));
+    max-height: calc(100% - 84px - var(--safet) - var(--safeb)); }
+}
+/* планшет в вертикальном положении: верхней строке тесно */
+@media (min-width: 700px) and (max-width: 899px) and (min-height: 500px) {
+  .brand b, .ver { display: none; }
+  .topbar { gap: 8px; padding-left: 10px; }
+  .stats { gap: 10px; font-size: 13px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .stats::-webkit-scrollbar { display: none; }
+}

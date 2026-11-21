@@ -1,11 +1,11 @@
 // «Мое_город» — градостроитель на Babylon.js.
-// Три вида: «3D» (свободная камера), «ИЗО» (изометрия с крупными пикселями, как в старых SimCity)
-// и «ИЗО HD» (та же изометрия, но с полным разрешением, сглаживанием, SSAO и подробными текстурами).
+// Один вид — качественная изометрия («ИЗО HD», с 0.12.0): полное разрешение экрана, сглаживание, SSAO
+// и подробные текстуры. Свободный 3D-вид и пиксельная изометрия убраны.
 // Одинаковые здания рисуются пачками (thin instances): тысячи домов — это десятки вызовов отрисовки.
 (function () {
   'use strict';
   var G = window.GAME, N = G.mapSize, B = window.BABYLON;
-  var SAVE_KEY = 'moe_gorod_save_v1', SEEN_KEY = 'moe_gorod_seen', VIEW_KEY = 'moe_gorod_view';
+  var SAVE_KEY = 'moe_gorod_save_v1', SEEN_KEY = 'moe_gorod_seen';
   var $ = function (id) { return document.getElementById(id); };
   var TOUCH = window.matchMedia && matchMedia('(pointer: coarse)').matches;
 
@@ -130,9 +130,8 @@
   scene.useRightHandedSystem = true;      // как в прежней версии: x вправо, z к зрителю
   scene.skipPointerMovePicking = true;    // свои обработчики касаний — движку не нужно искать объекты
   scene.autoClearDepthAndStencil = true;
-  var SKY = '#a9d0f0', VOID = '#10141c';
-  scene.clearColor = B.Color4.FromHexString(SKY + 'ff');
-  scene.fogColor = hex(SKY);
+  scene.clearColor = B.Color4.FromHexString('#141b27ff'); // фон за краем карты (как в «ИЗО HD»)
+  scene.fogMode = B.Scene.FOGMODE_NONE;
 
   var camera = new B.FreeCamera('cam', new B.Vector3(0, 30, 30), scene);
   camera.fov = 45 * Math.PI / 180; camera.minZ = 0.1; camera.maxZ = 600;
@@ -148,12 +147,6 @@
   sun.shadowMinZ = 1; sun.shadowMaxZ = 200;
   var shadowGen = new B.ShadowGenerator(2048, sun);
   shadowGen.bias = 0.0015; shadowGen.normalBias = 0.01;
-  function setShadowStyle(iso) {
-    // Один и тот же фильтр в обоих видах: смена фильтра на лету пересобирает шейдеры.
-    shadowGen.usePercentageCloserFiltering = true;
-    shadowGen.filteringQuality = B.ShadowGenerator.QUALITY_MEDIUM;
-    shadowGen.usePoissonSampling = false;
-  }
 
   // ---------- Материалы (на каждую сцену свой набор) ----------
   function windowCanvas(style, wall) {
@@ -804,24 +797,18 @@
     return getBatch(tplKey(b.cat, b.size, b.seed), function () { return buildModel(kit, b.cat, b.size, modelSeed(b.cat, v)); });
   }
 
-  // ---------- Карта: земля, сетка, рамка, «срез» земли для изометрии ----------
+  // ---------- Карта: земля, сетка, рамка, «срез» земли ----------
   var mapNodes = [];
-  var groundMat = kit.mat('#8cc068'), outerMat = kit.mat('#6f9a52'), frameMat = kit.mat('#c9b78f');
-  var outerGround = null, slab = null, slabHD = null, gridMesh = null, groundMesh = null;
+  var frameMat = kit.mat('#c9b78f');
+  var slabHD = null, gridMesh = null, groundMesh = null;
   function buildMapScene() {
     if (slabHD && slabHD.material) { slabHD.material.diffuseTexture.dispose(); slabHD.material.dispose(); }
     mapNodes.forEach(function (o) { o.dispose(); }); mapNodes = [];
     var ground = groundMesh = B.MeshBuilder.CreateGround('ground', { width: N, height: N }, scene);
-    ground.material = groundMat; ground.receiveShadows = true; ground.isPickable = false; mapNodes.push(ground);
-    outerGround = B.MeshBuilder.CreateGround('outer', { width: N * 6, height: N * 6 }, scene);
-    outerGround.position.y = -0.03; outerGround.material = outerMat; outerGround.receiveShadows = true; outerGround.isPickable = false; mapNodes.push(outerGround);
-    // Срез земли под картой (видно в изометрии, как в SimCity 2000): трава, земля, камень.
-    slab = new B.TransformNode('slab', scene); mapNodes.push(slab);
-    [['#7b5a3c', 0.9, -0.47], ['#5e4632', 0.7, -1.27], ['#4a4a4f', 0.5, -1.87]].forEach(function (L) {
-      var s = B.MeshBuilder.CreateBox('slab', { width: N, height: L[1], depth: N }, scene);
-      s.position.y = L[2]; s.material = kit.mat(L[0]); s.isPickable = false; s.parent = slab;
-    });
-    // Срез для «ИЗО HD»: один блок с нарисованными слоями — дёрн, земля с камнями, глина, скала.
+    var gm = hdMats().grass;
+    gm.diffuseTexture.uScale = gm.diffuseTexture.vScale = N / 3; // одна «плитка» травы на 3 клетки
+    ground.material = gm; ground.receiveShadows = true; ground.isPickable = false; mapNodes.push(ground);
+    // Срез земли под картой (как в SimCity 2000): один блок с нарисованными слоями — дёрн, земля с камнями, глина, скала.
     slabHD = B.MeshBuilder.CreateBox('slabHD', { width: N, height: 2.12, depth: N }, scene);
     slabHD.position.y = -1.06 - 0.001; slabHD.isPickable = false; slabHD.material = hdMats().slab(N); mapNodes.push(slabHD);
     var lines = [], h = N / 2;
@@ -830,14 +817,13 @@
       lines.push([new B.Vector3(-h, 0.006, -h + i), new B.Vector3(h, 0.006, -h + i)]);
     }
     var grid = B.MeshBuilder.CreateLineSystem('grid', { lines: lines }, scene);
-    grid.color = hex('#2d4a22'); grid.alpha = N > 80 ? 0.16 : 0.22; grid.isPickable = false; grid.applyFog = false; mapNodes.push(grid);
+    grid.color = hex('#2d4a22'); grid.alpha = (N > 80 ? 0.16 : 0.22) * 0.35; grid.isPickable = false; grid.applyFog = false; mapNodes.push(grid);
     gridMesh = grid;
     var t = 0.25, fh = 0.12;
     [[0, -N / 2 - t / 2, N + 2 * t, t], [0, N / 2 + t / 2, N + 2 * t, t], [-N / 2 - t / 2, 0, t, N], [N / 2 + t / 2, 0, t, N]].forEach(function (a) {
       var e = B.MeshBuilder.CreateBox('frame', { width: a[2], height: fh, depth: a[3] }, scene);
       e.position.set(a[0], fh / 2 - 0.02, a[1]); e.material = frameMat; e.receiveShadows = true; e.isPickable = false; mapNodes.push(e);
     });
-    applyViewScenery();
   }
 
   function cellCenter(x, z) { return { x: x - N / 2 + 0.5, z: z - N / 2 + 0.5 }; }
@@ -2082,43 +2068,34 @@
     var c = cellCenter(x, z); setOverlay(cursor, c.x, c.z, 1, 1, color);
   }
 
-  // ---------- Камера: 3D и изометрия ----------
+  // ---------- Камера: изометрия ----------
   var ISO_PITCH = Math.PI / 6; // 30° — пропорция клетки 2:1, как в SimCity 2000
-  var view = 'persp';
-  try { var sv = localStorage.getItem(VIEW_KEY); if (sv === 'iso' || sv === 'isohd') view = sv; } catch (e) {}
-  var cam = { tx: 0, tz: 2, dist: 34, yaw: Math.PI / 4, pitch: 0.95, yawGoal: null };
-  function isIso() { return view !== 'persp'; }   // обе изометрии: «ИЗО» (пиксели) и «ИЗО HD»
-  function isHD() { return view === 'isohd'; }
+  var cam = { tx: 0, tz: 2, dist: 34, yaw: Math.PI / 4, pitch: ISO_PITCH, yawGoal: null };
   function snapYaw(y) { var q = Math.PI / 2; return Math.round((y - Math.PI / 4) / q) * q + Math.PI / 4; }
   function camHome() {
-    cam.tx = 0; cam.tz = 2; cam.yaw = Math.PI / 4; cam.pitch = isIso() ? ISO_PITCH : 0.95; cam.yawGoal = null;
+    cam.tx = 0; cam.tz = 2; cam.yaw = Math.PI / 4; cam.pitch = ISO_PITCH; cam.yawGoal = null;
     cam.dist = clamp(N * 0.72, 24, 90) * (window.innerWidth < window.innerHeight ? 1.3 : 1);
     updateCam();
   }
   function aspect() { return engine.getRenderWidth() / Math.max(1, engine.getRenderHeight()); }
   function updateCam() {
     cam.dist = clamp(cam.dist, 5, Math.max(80, N * 1.3));
-    cam.pitch = isIso() ? ISO_PITCH : clamp(cam.pitch, 0.35, 1.45);
+    cam.pitch = ISO_PITCH;
     cam.tx = clamp(cam.tx, -N / 2, N / 2); cam.tz = clamp(cam.tz, -N / 2, N / 2);
     var cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch), dx = cp * Math.sin(cam.yaw), dz = cp * Math.cos(cam.yaw);
-    var halfH = cam.dist * Math.tan(camera.fov / 2), ext;
-    if (isIso()) {
-      // Ортографическая камера: дальние дома не уменьшаются, все линии параллельны.
-      var far = N * 2 + 60;
-      camera.mode = B.Camera.ORTHOGRAPHIC_CAMERA;
-      camera.orthoTop = halfH; camera.orthoBottom = -halfH;
-      camera.orthoLeft = -halfH * aspect(); camera.orthoRight = halfH * aspect();
-      camera.position.set(cam.tx + far * dx, far * sp, cam.tz + far * dz);
-      camera.minZ = 1; camera.maxZ = far * 2.5;
-      ext = halfH * Math.max(1, aspect()) * 1.6;
-      if (hdState && hdState.ssao) hdState.ssao.maxZ = camera.maxZ;
-    } else {
-      camera.mode = B.Camera.PERSPECTIVE_CAMERA;
-      camera.position.set(cam.tx + cam.dist * dx, cam.dist * sp, cam.tz + cam.dist * dz);
-      camera.minZ = 0.1; camera.maxZ = Math.max(400, cam.dist * 6);
-      scene.fogStart = cam.dist * 1.6 + 15; scene.fogEnd = cam.dist * 3.2 + 60;
-      ext = clamp(cam.dist * 1.1, 18, 70);
-    }
+    var halfH = cam.dist * Math.tan(camera.fov / 2);
+    // Ортографическая камера: дальние дома не уменьшаются, все линии параллельны.
+    var far = N * 2 + 60;
+    camera.mode = B.Camera.ORTHOGRAPHIC_CAMERA;
+    camera.orthoTop = halfH; camera.orthoBottom = -halfH;
+    // Компьютер и планшет: слева панель — центр города сдвигаем в середину свободной части экрана
+    var shift = 0;
+    if (SIDE && SIDE.matches) shift = (12 + $('dock').offsetWidth) / 2 * (2 * halfH / Math.max(1, window.innerHeight));
+    camera.orthoLeft = -halfH * aspect() - shift; camera.orthoRight = halfH * aspect() - shift;
+    camera.position.set(cam.tx + far * dx, far * sp, cam.tz + far * dz);
+    camera.minZ = 1; camera.maxZ = far * 2.5;
+    var ext = halfH * Math.max(1, aspect()) * 1.6;
+    if (hdState && hdState.ssao) hdState.ssao.maxZ = camera.maxZ;
     camera.setTarget(new B.Vector3(cam.tx, 0, cam.tz));
     // солнце и тени следуют за камерой
     sun.position.set(cam.tx + SUN_OFF.x * 2, SUN_OFF.y * 2, cam.tz + SUN_OFF.z * 2);
@@ -2126,27 +2103,11 @@
     sun.shadowMaxZ = 200 + ext;
     dirty();
   }
-  function applyViewScenery() {
-    var iso = isIso(), hd = isHD();
-    if (outerGround) outerGround.setEnabled(!iso);
-    if (slab) slab.setEnabled(iso && !hd);
-    if (slabHD) slabHD.setEnabled(hd);
-    if (gridMesh) gridMesh.alpha = (N > 80 ? 0.16 : 0.22) * (hd ? 0.35 : iso ? 0.7 : 1);
-    scene.fogMode = iso ? B.Scene.FOGMODE_NONE : B.Scene.FOGMODE_LINEAR;
-    scene.clearColor = B.Color4.FromHexString((hd ? VOID_HD : iso ? VOID : SKY) + 'ff');
-    setShadowStyle(iso);
-    setQuality(hd);
-    if (groundMesh) {
-      var gm = hdMats().grass;
-      gm.diffuseTexture.uScale = gm.diffuseTexture.vScale = N / 3; // одна «плитка» травы на 3 клетки
-      groundMesh.material = hd ? gm : groundMat;
-    }
-  }
 
-  // ---------- «ИЗО HD»: та же изометрия, но картинка намного качественнее ----------
+  // ---------- Качество картинки («ИЗО HD») ----------
   // Полное разрешение экрана, сглаживание (MSAA + FXAA), мягкое затенение углов (SSAO),
   // тени 4096, кинематографичная цветокоррекция (ACES), окна 256 px, трава и срез земли с фактурой.
-  var VOID_HD = '#141b27', hdState = null, hdMatCache = null;
+  var hdState = null, hdMatCache = null;
   function canvasTex(name, c, uS, vS) {
     var t = new B.DynamicTexture(name, c, scene, true); t.update();
     t.wrapU = t.wrapV = B.Texture.WRAP_ADDRESSMODE; t.anisotropicFilteringLevel = 8;
@@ -2213,82 +2174,42 @@
     if (!ssaoHold || !scene.isReady() || --ssaoHold > 0) return;
     if (hdState && hdState.ssao) try { scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline(hdState.ssao._name, camera); } catch (e) {}
   }
-  function setQuality(hd) {
-    if (!!hdState === hd) return;
+  function enableHD() {
+    if (hdState) return;
     ssaoHold = 0;
-    kit.setHD(hd); syncSiteMats();
-    if (hd) {
-      var dpr = window.devicePixelRatio || 1;
-      hdState = { hemi: hemi.intensity, sun: sun.intensity, sunC: sun.diffuse.clone(), ground: hemi.groundColor.clone() };
-      hemi.intensity = 0.7; hemi.groundColor = hex('#66745a');
-      sun.intensity = 1.0; sun.diffuse = hex('#fff1d8'); sun.specular = hex('#ffffff');
-      shadowGen.getShadowMap().resize(TOUCH ? 2048 : 4096);
-      shadowGen.filteringQuality = B.ShadowGenerator.QUALITY_HIGH;
-      shadowGen.darkness = 0.04;
-      try {
-        // мягкие тени в углах и у основания домов
-        var ssao = new B.SSAO2RenderingPipeline('ssao', scene, { ssaoRatio: TOUCH ? 0.5 : 1, blurRatio: TOUCH ? 0.5 : 1 }, [camera], true);
-        ssao.radius = 0.9; ssao.totalStrength = 1.15; ssao.base = 0.08; ssao.samples = TOUCH ? 8 : 16;
-        ssao.expensiveBlur = !TOUCH; ssao.maxZ = 400; ssao.minZAspect = 0.2;
-        hdState.ssao = ssao;
-      } catch (e) { hdState.ssao = null; }
-      var pp = new B.DefaultRenderingPipeline('hd', true, scene, [camera]);
-      pp.samples = 4; pp.fxaaEnabled = true;
-      pp.imageProcessingEnabled = true;
-      var ip = pp.imageProcessing;
-      ip.toneMappingEnabled = true; ip.toneMappingType = B.ImageProcessingConfiguration.TONEMAPPING_ACES;
-      ip.exposure = 1.32; ip.contrast = 1.18;
-      ip.vignetteEnabled = true; ip.vignetteWeight = 2.2; ip.vignetteStretch = 0.4; ip.vignetteColor = new B.Color4(0.02, 0.03, 0.06, 0);
-      pp.sharpenEnabled = true; pp.sharpen.edgeAmount = 0.22; pp.sharpen.colorAmount = 1;
-      hdState.pp = pp;
-    } else {
-      // снять эффекты с камеры и убрать их из движка целиком (иначе он пытается обновлять удалённые)
-      var pm = scene.postProcessRenderPipelineManager;
-      [hdState.pp, hdState.ssao].forEach(function (pl) {
-        if (!pl) return;
-        try { pm.detachCamerasFromRenderPipeline(pl._name, camera); } catch (e) {}
-        try { pl.dispose(); } catch (e) {}
-        if (pm.removePipeline) pm.removePipeline(pl._name);
-      });
-      hemi.intensity = hdState.hemi; hemi.groundColor = hdState.ground;
-      sun.intensity = hdState.sun; sun.diffuse = hdState.sunC; sun.specular = B.Color3.Black();
-      shadowGen.getShadowMap().resize(2048);
-      shadowGen.filteringQuality = B.ShadowGenerator.QUALITY_MEDIUM;
-      shadowGen.darkness = 0;
-      // убрать цветокоррекцию HD, иначе она остаётся в материалах и «ИЗО»/3D становятся контрастными
-      var ipc = scene.imageProcessingConfiguration;
-      ipc.toneMappingEnabled = false; ipc.exposure = 1; ipc.contrast = 1; ipc.vignetteEnabled = false; ipc.applyByPostProcess = false;
-      hdState = null;
-    }
+    kit.setHD(true); syncSiteMats();
+    hdState = {};
+    hemi.intensity = 0.7; hemi.groundColor = hex('#66745a');
+    sun.intensity = 1.0; sun.diffuse = hex('#fff1d8'); sun.specular = hex('#ffffff');
+    // один и тот же мягкий фильтр теней; смена фильтра на лету пересобирает шейдеры
+    shadowGen.usePercentageCloserFiltering = true;
+    shadowGen.usePoissonSampling = false;
+    shadowGen.getShadowMap().resize(TOUCH ? 2048 : 4096);
+    shadowGen.filteringQuality = B.ShadowGenerator.QUALITY_HIGH;
+    shadowGen.darkness = 0.04;
+    try {
+      // мягкие тени в углах и у основания домов
+      var ssao = new B.SSAO2RenderingPipeline('ssao', scene, { ssaoRatio: TOUCH ? 0.5 : 1, blurRatio: TOUCH ? 0.5 : 1 }, [camera], true);
+      ssao.radius = 0.9; ssao.totalStrength = 1.15; ssao.base = 0.08; ssao.samples = TOUCH ? 8 : 16;
+      ssao.expensiveBlur = !TOUCH; ssao.maxZ = 400; ssao.minZAspect = 0.2;
+      hdState.ssao = ssao;
+    } catch (e) { hdState.ssao = null; }
+    var pp = new B.DefaultRenderingPipeline('hd', true, scene, [camera]);
+    pp.samples = 4; pp.fxaaEnabled = true;
+    pp.imageProcessingEnabled = true;
+    var ip = pp.imageProcessing;
+    ip.toneMappingEnabled = true; ip.toneMappingType = B.ImageProcessingConfiguration.TONEMAPPING_ACES;
+    ip.exposure = 1.32; ip.contrast = 1.18;
+    ip.vignetteEnabled = true; ip.vignetteWeight = 2.2; ip.vignetteStretch = 0.4; ip.vignetteColor = new B.Color4(0.02, 0.03, 0.06, 0);
+    pp.sharpenEnabled = true; pp.sharpen.edgeAmount = 0.22; pp.sharpen.colorAmount = 1;
+    hdState.pp = pp;
     dirty();
   }
 
-  function pixelScale() {
-    var dpr = window.devicePixelRatio || 1;
-    // «ИЗО»: рисуем в пониженном разрешении и растягиваем без сглаживания — крупные пиксели.
-    // «ИЗО HD» и 3D — полное разрешение экрана (до 2× на «ретина»-экранах).
-    return view === 'iso' ? (TOUCH ? 1.5 : 2) : 1 / Math.min(dpr, 2);
-  }
-  var VIEWS = { persp: { btn: '3D', name: '🎥 Вид 3D' }, iso: { btn: 'ИЗО', name: '🧱 Изометрия (пиксели, как в SimCity)' }, isohd: { btn: 'HD', name: '✨ Изометрия HD (качественная картинка)' } };
-  var VIEW_ORDER = ['persp', 'iso', 'isohd'];
-  function nextView() { return VIEW_ORDER[(VIEW_ORDER.indexOf(view) + 1) % VIEW_ORDER.length]; }
-  function setView(v) {
-    if (!VIEWS[v]) v = 'persp';
-    var wasIso = isIso();
-    view = v;
-    try { localStorage.setItem(VIEW_KEY, v); } catch (e) {}
-    canvas.classList.toggle('iso', v === 'iso'); document.body.classList.toggle('iso', isIso());
-    // на кнопке — текущий вид; нажатие переключает по кругу 3D → ИЗО → HD
-    $('camMode').textContent = VIEWS[v].btn;
-    $('camMode').classList.toggle('hd', v === 'isohd');
-    $('camMode').title = 'Вид: ' + VIEWS[v].btn + '. Нажмите — ' + VIEWS[nextView()].btn;
-    if (isIso()) { cam.pitch = ISO_PITCH; if (!wasIso) { cam.yaw = snapYaw(cam.yaw); cam.yawGoal = null; } }
-    else cam.pitch = 0.95;
-    applyViewScenery(); resize();
-  }
-  function rotateCam(dir) { // dir: +1 влево, -1 вправо
-    if (isIso()) { cam.yawGoal = snapYaw((cam.yawGoal === null ? cam.yaw : cam.yawGoal) + dir * Math.PI / 2); }
-    else { cam.yaw += dir * Math.PI / 8; updateCam(); }
+  // Полное разрешение экрана (до 2× на «ретина»-экранах).
+  function pixelScale() { return 1 / Math.min(window.devicePixelRatio || 1, 2); }
+  function rotateCam(dir) { // dir: +1 влево, -1 вправо; карта поворачивается ровно на 90°
+    cam.yawGoal = snapYaw((cam.yawGoal === null ? cam.yaw : cam.yawGoal) + dir * Math.PI / 2);
   }
   function tickCam(dt) {
     if (cam.yawGoal === null) return;
@@ -2301,7 +2222,7 @@
     engine.setHardwareScalingLevel(pixelScale());
     engine.resize();
     camera.fov = (window.innerWidth < window.innerHeight ? 55 : 45) * Math.PI / 180;
-    updateCam();
+    updateCam(); fitGrid();
   }
   window.addEventListener('resize', resize);
 
@@ -2355,7 +2276,7 @@
   var moving = null; // {b, offX, offZ, rot, x, z}
 
   var HINTS = {
-    view: TOUCH ? 'Нажмите на здание — справка. Два пальца — масштаб и поворот.' : 'Нажмите на здание — справка. ЛКМ/ПКМ — двигать карту, колесо — масштаб, Q/E — поворот.',
+    view: TOUCH ? 'Нажмите на здание — справка. Два пальца — масштаб и поворот на 90°.' : 'Нажмите на здание — справка. ЛКМ/ПКМ — двигать карту, колесо — масштаб, Q/E — поворот на 90°.',
     build: TOUCH ? 'Ведите пальцем, отпустите — начнётся стройка.' : 'Наведите на карту и нажмите — начнётся стройка. R — повернуть.',
     road: 'Ведите по клеткам, чтобы проложить дорогу.',
     move: TOUCH ? 'Возьмите здание пальцем и перетащите на новое место.' : 'Зажмите здание и перетащите на новое место. R — повернуть.',
@@ -2379,9 +2300,30 @@
     if (t !== 'view') closeInfo();
     if (t === 'build') { setGhost(buildCat, buildSize, buildSeed); refreshNeed(); }
     if (t === 'build' && !state.brigades.length) hint(NO_BRIGADE, true); else hint();
+    fitGrid();
   }
-  function refreshNeed() { $('needBr').hidden = state.brigades.length > 0; }
+  function refreshNeed() { $('needBr').hidden = state.brigades.length > 0; fitGrid(); }
   $('needBuy').addEventListener('click', function () { openMech('build'); });
+
+  // Компьютер и планшет: меню построек — боковая панель, 2 колонки × 10 рядов (с 0.12.0).
+  // Высота карточки подбирается так, чтобы 10 рядов поместились в экран (от 50 до 72 px);
+  // если экран совсем низкий — лишнее прокручивается.
+  var SIDE = window.matchMedia('(min-width: 700px) and (min-height: 500px)');
+  function fitGrid() {
+    var dock = $('dock'), g = $('bGrid');
+    if (!SIDE.matches || $('panelBuild').hidden) { dock.style.removeProperty('--bh'); return; }
+    var chrome = dock.offsetHeight - g.offsetHeight;                 // всё в панели, кроме самой сетки
+    var avail = (parseFloat(getComputedStyle(dock).maxHeight) || window.innerHeight - 24) - chrome;
+    var bh = clamp(Math.floor((avail - 9 * 6) / 10), 50, 72);
+    dock.style.setProperty('--bh', bh + 'px');
+    g.classList.toggle('scroll', g.scrollHeight > g.clientHeight + 1);
+  }
+  if (SIDE.addEventListener) SIDE.addEventListener('change', fitGrid);
+  // мышью ряд категорий листается колесом (на тач-экране — пальцем)
+  $('catChips').addEventListener('wheel', function (e) {
+    var c = $('catChips'); if (c.scrollWidth <= c.clientWidth) return;
+    e.preventDefault(); c.scrollLeft += e.deltaY + e.deltaX;
+  }, { passive: false });
 
   // --- миниатюры: отдельный маленький движок, рисуются по очереди и подставляются в карточки ---
   var thumbs = {}, tq = [], T = null, tBusy = false;
@@ -2474,6 +2416,7 @@
     $('bGrid').innerHTML = h;
     var sel = $('bGrid').querySelector('.bcard.on');
     if (sel) sel.scrollIntoView({ block: 'nearest' });
+    fitGrid();
   }
   function secText(s) { if (s < 10) { var h = Math.max(0.5, Math.ceil(s * 2) / 2); return String(h).replace('.', ',') + ' с'; } s = Math.ceil(s); return s < 60 ? s + ' с' : Math.floor(s / 60) + ' мин ' + (s % 60 ? s % 60 + ' с' : ''); }
   function buildHint() {
@@ -2649,23 +2592,17 @@
     if (gest.type === 'two' && ptrs.size === 2) {
       var c = centroid();
       cam.dist = gest.dist * (gest.c.d / Math.max(c.d, 1));
-      if (isIso()) { // в изометрии поворот двумя пальцами — щелчком на 90°
-        var da = c.ang - gest.c.ang;
-        if (Math.abs(da) > 0.6) { rotateCam(da > 0 ? -1 : 1); gest.c.ang = c.ang; }
-      } else cam.yaw = gest.yaw - (c.ang - gest.c.ang);
+      var da = c.ang - gest.c.ang; // поворот двумя пальцами — щелчком на 90°
+      if (Math.abs(da) > 0.6) { rotateCam(da > 0 ? -1 : 1); gest.c.ang = c.ang; }
       updateCam();
       var g2 = groundAt(c.x, c.y);
       if (g2 && gest.grab) { cam.tx -= g2.x - gest.grab.x; cam.tz -= g2.z - gest.grab.z; updateCam(); }
       return;
     }
-    if (gest.type === 'rotate') {
-      if (isIso()) {
-        gest.acc += e.clientX - gest.lx; gest.lx = e.clientX;
-        if (Math.abs(gest.acc) > 80) { rotateCam(gest.acc > 0 ? -1 : 1); gest.acc = 0; }
-        return;
-      }
-      cam.yaw -= (e.clientX - gest.lx) * 0.008; cam.pitch += (e.clientY - gest.ly) * 0.005;
-      gest.lx = e.clientX; gest.ly = e.clientY; updateCam(); return;
+    if (gest.type === 'rotate') { // средняя кнопка или Shift + правая: карта щёлкает на 90°
+      gest.acc += e.clientX - gest.lx; gest.lx = e.clientX;
+      if (Math.abs(gest.acc) > 80) { rotateCam(gest.acc > 0 ? -1 : 1); gest.acc = 0; }
+      return;
     }
     if (gest.type === 'pan') {
       if (Math.hypot(e.clientX - gest.sx, e.clientY - gest.sy) > 6) gest.moved = true;
@@ -2740,7 +2677,6 @@
     if (k === 'q' || k === 'й') rotateCam(1);
     else if (k === 'e' || k === 'у') rotateCam(-1);
     else if (k === 'r' || k === 'к') rotateCurrent();
-    else if (k === 'i' || k === 'ш') cycleView();
     else if (k === 'escape') { if (!$('modal').hidden) closeModal(); else if (!$('mech').hidden) closeMech(); else { closeInfo(); setTool('view'); } }
     else if (k === '6') openMech();
     else if ('12345'.indexOf(k) >= 0 && k) setTool(['view', 'build', 'road', 'move', 'delete'][+k - 1]);
@@ -2762,11 +2698,6 @@
     cam.tx += (-sy * f + cy * s) * sp; cam.tz += (-cy * f - sy * s) * sp; updateCam();
   }
 
-  function cycleView() {
-    setView(nextView());
-    hint(view === 'isohd' ? '✨ Изометрия HD: сглаживание, мягкие тени, чёткие окна' : view === 'iso' ? '🧱 Изометрия: крупные пиксели, поворот ⟲ ⟳ — на 90°' : '🎥 Вид 3D');
-  }
-  $('camMode').addEventListener('click', cycleView);
   $('camRotL').addEventListener('click', function () { rotateCam(1); });
   $('camRotR').addEventListener('click', function () { rotateCam(-1); });
   $('camIn').addEventListener('click', function () { cam.dist /= 1.25; updateCam(); });
@@ -3201,7 +3132,6 @@
       '<button class="menu-btn" data-m="help">📖 Гайд по игре</button>' +
       '<button class="menu-btn" data-m="news">📝 Что нового</button>' +
       '<button class="menu-btn" data-m="city">📊 Город</button>' +
-      VIEW_ORDER.map(function (v) { return '<button class="menu-btn' + (v === view ? ' cur' : '') + '" data-m="view" data-v="' + v + '">' + VIEWS[v].name + (v === view ? ' <span style="float:right;color:#a9b6c8">сейчас</span>' : '') + '</button>'; }).join('') +
       '<button class="menu-btn" data-m="mech">🚚 Механизмы</button>' +
       '<button class="menu-btn" data-m="size">🗺️ Размер карты <span style="float:right;color:#a9b6c8">' + N + '×' + N + '</span></button>' +
       '<button class="menu-btn" data-m="demo">🏘️ Загрузить город-пример</button>' +
@@ -3278,7 +3208,6 @@
     if (m === 'help') openModal(guideHtml());
     else if (m === 'gsec') { var d = document.getElementById('g-' + b.dataset.s); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); } }
     else if (m === 'city') openModal(cityHtml());
-    else if (m === 'view') { closeModal(); setView(b.dataset.v); }
     else if (m === 'mech') { closeModal(); openMech(); }
     else if (m === 'size') { pickSize = N; confirmArm = ''; openSize(); }
     else if (m === 'resize') {
@@ -3350,7 +3279,8 @@
   // ---------- Старт ----------
   state = load() || demoState(G.mapSize);
   $('ver').textContent = G.version;
-  setView(view);
+  try { localStorage.removeItem('moe_gorod_view'); } catch (e) {} // старая настройка вида (3D / ИЗО / HD) больше не нужна
+  enableHD(); resize();
   renderChips(); rebuildAll(); setTool('view');
   camHome();
   engine.runRenderLoop(loop);
@@ -3366,7 +3296,7 @@
   window.__gorod = {
     state: function () { return state; }, size: function () { return N; }, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam,
     road: function (x, z, t) { setRoad(x, z, t); }, stats: updateStats,
-    scene: scene, buy: buyBrigade, siteAt: function (id, p) { var b = getB(id); b.prog = p; writeBuilding(b); updateSite(b, 0.016); }, openMech: openMech, setView: setView, sim: function () { return sim; }, frames: function () { return frames; },
+    scene: scene, buy: buyBrigade, siteAt: function (id, p) { var b = getB(id); b.prog = p; writeBuilding(b); updateSite(b, 0.016); }, openMech: openMech, sim: function () { return sim; }, frames: function () { return frames; },
     batches: function () { return Object.keys(batches).map(function (k) { return k + ':' + batches[k].ids.length; }); },
     wearAll: function (w) { for (var k in state.roads) if (state.roads[k] === 'asphalt') { state.wear[k] = typeof w === 'function' ? w(k) : w; markRoadKey(k); } dirty(); },
     finishAll: function () { state.buildings.forEach(function (b) { if (isSite(b)) { b.prog = 1; finishSite(b); } }); },
