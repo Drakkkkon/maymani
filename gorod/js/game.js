@@ -2260,7 +2260,7 @@
     move: TOUCH ? 'Возьмите здание пальцем и перетащите на новое место.' : 'Зажмите здание и перетащите на новое место. R — повернуть.',
     delete: 'Нажмите на здание или ведите по дороге, чтобы удалить.'
   };
-  var NO_BRIGADE = 'Сначала купите бригаду: 🚚 Механизмы → Строительство';
+  var NO_BRIGADE = 'Сначала купите бригаду — кнопка «Купить» вверху меню «Строить»';
   var hintTimer = 0;
   function hint(text, warn) {
     var h = $('hint'); h.textContent = text || HINTS[tool]; h.className = 'hint' + (warn ? ' warn' : ''); h.style.opacity = 1;
@@ -2282,8 +2282,26 @@
     if (t === 'build' && !state.brigades.length) hint(NO_BRIGADE, true); else hint();
     fitGrid();
   }
-  function refreshNeed() { $('needBr').hidden = state.brigades.length > 0; fitGrid(); }
-  $('needBuy').addEventListener('click', function () { openMech('build'); });
+  // Покупка бригады прямо в панели «Строить» (с 0.15.0). Строка обновляется, только если что-то изменилось.
+  var brKey = '';
+  function updateBrRow() {
+    var u = G.units.brigade, n = state.brigades.length, busy = 0, lim = n >= u.importMax, price = usd(u.price);
+    state.brigades.forEach(function (br) { if (br.site) busy++; });
+    var sub = !n ? 'строить некому' : lim ? 'лимит завоза: ' + u.importMax : busy ? 'заняты ' + busy + ' из ' + n : 'все свободны';
+    var k = n + '|' + busy + '|' + price;
+    if (k === brKey) return;
+    brKey = k;
+    $('brN').textContent = n;
+    $('brSub').textContent = sub;
+    $('brBuy').textContent = 'Купить · ' + price;
+    $('brBuy').classList.toggle('lim', lim);
+    $('brRow').classList.toggle('none', !n);
+    $('brRow').title = 'Бригад: ' + n + (n ? ', заняты ' + busy : '') + '. Чем больше бригад — тем быстрее стройка.' +
+      (lim ? ' Привезти можно только ' + u.importMax + ' — остальные заказывайте на Механическом заводе.' : '');
+    $('brBuy').title = lim ? 'Привезти можно только ' + u.importMax + ' бригады — дальше заказывайте на заводе' : 'Купить бригаду за ' + price;
+  }
+  function refreshNeed() { updateBrRow(); fitGrid(); }
+  $('brBuy').addEventListener('click', buyBrigade);
 
   // Компьютер и планшет: меню построек — боковая панель справа (с 0.13.0; в 0.12.0 была слева), 2 колонки × 10 рядов.
   // Высота карточки подбирается так, чтобы 10 рядов поместились в экран (от 50 до 72 px);
@@ -3278,6 +3296,7 @@
       lastUi = t;
       if (infoId) { var ib = getB(infoId); if (ib && isSite(ib)) renderInfo(ib, true); }
       renderMech(); refreshLive(); updateStock();
+      if (!$('panelBuild').hidden) updateBrRow();   // «заняты N из M» меняется, когда бригады уезжают на стройки
     }
     flushRoads(); flushBatches();
     if (needRender) {
@@ -3294,6 +3313,7 @@
   $('ver').textContent = G.version;
   try { localStorage.removeItem('moe_gorod_view'); } catch (e) {} // старая настройка вида (3D / ИЗО / HD) больше не нужна
   enableHD(); resize();
+  $('brImg').innerHTML = thumbImg('brimg', 'truck', truckThumb());   // картинка грузовика в строке «Бригады»
   renderChips(); rebuildAll(); setTool('view');
   camHome();
   engine.runRenderLoop(loop);
@@ -3302,7 +3322,7 @@
   try {
     var seen = localStorage.getItem(SEEN_KEY);
     if (seen !== G.version) {
-      openModal(seen ? '<h2>Что нового в ' + G.version + '</h2>' + changelogHtml() : '<h2>Добро пожаловать в «Мое_город»!</h2><p>Купите бригаду в 🚚 «Механизмы», проложите дорогу и стройте вдоль неё дома и службы. Здание без дороги не работает! Нажмите на любое здание, чтобы узнать, кто там живёт.</p>' + guideHtml(true));
+      openModal(seen ? '<h2>Что нового в ' + G.version + '</h2>' + changelogHtml() : '<h2>Добро пожаловать в «Мое_город»!</h2><p>Нажмите 🏠 «Строить» и купите бригаду (кнопка вверху панели), проложите дорогу и стройте вдоль неё дома и службы. Здание без дороги не работает! Нажмите на любое здание, чтобы узнать, кто там живёт.</p>' + guideHtml(true));
       localStorage.setItem(SEEN_KEY, G.version);
     }
   } catch (e) {}
