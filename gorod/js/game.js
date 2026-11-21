@@ -332,7 +332,7 @@
         if ((cx - ins[0]) * nx + (cy - ins[1]) * ny + (cz - ins[2]) * nz < 0) { f = f.slice().reverse(); nx = -nx; ny = -ny; nz = -nz; }
         var l = Math.hypot(nx, ny, nz) || 1, o = pos.length / 3;
         f.forEach(function (p) { pos.push(p[0] - ox, p[1], p[2] - oz); nor.push(nx / l, ny / l, nz / l); uv.push(p[0] * 0.3, p[2] * 0.3); });
-        for (var i = 1; i < f.length - 1; i++) ind.push(o, o + i, o + i + 1);
+        for (var i = 1; i < f.length - 1; i++) ind.push(o, o + i + 1, o + i); // порядок вершин под правостороннюю сцену (0.17.0)
       });
       var mesh = new B.Mesh('s', sc), vd = new B.VertexData();
       vd.positions = pos; vd.normals = nor; vd.uvs = uv; vd.indices = ind; vd.applyToMesh(mesh);
