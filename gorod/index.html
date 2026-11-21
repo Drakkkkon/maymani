@@ -43,6 +43,7 @@
     <button class="tool" data-tool="move"><span>✋</span><small>Перенести</small></button>
     <button class="tool" data-tool="delete"><span>🗑️</span><small>Удалить</small></button>
     <button class="tool mech" data-tool="mech"><span>🚚</span><small>Механизмы</small></button>
+    <button class="tool epochs" data-tool="epochs"><span>🕰️</span><small>Эпохи</small></button>
   </nav>
 
   <section class="subpanel" id="panelRoad" hidden>
@@ -84,6 +85,17 @@
     </div>
     <div class="tabs" id="mechTabs"></div>
     <div class="page-body" id="mechBody"></div>
+  </div>
+</section>
+
+<!-- Страница «Эпохи» (с 0.19.0) -->
+<section class="page" id="epochs" hidden>
+  <div class="page-card">
+    <div class="page-head">
+      <h2>🕰️ Эпохи</h2>
+      <button class="icon-btn" id="epochsClose" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="page-body" id="epochsBody"></div>
   </div>
 </section>
 

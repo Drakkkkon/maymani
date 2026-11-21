@@ -56,14 +56,14 @@
     list.forEach(function (b) {
       var f = foot(b[1], b[4]), bx = b[2] + o, bz = b[3] + o;
       if (bx < 0 || bz < 0 || bx + f.w > n || bz + f.d > n) return;
-      // в городе-примере показаны все четыре оформления: корпорации — B, армия — D, нижний ряд домов — C, остальное — A
-      var th = b[0] === 'corp' ? 1 : b[0] === 'army' ? 3 : (b[0] === 'res' && b[3] === 30) ? 2 : 0;
+      // в городе-примере показаны все четыре эпохи: корпорации — ар-деко, армия — баухаус, нижний ряд домов — модерн, остальное — бель-эпок
+      var th = b[0] === 'corp' ? 2 : b[0] === 'army' ? 3 : (b[0] === 'res' && b[3] === 30) ? 1 : 0;
       s.buildings.push({ id: s.nextId++, cat: b[0], size: b[1], x: bx, z: bz, rot: b[4], seed: newSeed(), th: th });
     });
     return s;
   }
   // wear — износ асфальта по клеткам (0…1), rq — очередь ремонта, fql / fprog — очередь заказов завода, vehicles — машины завода
-  function emptyState(n) { return { v: 1, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fql: [], fprog: 0, vehicles: [], nextVeh: 1, stock: { boards: 0, dsp: 0 } }; }
+  function emptyState(n) { return { v: 1, thv: 2, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fql: [], fprog: 0, vehicles: [], nextVeh: 1, stock: { boards: 0, dsp: 0 } }; }
   function fixState(s) {
     if (!sizeOk(s.size)) s.size = 48;
     if (!Array.isArray(s.brigades)) s.brigades = [];
@@ -79,7 +79,8 @@
     s.vehicles = s.vehicles.filter(function (v) { return v && G.vehicles[v.kind]; });
     s.nextVeh = s.nextVeh || s.vehicles.reduce(function (m, v) { return Math.max(m, v.id); }, 0) + 1;
     s.buildings = s.buildings.filter(function (b) { return G.cats[b.cat] && G.sizes[b.size]; });
-    s.buildings.forEach(function (b) { b.th = G.themes[b.th | 0] ? b.th | 0 : 0; }); // оформление здания (с 0.18.0); у старых сохранений — A
+    if (s.thv !== 2) { var TMAP = [0, 3, 2, 1]; s.buildings.forEach(function (b) { b.th = TMAP[b.th | 0] || 0; }); s.thv = 2; } // 0.19.0: стили A–D 0.18.0 → ближайшие эпохи
+    s.buildings.forEach(function (b) { b.th = G.themes[b.th | 0] ? b.th | 0 : 0; }); // эпоха здания (с 0.18.0 — оформление); у старых сохранений — бель-эпок
     if (!s.stock || typeof s.stock !== 'object') s.stock = {};
     s.stock.boards = +s.stock.boards || 0; s.stock.dsp = +s.stock.dsp || 0; // склад досок и ДСП (с 0.11.0)
     return s;
@@ -158,7 +159,8 @@
   // iron — большие окна в чугунном переплёте, dorm — слуховое окно мансарды, clock — башенные часы.
   var FH = 0.3; // высота одного этажа
   var TILE = { euro: [0.5, 0.3], brick: [0.5, 0.3], archb: [0.6, 0.3], gov: [0.6, 0.3], arcade: [0.6, 0.3], shop: [0.7, 0.3], iron: [0.5, 0.3], dorm: [0.3, 0.3], clock: [0.6, 0.6],
-    deco: [0.5, 0.3], decot: [0.6, 0.3], decobase: [0.6, 0.3], indb: [0.5, 0.3], indw: [0.6, 0.3], indbase: [0.6, 0.3], panel: [0.6, 0.3], panelw: [0.6, 0.3], panelbase: [0.6, 0.3] };
+    deco: [0.5, 0.3], decot: [0.6, 0.3], decobase: [0.6, 0.3], indb: [0.5, 0.3], indw: [0.6, 0.3], indbase: [0.6, 0.3], panel: [0.6, 0.3], panelw: [0.6, 0.3], panelbase: [0.6, 0.3],
+    nouv: [0.5, 0.3], bauh: [0.5, 0.3], bauhbase: [0.6, 0.3] };
   function shade(c, k) { // осветлить (k>0) или затемнить (k<0) цвет #rrggbb
     var n = parseInt(c.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
     function f(v) { return Math.round(k > 0 ? v + (255 - v) * k : v * (1 + k)); }
@@ -288,6 +290,25 @@
         R(x - 0.075, 0.27, 0.15, 0.012, '#c9a24a');
       });
       R(0.3 - 0.012, 0, 0.024, th, shade(wl, 0.28)); R(0, 0, 0.012, th, shade(wl, 0.28)); R(tw - 0.012, 0, 0.012, th, shade(wl, 0.28));
+    } else if (style === 'nouv') { // модерн: охристая штукатурка, арочное окно с лепной рамой, волнистый пояс
+      R(0, 0, tw, th, wl); grain(1500, 0.05);
+      g.strokeStyle = shade(wl, 0.4); g.lineWidth = Math.max(1, 0.012 * ky); g.beginPath();
+      for (i = 0; i <= 24; i++) { var wx0 = i * tw / 24, wy0 = 0.022 + Math.sin(i * 1.05) * 0.008; if (i) g.lineTo(wx0 * kx, wy0 * ky); else g.moveTo(wx0 * kx, wy0 * ky); }
+      g.stroke(); R(0, 0.04, tw, 0.006, shade(wl, -0.16));
+      archWin(cx, 0.27, 0.19, 0.22, shade(wl, 0.34), '#d3e4d4', '#4d7a66', '#3d5a49', shade(wl, 0.34));
+      g.strokeStyle = shade(wl, 0.32); g.lineWidth = Math.max(1, 0.01 * kx);
+      [-1, 1].forEach(function (sd) { g.beginPath(); g.moveTo((cx + sd * 0.16) * kx, 0.27 * ky); g.bezierCurveTo((cx + sd * 0.2) * kx, 0.17 * ky, (cx + sd * 0.12) * kx, 0.1 * ky, (cx + sd * 0.05) * kx, 0.075 * ky); g.stroke(); });
+    } else if (style === 'bauh') { // баухаус: гладкая белая стена, ленточное окно с тонкими стальными переплётами
+      R(0, 0, tw, th, wl); grain(900, 0.04);
+      R(0, 0.064, tw, 0.19, '#2a3238'); glassRect(0, 0.072, tw, 0.174, GL0, GL1);
+      for (i = 0; i <= 4; i++) line(i * tw / 4, 0.072, i * tw / 4, 0.246, '#2a3238', 0.008);
+      line(0, 0.2, tw, 0.2, '#2a3238', 0.005);
+      R(0, 0.262, tw, 0.012, shade(wl, -0.12)); R(0, 0, tw, 0.008, shade(wl, 0.2));
+    } else if (style === 'bauhbase') { // баухаус: цоколь-витрина, стекло в тёмной раме
+      R(0, 0, tw, th, shade(wl, -0.05)); grain(700, 0.04);
+      R(0.03, 0.05, tw - 0.06, 0.22, '#2a3238'); glassRect(0.045, 0.062, tw - 0.09, 0.196, '#cfe2ee', '#476b8a');
+      for (i = 1; i < 5; i++) line(0.045 + i * (tw - 0.09) / 5, 0.062, 0.045 + i * (tw - 0.09) / 5, 0.258, '#2a3238', 0.008);
+      R(0, 0, tw, 0.008, shade(wl, 0.2));
     } else if (style === 'decobase') { // ар-деко: тёмный каменный цоколь с золотыми окнами
       R(0, 0, tw, th, shade(wl, -0.3)); grain(1000, 0.06); R(0, 0, tw, 0.01, '#c9a24a');
       for (i = 1; i < 6; i++) R(0, i * th / 6, tw, 0.003, 'rgba(0,0,0,.2)');
@@ -325,20 +346,20 @@
     } else { R(0, 0, tw, th, wl); }
     return c;
   }
-  // ---------- Оформления зданий (с 0.18.0): A — Belle époque, B — ар-деко и Баухаус, C — индустриальный кирпич, D — послевоенные панели ----------
-  // Модель здания рисуется одна и та же; оформление меняет только текстуры стен (стиль окон и цвет) и крыш.
+  // ---------- Эпохи (с 0.19.0; в 0.18.0 — «оформления» A–D): 0 — бель-эпок (прежний вид), 1 — модерн, 2 — ар-деко, 3 — баухаус ----------
+  // Эпоха меняет текстуры стен (стиль окон и цвет), текстуру крыш и сами формы крыш и деталей: см. Shapes и buildModel (th).
   var TH_WALL = [null,
-    ['#efece4', '#e8e2d2', '#f2ead8', '#dcd8cc', '#e9dcc0'],
-    ['#96523d', '#8a4a38', '#a05d44', '#7e4333', '#8c5a3e', '#9a6a48'],
-    ['#b9b8b2', '#c2bfb3', '#aeb0ab', '#c9c0aa', '#b4b9b6']];
+    ['#e3c27d', '#dcae6b', '#e9d7a8', '#d3955f', '#d9c48c', '#c9d2a8'],
+    ['#6b3a30', '#5d3a36', '#4d4d56', '#3f4b55', '#7a4a3a', '#54433e'],
+    ['#f3f1ea', '#ece9df', '#f6efe2', '#e6e4dc', '#f1ebd9', '#eae6da']];
   var TH_ROOF = [null,
-    ['#4e6f66', '#5a6068', '#7a4a3a', '#3f4448'],
-    ['#6a4636', '#7d7873', '#8a6a4a', '#555b60', '#9a5238'],
-    ['#8d9188', '#9a9c94', '#7e8580', '#a09c8c']];
+    ['#4f8a6c', '#5d9a7c', '#b5532f', '#4a7e8a'],
+    ['#6e747c', '#5a6068'],
+    ['#8d9188', '#9a9c94']];
   var TH_STYLE = [null,
-    { euro: 'deco', brick: 'deco', archb: 'decot', gov: 'decot', arcade: 'decobase' },
-    { euro: 'indb', brick: 'indb', archb: 'indb', gov: 'indw', arcade: 'indbase', iron: 'indw' },
-    { euro: 'panel', brick: 'panel', archb: 'panel', gov: 'panelw', arcade: 'panelbase', iron: 'panelw' }];
+    { euro: 'nouv', brick: 'nouv', archb: 'archb', gov: 'nouv' },
+    { euro: 'decot', brick: 'decot', archb: 'decot', gov: 'decot', arcade: 'decobase', iron: 'decot' },
+    { euro: 'bauh', brick: 'bauh', archb: 'bauh', gov: 'bauh', arcade: 'bauhbase', iron: 'bauh' }];
   function hashStr(t) { var h = 7; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0; return h; }
   function themeWall(style, col, th) {
     if (!th || !TH_WALL[th]) return [style, col];
@@ -359,9 +380,13 @@
         [x0, x0 - S].forEach(function (xx) { g.fillStyle = tone(0.8 + r() * 0.2); g.fillRect(xx + 1, i * rh + 1, cw - 2, rh - 2); });
         g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(0, i * rh + rh - 3, S, 3);
       }
-    } else if (th === 1) { // стоячий фальц: вертикальные швы и поперечные стыки листов
-      for (i = 0; i < 4; i++) { var x = i * S / 4; g.fillStyle = tone(0.78 + (i % 2) * 0.08); g.fillRect(x, 0, S / 4, S); g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(x, 0, 3, S); g.fillStyle = 'rgba(255,255,255,.55)'; g.fillRect(x + 3, 0, 2, S); }
-      g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, S / 2, S, 2);
+    } else if (th === 1) { // чешуя (модерн): ряды полукруглых плиток со сдвигом
+      var sr = 8, sh2 = S / sr, sw2 = S / 4;
+      for (i = 0; i <= sr; i++) for (j = -1; j < 5; j++) {
+        var cxs = j * sw2 + (i % 2 ? sw2 / 2 : 0), cys = i * sh2;
+        g.fillStyle = tone(0.74 + r() * 0.26); g.beginPath(); g.arc(cxs, cys, sw2 / 2, 0, Math.PI); g.fill();
+        g.strokeStyle = 'rgba(0,0,0,.4)'; g.lineWidth = 2; g.stroke();
+      }
     } else if (th === 2) { // рифлёное железо с ржавчиной
       for (i = 0; i < 8; i++) { var gx = i * S / 8, gr = g.createLinearGradient(gx, 0, gx + S / 8, 0); gr.addColorStop(0, tone(1)); gr.addColorStop(0.55, tone(0.6)); gr.addColorStop(1, tone(0.82)); g.fillStyle = gr; g.fillRect(gx, 0, S / 8, S); }
       for (i = 0; i < 26; i++) { g.fillStyle = 'rgba(120,60,20,' + (0.12 + r() * 0.2) + ')'; g.fillRect(r() * S, r() * S, 2 + r() * 8, 3 + r() * 10); }
@@ -521,6 +546,62 @@
         return m;
       }
     };
+    api.nTwr = 0;
+    var oTwr = api.twr; api.twr = function () { api.nTwr++; return oTwr.apply(api, arguments); };
+    // Эпоха «модерн»: конусы башенок — зелёная медь
+    if (th === 1) {
+      var mCyl = api.cyl;
+      api.cyl = function (rt, rb, h, seg, color, x, y, z) { return mCyl(rt, rb, h, seg, rt < 0.001 && color === SLATE ? PAT : color, x, y, z); };
+    }
+    // Эпохи «ар-деко» и «баухаус» (с 0.19.0): вместо скатных крыш — другие формы. Высота крыши сохраняется,
+    // чтобы флагштоки, шпили и башни стояли на своих местах.
+    if (th === 2 || th === 3) {
+      var oCyl = api.cyl, oSph = api.sph, oDome = api.dome;
+      var STN = '#d6ccb4', STN2 = '#c9bea4', SLAB = '#ece9e0', wmB = K.wm('euro', '#f3f1ea', 3);
+      api.crown = function (x0, z0, x1, z1, y0, rh) {
+        var w = x1 - x0, d = z1 - z0, mn = Math.min(w, d), i, e, y;
+        if (th === 2) { // ар-деко: ступенчатый «зиккурат» из светлого камня с золотой каймой, на башнях — золотой шпиль
+          api.cube(x0 - 0.03, z0 - 0.03, x1 + 0.03, z1 + 0.03, y0, 0.03, STN);
+          api.cube(x0 - 0.034, z0 - 0.034, x1 + 0.034, z1 + 0.034, y0 + 0.02, 0.01, GOLD);
+          var n = rh > 0.5 ? 3 : rh > 0.2 ? 2 : 1, hh = Math.max(0.03, (rh - 0.03) / n), st = Math.min(mn * 0.17, 0.13);
+          y = y0 + 0.03; e = 0;
+          for (i = 0; i < n; i++) {
+            e = Math.max(0, Math.min(st * (i + 0.7), (mn - 0.07) / 2));
+            api.cube(x0 + e, z0 + e, x1 - e, z1 - e, y, hh, i % 2 ? STN2 : STN);
+            api.cube(x0 + e - 0.008, z0 + e - 0.008, x1 - e + 0.008, z1 - e + 0.008, y + hh - 0.012, 0.012, GOLD);
+            y += hh;
+          }
+          if (mn - 2 * e < 0.45 && rh > 0.2) { var mh = 0.24 + rh * 0.3; oCyl(0.005, 0.013, mh, 6, GOLD, (x0 + x1) / 2, y + mh / 2, (z0 + z1) / 2); }
+          return y;
+        }
+        // баухаус: плита перекрытия с вылетом и отступной этаж-терраса с ленточными окнами
+        api.cube(x0 - 0.025, z0 - 0.025, x1 + 0.025, z1 + 0.025, y0, 0.03, SLAB);
+        y = y0 + 0.03;
+        if (rh >= 0.16 && mn > 0.3) {
+          e = Math.min(0.12, mn * 0.2);
+          var fl = Math.max(1, Math.round(rh * 0.78 / 0.3)), ph = fl * 0.3, ww = w - 2 * e, dd = d - 2 * e;
+          var uw = Math.max(1, Math.round(ww / 0.5)), ud = Math.max(1, Math.round(dd / 0.5));
+          function V(a, b, c, d2) { return new B.Vector4(a, b, c, d2); }
+          var CP = V(0.02, 0.02, 0.03, 0.03);
+          api.box(ww, ph, dd, K.wall(wmB[0], wmB[1]), (x0 + x1) / 2, y + ph / 2, (z0 + z1) / 2, [V(0, 0, uw, fl), V(0, 0, uw, fl), V(0, 0, ud, fl), V(0, 0, ud, fl), CP, CP]);
+          y += ph;
+          api.cube(x0 + e - 0.03, z0 + e - 0.03, x1 - e + 0.03, z1 - e + 0.03, y, 0.03, SLAB); y += 0.03;
+        }
+        return y;
+      };
+      api.gable = function (x0, z0, x1, z1, y0, rh) { return api.crown(x0, z0, x1, z1, y0, rh); };
+      api.hip = function (x0, z0, x1, z1, y0, rh) { return api.crown(x0, z0, x1, z1, y0, rh); };
+      api.mansard = function (x0, z0, x1, z1, y0, hl, hu) { return api.crown(x0, z0, x1, z1, y0, hl + hu); };
+      api.cyl = function (rt, rb, h, seg, color, x, y, z) {
+        var cone = rt < 0.001 && (color === PAT || color === SLATE);
+        if (th === 2) return oCyl(rt, rb, h, seg, cone ? GOLD : color, x, y, z);                                  // шпиль — золотой
+        if (cone) return oCyl(rb * 1.05, rb * 1.05, 0.03, seg, SLAB, x, y - h / 2 + 0.015, z);                    // конус → плоская крышка
+        if (color === GOLD) return oCyl(0.0005, 0.0005, 0.001, 3, GOLD, x, y, z);                                  // золотые шпили и флюгера в баухаусе не нужны
+        return oCyl(rt, rb, h, seg, color, x, y, z);
+      };
+      api.sph = function (rad, color, x, y, z, sy) { return th === 3 && color === GOLD ? oSph(0.001, GOLD, x, y, z, 1) : oSph(rad, color, x, y, z, sy); };
+      api.dome = function (rad, color, x, y, z, sy) { return th === 3 ? oCyl(rad, rad, 0.14, 16, SLAB, x, y + 0.07, z) : oDome(rad, GOLD, x, y, z, sy); };
+    }
     return api;
   }
 
@@ -529,7 +610,7 @@
     var s = G.sizes[size], W = s.w, D = s.d, m = 0.08;
     var r = rng(seed), S = Shapes(K, W / 2, D / 2, th), cube = S.cube;
     function kwall(style, col) { var q = K.wm(style, col, th); return K.wall(q[0], q[1]); } // стена в выбранном оформлении
-    var F = [m, m, W - m, D - m];
+    var F = [m, m, W - m, D - m], bw = { a: 0, top: 0 };
     function V4(a, b, c, d) { return new B.Vector4(a, b, c, d); }
     var CAP = V4(0.02, 0.02, 0.03, 0.03);
     // ---- общие детали ----
@@ -537,11 +618,13 @@
     function wallBox(x0, z0, x1, z1, y0, fl, style, col, fh) {
       fh = fh || FH; var q = K.wm(style, col, th); style = q[0]; col = q[1];
       var h = fl * fh, w = x1 - x0, d = z1 - z0, tw = TILE[style][0];
+      if (w * d >= bw.a) bw = { a: w * d, x0: x0, z0: z0, x1: x1, z1: z1, top: y0 + h };   // самый большой корпус — для угловой башенки модерна
       var uw = Math.max(1, Math.round(w / tw)), ud = Math.max(1, Math.round(d / tw));
       S.box(w, h, d, K.wall(style, col), (x0 + x1) / 2, y0 + h / 2, (z0 + z1) / 2, [V4(0, 0, uw, fl), V4(0, 0, uw, fl), V4(0, 0, ud, fl), V4(0, 0, ud, fl), CAP, CAP]);
       return y0 + h;
     }
     function chim(x, z, y0, h) {
+      if (th >= 2) return;   // ар-деко и баухаус: без печных труб
       cube(x - 0.035, z - 0.03, x + 0.035, z + 0.03, y0, h, '#9a4b35'); cube(x - 0.047, z - 0.042, x + 0.047, z + 0.042, y0 + h, 0.025, '#d9d2c2'); cube(x - 0.03, z - 0.025, x + 0.03, z + 0.025, y0 + h + 0.025, 0.012, '#2b2b2b');
     }
     function flag(x, y, z, color) {
@@ -549,11 +632,11 @@
       S.box(0.26, 0.15, 0.01, K.mat(color || '#c8342c'), x + 0.14, y + 0.51, z);
     }
     function tree(x, z, k) { k = k || 1; S.cyl(0.025 * k, 0.035 * k, 0.16 * k, 6, '#6b4a2e', x, 0.08 * k, z); S.sph(0.13 * k, '#4f8f4a', x, 0.27 * k, z, 1); }
-    function cornice(x0, z0, x1, z1, y, col) { cube(x0 - 0.035, z0 - 0.035, x1 + 0.035, z1 + 0.035, y, 0.04, col || STONE); }
-    function sband(x0, z0, x1, z1, y, col) { cube(x0 - 0.015, z0 - 0.015, x1 + 0.015, z1 + 0.015, y, 0.018, col || STONE); }
+    function cornice(x0, z0, x1, z1, y, col) { if (th === 3) return; cube(x0 - 0.035, z0 - 0.035, x1 + 0.035, z1 + 0.035, y, 0.04, th === 2 ? '#d6ccb4' : col || STONE); }
+    function sband(x0, z0, x1, z1, y, col) { if (th === 3) return; cube(x0 - 0.015, z0 - 0.015, x1 + 0.015, z1 + 0.015, y, 0.018, th === 2 ? GOLD : col || STONE); }
     // чугунные балконы по сторонам: f — перед (+z), b — зад, l — слева, r — справа
     function balc(x0, z0, x1, z1, y, sides) {
-      var BS = '#383c42', e = 0.06;
+      var BS = th === 3 ? '#f1eee6' : th === 2 ? '#2a2d32' : '#383c42', IRON = th === 3 ? '#4c525a' : th === 2 ? GOLD : '#2b2f35', e = 0.06;
       if (sides.indexOf('f') >= 0) { cube(x0, z1, x1, z1 + e, y, 0.022, BS); cube(x0, z1 + e - 0.008, x1, z1 + e, y + 0.022, 0.045, IRON); }
       if (sides.indexOf('b') >= 0) { cube(x0, z0 - e, x1, z0, y, 0.022, BS); cube(x0, z0 - e, x1, z0 - e + 0.008, y + 0.022, 0.045, IRON); }
       if (sides.indexOf('l') >= 0) { cube(x0 - e, z0, x0, z1, y, 0.022, BS); cube(x0 - e, z0, x0 - e + 0.008, z1, y + 0.022, 0.045, IRON); }
@@ -567,6 +650,7 @@
     }
     // слуховое окно с двускатной крышей; (fx,fz) — центр лицевой стенки на скате, dir: 0 +z, 1 +x, 2 -z, 3 -x
     function dorm(fx, fz, yb, dir, wc, rc) {
+      if (th >= 2) return;
       var w = 0.13, h = 0.14, dp = 0.1, dx = [0, 1, 0, -1][dir], dz = [1, 0, -1, 0][dir];
       var cx = fx - dx * dp / 2, cz = fz - dz * dp / 2, bw = dir % 2 ? dp : w, bd = dir % 2 ? w : dp, fu = [0, 2, 1, 3][dir], uv = [CAP, CAP, CAP, CAP, CAP, CAP];
       uv[fu] = V4(0, 0, 1, 1);
@@ -586,7 +670,7 @@
       if (sides.indexOf('r') >= 0) row(Z0 + 0.1, Z1 - 0.1, X1 - ins, 1, false);
     }
     function mans(x0, z0, x1, z1, y, hl, hu, i1, i2, col, col2, wc, sides) { // карниз + мансарда + слуховые окна
-      cube(x0 - 0.03, z0 - 0.03, x1 + 0.03, z1 + 0.03, y, 0.04, STONE);
+      cube(x0 - 0.03, z0 - 0.03, x1 + 0.03, z1 + 0.03, y, 0.04, th === 3 ? '#ece9e0' : th === 2 ? '#d6ccb4' : STONE);
       S.mansard(x0 - 0.01, z0 - 0.01, x1 + 0.01, z1 + 0.01, y + 0.04, hl, hu, i1, i2, col, col2);
       if (sides) mdorms(x0 - 0.01, z0 - 0.01, x1 + 0.01, z1 + 0.01, y + 0.04, hl, i1, wc || '#cfc6b2', col, sides);
       return y + 0.04 + hl + hu;
@@ -595,7 +679,7 @@
       if (flat) { cube(x - 0.25, z - 0.07, x + 0.25, z + 0.07, y, 0.03, color); cube(x - 0.07, z - 0.25, x + 0.07, z + 0.25, y, 0.03, color); }
       else { cube(x - 0.1, z - 0.012, x + 0.1, z + 0.012, y - 0.03, 0.06, color); cube(x - 0.03, z - 0.012, x + 0.03, z + 0.012, y - 0.1, 0.2, color); }
     }
-    function door(x0, x1, z, h, col) { cube(x0, z - 0.006, x1, z + 0.008, 0, h, col || '#4a3322'); }
+    function door(x0, x1, z, h, col) { cube(x0, z - 0.006, x1, z + 0.008, 0, h, th === 3 ? '#c8483a' : th === 2 ? '#2b2a30' : col || '#4a3322'); }
     function steps(x0, x1, z, n, wd) { for (var i = 0; i < n; i++) cube(x0 - i * 0.01, z + (n - 1 - i) * wd, x1 + i * 0.01, z + (n - i) * wd + 0.01, 0, 0.022 * (i + 1), STONE2); }
     function lamp(x, z, h) { // газовый фонарь
       h = h || 0.32; S.cyl(0.008, 0.012, h, 6, '#1f3a2f', x, h / 2, z); S.cyl(0.02, 0.014, 0.012, 6, '#1f3a2f', x, 0.02, z); S.sph(0.026, '#fff1b8', x, h + 0.02, z, 1.2);
@@ -984,6 +1068,15 @@
         }
         if (W >= 3) { tree(1.2, 1.5, 0.8); tree(2.2, 2.3, 0.75); tree(0.6, 2.6, 0.7); S.cyl(0.25, 0.28, 0.06, 16, '#c9c2b3', 1.5, 0.08, 2.9); S.cyl(0.18, 0.18, 0.02, 16, '#6fb6e0', 1.5, 0.11, 2.9); }
       }
+    }
+    // Модерн (с 0.19.0): круглая угловая башенка с зелёным шатром и золотым шариком (у зданий без собственных башен, кроме 4×4)
+    if (th === 1 && size !== '4x4' && bw.a > 0 && !S.nTwr && ['res', 'social', 'gov', 'army', 'corp'].indexOf(cat) >= 0) {
+      var tr = Math.min(0.15, Math.min(bw.x1 - bw.x0, bw.z1 - bw.z0) * 0.22), tx = bw.x1 - tr * 0.6, tz = bw.z1 - tr * 0.6;
+      var tfl = Math.max(1, Math.round(bw.top / FH)), th2 = tfl * FH;
+      S.twr(tr, th2, 12, kwall('euro', '#e3c27d'), tx, 0, tz, 2, tfl);
+      S.cyl(tr + 0.02, tr + 0.02, 0.03, 12, STONE, tx, th2 + 0.015, tz);
+      S.cyl(0, tr * 1.3, tr * 3.4, 12, PAT, tx, th2 + 0.03 + tr * 1.7, tz);
+      S.sph(0.028, GOLD, tx, th2 + 0.04 + tr * 3.4, tz, 1);
     }
     return S.merge();
   }
@@ -2679,7 +2772,7 @@
 
   // ---------- Инструменты ----------
   var tool = 'view', buildCat = 'res', buildSize = '1x1', buildRot = 0, buildSeed = newSeed(), roadType = 'asphalt';
-  var THEME_KEY = 'moe_gorod_theme', buildTheme = 0;
+  var THEME_KEY = 'moe_gorod_epoch', buildTheme = 0;
   try { buildTheme = clamp(parseInt(localStorage.getItem(THEME_KEY), 10) || 0, 0, G.themes.length - 1); } catch (e) {}
   var moving = null; // {b, offX, offZ, rot, x, z}
 
@@ -2787,10 +2880,10 @@
     tq.shift();
     if (tq.length) requestAnimationFrame(thumbStep); else tBusy = false;
   }
-  function thumbKey(cat, size) { return cat + size + 't' + buildTheme; }
-  function thumbUrl(cat, size) {
-    var th = buildTheme;
-    return thumbReq(thumbKey(cat, size), function (K) {
+  function thumbKey(cat, size, th) { return cat + size + 't' + (th === undefined ? buildTheme : th); }
+  function thumbUrl(cat, size, th) {
+    th = th === undefined ? buildTheme : th;
+    return thumbReq(thumbKey(cat, size, th), function (K) {
       var root = new B.Mesh('thumb', K.scene), g = buildModel(K, cat, size, modelSeed(cat, 0), th), s0 = G.sizes[size];
       g.parent = root;
       var pad = B.MeshBuilder.CreateBox('pad', { width: s0.w, height: 0.06, depth: s0.d }, K.scene); pad.position.y = -0.03; pad.material = K.mat('#8cc068'); pad.parent = root;
@@ -2833,7 +2926,7 @@
   }
   function renderStyleRow() {
     var t = G.themes[buildTheme];
-    $('styleRow').innerHTML = '<span class="stl">Оформление: <b>' + t.letter + ' · ' + esc(t.name) + '</b> · ' + esc(t.era) + '</span>' + themeChips(buildTheme, 'data-bth');
+    $('styleRow').innerHTML = '<span class="stl">Эпоха: <b>' + t.letter + ' · ' + esc(t.name) + '</b> · ' + esc(t.era) + '</span>' + themeChips(buildTheme, 'data-bth');
   }
   function renderChips() {
     $('catChips').innerHTML = catItem('all') + Object.keys(G.cats).filter(function (k) { return !G.cats[k].mech && !G.cats[k].group; }).map(catItem).join('') +
@@ -2907,7 +3000,7 @@
     buildTheme = +b.dataset.bth; try { localStorage.setItem(THEME_KEY, String(buildTheme)); } catch (e2) {}
     renderStyleRow(); renderCards(); setGhost(buildCat, buildSize, buildSeed);
     if (lastHover && tool === 'build' && ghost && ghost.isEnabled()) buildGhostTo(lastHover);
-    hint('Оформление: ' + G.themes[buildTheme].name + ' · ' + G.themes[buildTheme].era);
+    hint('Эпоха: ' + G.themes[buildTheme].name + ' · ' + G.themes[buildTheme].era);
   });
   $('roadChips').addEventListener('click', function (e) {
     var b = e.target.closest('[data-road]'); if (!b) return;
@@ -2921,7 +3014,7 @@
   $('btnRotate').addEventListener('click', rotateCurrent);
   $('toolbar').addEventListener('click', function (e) {
     var b = e.target.closest('.tool'); if (!b) return;
-    if (b.dataset.tool === 'mech') openMech(); else setTool(b.dataset.tool);
+    if (b.dataset.tool === 'mech') openMech(); else if (b.dataset.tool === 'epochs') openEpochs(); else setTool(b.dataset.tool);
   });
 
   // --- действия ---
@@ -3144,8 +3237,9 @@
     if (k === 'q' || k === 'й') rotateCam(1);
     else if (k === 'e' || k === 'у') rotateCam(-1);
     else if (k === 'r' || k === 'к') rotateCurrent();
-    else if (k === 'escape') { if (sideOpen) closeSide(); else if (!$('modal').hidden) closeModal(); else if (!$('mech').hidden) closeMech(); else { closeInfo(); setTool('view'); } }
+    else if (k === 'escape') { if (sideOpen) closeSide(); else if (!$('modal').hidden) closeModal(); else if (!$('mech').hidden) closeMech(); else if (!$('epochs').hidden) closeEpochs(); else { closeInfo(); setTool('view'); } }
     else if (k === '6') openMech();
+    else if (k === '7') openEpochs();
     else if ('12345'.indexOf(k) >= 0 && k) setTool(['view', 'build', 'road', 'move', 'delete'][+k - 1]);
     else if (k === '+' || k === '=') { cam.dist /= 1.2; updateCam(); }
     else if (k === '-') { cam.dist *= 1.2; updateCam(); }
@@ -3154,7 +3248,7 @@
   window.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
   window.addEventListener('blur', function () { keys = {}; });
   function keyPan(dt) {
-    if (!$('mech').hidden) return;
+    if (!$('mech').hidden || !$('epochs').hidden) return;
     var f = 0, s = 0;
     if (keys.w || keys['ц'] || keys.arrowup) f += 1;
     if (keys.s || keys['ы'] || keys.arrowdown) f -= 1;
@@ -3169,6 +3263,59 @@
   $('camRotR').addEventListener('click', function () { rotateCam(-1); });
   $('camIn').addEventListener('click', function () { cam.dist /= 1.25; updateCam(); });
   $('camOut').addEventListener('click', function () { cam.dist *= 1.25; updateCam(); });
+
+  // ---------- Страница «Эпохи» (с 0.19.0) ----------
+  // Четыре карточки: миниатюра, годы, рассказ о времени, стилистика и что это значит в игре.
+  // «Строить в этой эпохе» — выбор эпохи для новых зданий; «Весь город в эту эпоху» — перекрасить уже построенные (нажать дважды).
+  var epochArm = -1;
+  function openEpochs() {
+    closeInfo(); if (moving) cancelMove(); closeSide && sideOpen && closeSide(); epochArm = -1;
+    $('epochs').hidden = false;
+    document.querySelector('.tool.epochs').classList.add('open');
+    renderEpochs(); $('epochsBody').scrollTop = 0;
+  }
+  function closeEpochs() { $('epochs').hidden = true; document.querySelector('.tool.epochs').classList.remove('open'); epochArm = -1; }
+  function renderEpochs() {
+    if ($('epochs').hidden) return;
+    var cnt = G.themes.map(function () { return 0; }), done = 0;
+    state.buildings.forEach(function (b) { if (!isSite(b)) { cnt[b.th | 0]++; done++; } });
+    var h = '<p class="note epnote">Четыре эпохи архитектуры Европы начала XX века. Любое здание можно построить в любой из них: у каждой свои крыши, окна, цвета и детали.</p>';
+    G.themes.forEach(function (t, i) {
+      var cur = i === buildTheme, other = done - cnt[i], arm = epochArm === i;
+      h += '<div class="epc' + (cur ? ' on' : '') + '" style="--ec:' + t.color + '">' +
+        '<div class="epc-top">' + thumbImg('epc-img', thumbKey('res', '2x2', i), thumbUrl('res', '2x2', i)) +
+        '<div class="epc-hd"><h3><span class="epc-let">' + t.letter + '</span>' + esc(t.name) + '</h3><div class="epc-era">' + t.icon + ' ' + esc(t.era) + '</div>' +
+        '<div class="epc-ab">' + esc(t.about) + '</div></div></div>' +
+        '<div class="epc-sec"><b>🕰️ О времени</b><p>' + esc(t.time) + '</p></div>' +
+        '<div class="epc-sec"><b>🏛️ Стилистика</b><p>' + esc(t.look) + '</p></div>' +
+        '<div class="epc-sec"><b>🎮 В игре</b><p>' + esc(t.game) + '</p></div>' +
+        '<div class="epc-cnt">В городе в этой эпохе: <b>' + cnt[i] + '</b> ' + plural(cnt[i], 'здание', 'здания', 'зданий') + (cur ? ' · выбрана для новых построек' : '') + '</div>' +
+        '<div class="epc-btns"><button class="btn-buy" data-ep="use" data-th="' + i + '">' + (cur ? '✔ Строить в этой эпохе' : 'Строить в этой эпохе') + '</button>' +
+        '<button class="btn-sell' + (arm ? ' arm' : '') + '" data-ep="all" data-th="' + i + '"' + (other ? '' : ' disabled') + '>' +
+        (arm ? 'Точно? Нажмите ещё раз (' + other + ')' : other ? 'Весь город в эту эпоху (' + other + ')' : 'Весь город уже в этой эпохе') + '</button></div></div>';
+    });
+    var sc = $('epochsBody').scrollTop;
+    $('epochsBody').innerHTML = h; $('epochsBody').scrollTop = sc;
+  }
+  function epochAct(act, th) {
+    var t = G.themes[th]; if (!t) return;
+    if (act === 'use') {
+      buildTheme = th; try { localStorage.setItem(THEME_KEY, String(th)); } catch (e) {}
+      renderStyleRow(); renderCards(); setGhost(buildCat, buildSize, buildSeed);
+      closeEpochs(); setTool('build');
+      hint('Эпоха для новых зданий: ' + t.name + ' · ' + t.era);
+    } else if (act === 'all') {
+      if (epochArm !== th) { epochArm = th; renderEpochs(); return; }
+      epochArm = -1; var n = 0;
+      state.buildings.slice().forEach(function (b) { if (!isSite(b) && (b.th | 0) !== th) { setBuildingTheme(b, th); n++; } });
+      renderEpochs(); hint('Весь город — эпоха «' + t.name + '»: ' + n + ' ' + plural(n, 'здание', 'здания', 'зданий'));
+    }
+  }
+  $('epochsClose').addEventListener('click', closeEpochs);
+  $('epochs').addEventListener('click', function (e) {
+    if (e.target === $('epochs')) { closeEpochs(); return; }
+    var b = e.target.closest('[data-ep]'); if (b && !b.disabled) epochAct(b.dataset.ep, +b.dataset.th);
+  });
 
   // ---------- Страница «Механизмы» ----------
   var mechTab = 'build';
@@ -3420,7 +3567,7 @@
     var c = G.cats[b.cat], name = c.names[b.size], h = '';
     h += '<h2>' + esc(name) + '</h2>';
     h += '<div class="sub"><span class="tag" style="background:' + c.tag + '">' + esc(c.label) + '</span>' + esc(address(b)) + ' · ' + G.sizes[b.size].label + '</div>';
-    if (!isSite(b)) var bt0 = G.themes[b.th | 0]; h += '<div class="strow info"><span class="stl">Оформление: <b>' + bt0.letter + ' · ' + esc(bt0.name) + '</b> · ' + esc(bt0.era) + ' — сменить можно бесплатно</span>' + themeChips(b.th | 0, 'data-act="style" data-th') + '</div>';
+    if (!isSite(b)) var bt0 = G.themes[b.th | 0]; h += '<div class="strow info"><span class="stl">Эпоха: <b>' + bt0.letter + ' · ' + esc(bt0.name) + '</b> · ' + esc(bt0.era) + ' — сменить можно бесплатно</span>' + themeChips(b.th | 0, 'data-act="style" data-th') + '</div>';
     if (isSite(b)) {
       var crew = siteCrew(b.id), pct = Math.floor(b.prog * 100), left = (1 - b.prog) * buildTime(b) / Math.max(1, crew.all);
       var sg = stageOf(b.prog);

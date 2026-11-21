@@ -53,6 +53,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tool.on { background: var(--acc); }
 .tool.on small { color: #2a2205; font-weight: 600; }
 .tool.mech.open { background: rgba(95,191,79,.28); }
+.tool.epochs.open { background: rgba(217,176,74,.28); }
 
 .subpanel { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(80px + var(--safeb)); z-index: 5;
   width: min(560px, calc(100% - 16px)); padding: 8px; background: var(--bg); border-radius: var(--r); display: flex; flex-direction: column; gap: 8px; }
@@ -381,3 +382,24 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .strow .chip small { font-size: 10.5px; opacity: .85; }
 .strow.info { margin: 8px 0 4px; padding-top: 8px; border-top: 1px solid var(--line); }
 #roadChips { flex-wrap: wrap; overflow: visible; }
+
+/* страница «Эпохи» (с 0.19.0) */
+#epochs .page-card { width: min(640px, 100%); }
+.epnote { margin: 0 0 10px; }
+.epc { --ec: #d9b04a; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-left: 5px solid var(--ec); border-radius: 14px; padding: 10px 12px 12px; margin-bottom: 12px; }
+.epc.on { box-shadow: 0 0 0 2px var(--ec); }
+.epc-top { display: flex; gap: 10px; align-items: center; }
+.epc-img { width: 96px; height: 96px; flex: none; border-radius: 12px; background: rgba(0,0,0,.2); object-fit: contain; }
+.epc-hd h3 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.epc-let { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: var(--ec); color: #1b1b1b; font-size: 13px; align-items: center; justify-content: center; font-weight: 700; }
+.epc-era { font-size: 13px; color: var(--mut); margin: 2px 0 4px; }
+.epc-ab { font-size: 13.5px; line-height: 1.35; }
+.epc-sec { margin-top: 8px; font-size: 13.5px; line-height: 1.4; }
+.epc-sec b { font-size: 13px; color: var(--ec); }
+.epc-sec p { margin: 2px 0 0; }
+.epc-cnt { margin-top: 8px; font-size: 12.5px; color: var(--mut); }
+.epc-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.epc-btns button { flex: 1 1 170px; }
+.epc-btns button[disabled] { opacity: .5; }
+.epc-btns .arm { outline: 2px solid #ff8a7a; }
+@media (min-width: 900px) { .toolbar .tool.epochs { grid-column: 1 / -1; } }
