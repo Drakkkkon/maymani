@@ -206,3 +206,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .stages li.now::before { background: #f2b705; color: #222; }
 .stages li b { font-weight: 600; }
 .stages li small { display: block; color: #ffdcae; font-size: 12px; }
+
+/* 0.8.0: здания без дороги и гайд */
+.stats .off { color: #ff8a80; font-weight: 600; }
+.stats .off b { color: #ff8a80; }
+.bad { color: #ff8a80; font-weight: 600; }
+.info .noroad, .card .noroad { background: rgba(232,53,43,.16); border: 1px solid rgba(232,53,43,.55); border-radius: 12px; padding: 8px 12px; margin: 8px 0 10px; font-size: 14px; line-height: 1.4; }
+.noroad b { display: block; color: #ff9d94; margin-bottom: 2px; }
+.gtoc { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+.gtoc .chip { font-size: 13px; padding: 5px 10px; white-space: normal; text-align: left; flex: 0 1 auto; }
+.card details.guide { scroll-margin-top: 8px; }
+.card details.guide li { margin: 4px 0; line-height: 1.45; }

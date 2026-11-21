@@ -45,6 +45,8 @@
     for (x = 8; x <= 23; x++) rd(x, 31, 'dirt');
     for (z = 14; z <= 23; z++) rd(30, z, 'asphalt');
     for (z = 25; z <= 30; z++) rd(12, z, 'dirt');
+    for (x = 25; x <= 31; x++) rd(x, 31, 'asphalt'); // подъезд к небоскрёбу (с 0.8.0 без дороги здания не работают)
+    rd(13, 26, 'dirt'); rd(13, 27, 'dirt');            // подъезд к казарме
     var list = [
       ['res', '1x1', 19, 23, 0], ['res', '1x1', 21, 23, 0], ['res', '2x1', 16, 23, 0], ['res', '1x1', 14, 30, 2],
       ['res', '2x1', 17, 30, 2], ['res', '1x1', 20, 30, 2], ['res', '2x2', 26, 22, 0], ['res', '4x4', 31, 19, 0],
@@ -637,6 +639,7 @@
       if (st) { st.node.setEnabled(!hide); if (st.crane) st.crane.root.setEnabled(!hide); st.hidden = hide; }
     } else if (hide) batchSet(bt, b.id, p.x, -50, p.z, p.yaw, 0.001, 0.001, 0.001);
     else batchSet(bt, b.id, p.x, 0, p.z, p.yaw, 1, 1, 1);
+    pinFor(b);
     dirty();
   }
 
@@ -1040,6 +1043,7 @@
   }
   function removeBuildingMesh(id) {
     if (placed[id]) { batchRemove(placed[id], id); delete placed[id]; }
+    if (batches.noroad) batchRemove(batches.noroad, id);
     disposeSite(id);
     dirty();
   }
@@ -1160,7 +1164,8 @@
     removeBuildingMesh(b.id); addBuildingMesh(b);
     assignBrigades(); updateStats(); saveNow();
     if (infoId === b.id) renderInfo(b, true);
-    hint('✅ Построено: ' + G.cats[b.cat].names[b.size]);
+    if (hasRoad(b)) hint('✅ Построено: ' + G.cats[b.cat].names[b.size]);
+    else hint('✅ Построено: ' + G.cats[b.cat].names[b.size] + '. Но к нему нет дороги — подведите, чтобы заработало', true);
     renderMech();
   }
 
@@ -1651,7 +1656,8 @@
     buildSeed = newSeed(); setGhost(buildCat, buildSize, buildSeed);
     save(); updateStats(); renderMech(); dirty();
     var crew = siteCrew(b.id).all;
-    hint(crew ? '🏗️ Стройка началась: ' + G.cats[b.cat].names[b.size] : '🏗️ Стройка ждёт: все бригады заняты — купите ещё, чтобы быстрее');
+    var msg = crew ? '🏗️ Стройка началась: ' + G.cats[b.cat].names[b.size] : '🏗️ Стройка ждёт: все бригады заняты — купите ещё, чтобы быстрее';
+    hint(hasRoad(b) ? msg : msg + '. 🛣️ Не забудьте дорогу — без неё здание не заработает');
   }
   function deleteBuilding(b) {
     markOcc(b, 0); removeBuildingMesh(b.id); delete byId[b.id];
@@ -1665,7 +1671,7 @@
     var k = key(x, z);
     if (t) { if (occ[idx(x, z)] || state.roads[k] === t) return; state.roads[k] = t; }
     else { if (!state.roads[k]) return; delete state.roads[k]; }
-    refreshRoadAround(x, z); save(); dirty();
+    refreshRoadAround(x, z); save(); statsSoon(); dirty();
   }
   function lineCells(a, b, fn) { // Брезенхэм
     var x0 = a.x, z0 = a.z, x1 = b.x, z1 = b.z, dx = Math.abs(x1 - x0), dz = Math.abs(z1 - z0), sx = x0 < x1 ? 1 : -1, sz = z0 < z1 ? 1 : -1, err = dx - dz;
@@ -1704,6 +1710,7 @@
     if (canPlace(b.size, mv.rot, mv.x, mv.z, b.id)) {
       markOcc(b, 0); b.x = mv.x; b.z = mv.z; b.rot = mv.rot; markOcc(b, b.id);
       save(); updateStats();
+      if (!isSite(b) && !hasRoad(b)) hint('🛣️ Здесь нет дороги — здание не работает, пока её не подведёте', true);
     } else hint('Сюда нельзя — здание вернулось на место', true);
     writeBuilding(b);
     hideGhost();
@@ -1975,16 +1982,25 @@
     return (workCache[ck] = res);
   }
   function address(b) { return G.streets[Math.floor(b.z / 4) % G.streets.length] + ', ' + (b.x + 1); }
-  function roadNear(b) {
-    var f = foot(b.size, b.rot), seen = {};
-    for (var x = b.x - 1; x <= b.x + f.w; x++) for (var z = b.z - 1; z <= b.z + f.d; z++) {
-      var onEdge = x === b.x - 1 || x === b.x + f.w || z === b.z - 1 || z === b.z + f.d;
-      var corner = (x === b.x - 1 || x === b.x + f.w) && (z === b.z - 1 || z === b.z + f.d);
+  // Правило (с 0.8.0): здание работает, только если к нему подведена дорога — любая.
+  // Дорога должна касаться стороны здания; клетка наискосок от угла не считается.
+  function roadsAt(sz, rot, bx, bz) {
+    var f = foot(sz, rot), seen = {};
+    for (var x = bx - 1; x <= bx + f.w; x++) for (var z = bz - 1; z <= bz + f.d; z++) {
+      var onEdge = x === bx - 1 || x === bx + f.w || z === bz - 1 || z === bz + f.d;
+      var corner = (x === bx - 1 || x === bx + f.w) && (z === bz - 1 || z === bz + f.d);
       if (onEdge && !corner) { var t = state.roads[key(x, z)]; if (t) seen[t] = 1; }
     }
+    return seen;
+  }
+  function hasRoad(b) { var s = roadsAt(b.size, b.rot, b.x, b.z); return !!(s.asphalt || s.dirt); }
+  function isWorking(b) { return !isSite(b) && hasRoad(b); }
+  function roadNear(b) {
+    var seen = roadsAt(b.size, b.rot, b.x, b.z);
+    if (seen.asphalt && seen.dirt) return 'асфальт и простая';
     if (seen.asphalt) return 'асфальт';
     if (seen.dirt) return 'простая дорога';
-    return 'нет — дом стоит без дороги';
+    return '<span class="bad">нет</span>';
   }
 
   // ---------- Расчёт жителей в фоне (js/sim.js) ----------
@@ -1995,7 +2011,7 @@
     simTimer = setTimeout(function () {
       var homes = [], works = [];
       state.buildings.forEach(function (b) {
-        if (isSite(b)) return;
+        if (!isWorking(b)) return; // без дороги здание не работает
         var c = siteCenter(b);
         if (b.cat === 'res') { var R = residents(b); homes.push([b.id, c.x, c.z, R.adults, R.total]); }
         else works.push([b.id, c.x, c.z, workplace(b).staff]);
@@ -2032,7 +2048,15 @@
       h += '<div class="kv"><span>Бригады</span><span>' + (crew.all ? crew.all + (crew.here < crew.all ? ' (в пути ' + (crew.all - crew.here) + ')' : ' на месте') : state.brigades.length ? 'ждёт свободную' : 'нет — купите в «Механизмы»') + '</span>' +
         (crew.all ? '<span>Осталось</span><span>≈ ' + secText(left) + '</span>' : '') +
         '<span>Цена</span><span>' + usd(costOf(b.cat, b.size)) + '</span>' +
-        '<span>После стройки</span><span>' + (b.cat === 'res' ? 'заедут ' + c.families[b.size] + ' ' + plural(c.families[b.size], 'семья', 'семьи', 'семей') : 'работа для ~' + c.staff[b.size] + ' чел.') + '</span></div>';
+        '<span>После стройки</span><span>' + (b.cat === 'res' ? 'заедут ' + c.families[b.size] + ' ' + plural(c.families[b.size], 'семья', 'семьи', 'семей') : 'работа для ~' + c.staff[b.size] + ' чел.') + '</span>' +
+        '<span>Дорога рядом</span><span>' + roadNear(b) + '</span></div>';
+      if (!hasRoad(b)) h += '<div class="noroad">🛣️ К стройке нет дороги. Достроить можно, но работать здание начнёт, только когда к нему подведут дорогу.</div>';
+    } else if (!hasRoad(b)) {
+      h += '<div class="noroad"><b>⛔ Не работает — нет дороги</b>Подведите к зданию любую дорогу (асфальт или простую): она должна касаться его стороны. ' +
+        (b.cat === 'res' ? 'Тогда заедут ' + c.families[b.size] + ' ' + plural(c.families[b.size], 'семья', 'семьи', 'семей') + '.' : 'Тогда откроется ' + workplace(b).staff + ' рабочих мест.') + '</div>';
+      if (b.cat !== 'res') h += '<div class="about">' + esc(c.about[b.size]) + '</div>';
+      h += '<div class="kv"><span>Дорога рядом</span><span>' + roadNear(b) + '</span>' +
+        (b.cat === 'res' ? '<span>Живут</span><span>никого — дом пустой</span>' : '<span>Работают</span><span>никто — закрыто</span>') + '</div>';
     } else if (b.cat === 'res') {
       var R = residents(b), emp = sim.home[b.id];
       h += '<div class="kv"><span>Живут</span><span><b>' + R.total + '</b> чел., ' + R.families.length + ' ' + plural(R.families.length, 'семья', 'семьи', 'семей') + '</span>' +
@@ -2076,17 +2100,26 @@
   }
 
   // ---------- Статистика ----------
+  var noRoadCount = 0, statsTimer = 0;
   function updateStats() {
-    var people = 0, jobs = 0, built = 0;
+    clearTimeout(statsTimer);
+    var people = 0, jobs = 0, built = 0, off = 0;
     state.buildings.forEach(function (b) {
+      pinFor(b);
       if (isSite(b)) return; built++;
+      if (!hasRoad(b)) { off++; return; }
       if (b.cat === 'res') people += residents(b).total; else jobs += workplace(b).staff;
     });
+    noRoadCount = off;
     $('stPeople').textContent = people.toLocaleString('ru-RU');
     $('stJobs').textContent = jobs.toLocaleString('ru-RU');
     $('stBuild').textContent = built;
+    $('stOff').textContent = off; $('stOffWrap').hidden = !off;
+    $('stOffWrap').title = 'Без дороги: ' + off + ' ' + plural(off, 'здание', 'здания', 'зданий') + ' не работают. Подведите к ним дорогу.';
+    if (infoId) { var ib = getB(infoId); if (ib) renderInfo(ib, true); }
     simRequest();
   }
+  function statsSoon() { clearTimeout(statsTimer); statsTimer = setTimeout(updateStats, 120); }
 
   // ---------- Меню ----------
   function openModal(html) { $('modalBody').innerHTML = html; $('modal').hidden = false; }
@@ -2094,33 +2127,17 @@
   $('modalClose').addEventListener('click', closeModal);
   $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeModal(); });
 
-  function helpHtml() {
-    return '<details open><summary>🧱 Виды: 3D, ИЗО и ИЗО HD</summary><ul>' +
-      '<li>Верхняя кнопка справа показывает текущий вид и переключает их по кругу: <b>3D → ИЗО → HD</b>.</li>' +
-      '<li><b>ИЗО</b> — изометрия как в старых SimCity: камера под постоянным углом, крупные пиксели, город на срезе земли.</li>' +
-      '<li><b>HD</b> — та же изометрия, но качественная картинка: полное разрешение, сглаженные края, мягкие тени в углах, подробные окна, трава и слои земли. Нагружает телефон сильнее.</li>' +
-      '<li>В изометрии ⟲ ⟳ поворачивают карту ровно на 90°. Вид можно выбрать и в меню ☰. На компьютере — клавиша I.</li></ul></details>' +
-      '<details><summary>🚚 Бригады и стройка</summary><ul>' +
-      '<li>Строить можно только с бригадой. Откройте 🚚 «Механизмы» → «Строительство» и купите «Бригаду» — зелёный грузовик.</li>' +
-      '<li>Поставьте здание — стройка идёт по этапам, как в жизни: забор и котлован, монтаж башенного крана, фундамент, этажи один за другим в строительных лесах, отделка и снятие лесов, разборка крана. Кран подаёт грузы с грузовика, по лесам ходят рабочие.</li><li>Нажмите на стройку — видно, какой сейчас этап.</li>' +
-      '<li>Чем больше бригад, тем быстрее. Бригады делятся между стройками поровну.</li>' +
-      '<li>Доллары — вверху экрана. Пока их бесконечно (∞), но у зданий и бригад уже есть цены.</li></ul></details>' +
-      '<details><summary>👥 Жители и работа</summary><ul>' +
-      '<li>Каждый взрослый житель сам ищет работу поближе к дому. Это считается в фоне и не тормозит игру.</li>' +
-      '<li>В справке дома видно, сколько жильцов работают; у работы — сколько мест заняли горожане.</li>' +
-      '<li>Сводка по городу — ☰ → «Город».</li></ul></details>' +
-      '<details' + (TOUCH ? ' open' : '') + '><summary>Телефон и планшет</summary><ul>' +
-      '<li>Один палец — двигать карту (в режиме «Смотреть»).</li><li>Два пальца — масштаб (щипок) и поворот карты.</li>' +
-      '<li>«Строить»: выберите вид и размер, коснитесь карты и ведите пальцем, отпустите — начнётся стройка. Зелёная клетка — можно, красная — занято.</li>' +
-      '<li>«Дорога»: ведите пальцем по клеткам. «Переместить»: возьмите дом и перетащите. «Удалить»: нажмите на дом или ведите по дороге.</li>' +
-      '<li>Кнопки справа: вид ИЗО/3D, поворот камеры и масштаб.</li></ul></details>' +
-      '<details' + (TOUCH ? '' : ' open') + '><summary>Компьютер</summary><ul>' +
-      '<li>Левая кнопка — действие (в «Смотреть» — двигать карту и открыть справку).</li><li>Правая кнопка — двигать карту, колёсико — масштаб, средняя кнопка или Shift+правая — поворот и наклон.</li>' +
-      '<li>Размер карты (от 32×32 до 128×128) — в меню ☰ → «Размер карты». Можно расширить карту, не теряя город.</li>' +
-      '<li>W A S D или стрелки — двигать карту, Q / E — поворот камеры, I — ИЗО/3D, R — повернуть дом, 1–5 — инструменты, 6 — «Механизмы», Esc — «Смотреть».</li></ul></details>' +
-      '<details><summary>Здания</summary><ul>' + Object.keys(G.cats).map(function (k) {
-        var c = G.cats[k]; return '<li><b>' + c.label + '</b>: ' + Object.keys(G.sizes).map(function (s) { return G.sizes[s].label + ' ' + c.names[s].toLowerCase(); }).join(', ') + '.</li>';
-      }).join('') + '</ul></details>';
+  // Гайд: текст в js/guide.js (тот же текст — в файле GUIDE.txt)
+  function guideHtml(welcome) {
+    var g = window.GUIDE, open = { start: 1, roads: 1 };
+    open[TOUCH ? 'touch' : 'pc'] = 1;
+    if (!g) return '<p>Гайд не загрузился.</p>';
+    return (welcome ? '' : '<h2>📖 ' + esc(g.title) + '</h2><p style="font-size:13px;color:#a9b6c8">Версия ' + esc(g.version) + ' · ' + esc(g.date) + '</p>') +
+      '<div class="gtoc">' + g.sections.map(function (x) { return '<button class="chip" data-m="gsec" data-s="' + x.id + '">' + esc(x.title) + '</button>'; }).join('') + '</div>' +
+      g.sections.map(function (x) {
+        return '<details class="guide" id="g-' + x.id + '"' + (open[x.id] ? ' open' : '') + '><summary>' + esc(x.title) + '</summary><ul>' +
+          x.items.map(function (i) { return '<li>' + i + '</li>'; }).join('') + '</ul></details>';
+      }).join('');
   }
   function cityHtml() {
     var f = function (n) { return Number(n).toLocaleString('ru-RU'); };
@@ -2131,7 +2148,8 @@
       '<span>Работают</span><span>' + f(sim.employed) + '</span>' +
       '<span>Ищут работу</span><span>' + f(sim.unemployed) + '</span>' +
       '<span>Рабочих мест</span><span>' + f(sim.jobs) + ' (свободно ' + f(sim.freeJobs) + ')</span>' +
-      '<span>Зданий</span><span>' + f(state.buildings.length) + '</span></div>' +
+      '<span>Зданий</span><span>' + f(state.buildings.length) + '</span>' +
+      '<span>Не работают — нет дороги</span><span>' + (noRoadCount ? '<span class="bad">' + f(noRoadCount) + '</span>' : '0') + '</span></div>' +
       '<p style="font-size:13px;color:#a9b6c8">Расчёт жителей: ' + (window.SIM.threaded() ? 'в фоновом потоке' : 'на странице') + ', ' + sim.ms + ' мс. ' +
       'Отрисовка: Babylon.js ' + B.Engine.Version + ', ' + nb + ' ' + plural(nb, 'пачка', 'пачки', 'пачек') + ' одинаковых моделей.</p>';
   }
@@ -2140,7 +2158,7 @@
   }
   function openMenu() {
     openModal('<h2>Мое_город ' + G.version + '</h2>' +
-      '<button class="menu-btn" data-m="help">❓ Как играть</button>' +
+      '<button class="menu-btn" data-m="help">📖 Гайд по игре</button>' +
       '<button class="menu-btn" data-m="news">📝 Что нового</button>' +
       '<button class="menu-btn" data-m="city">📊 Город</button>' +
       VIEW_ORDER.map(function (v) { return '<button class="menu-btn' + (v === view ? ' cur' : '') + '" data-m="view" data-v="' + v + '">' + VIEWS[v].name + (v === view ? ' <span style="float:right;color:#a9b6c8">сейчас</span>' : '') + '</button>'; }).join('') +
@@ -2210,7 +2228,8 @@
     var m = b.dataset.m;
     var sb = e.target.closest('[data-n]');
     if (sb) { pickSize = +sb.dataset.n; confirmArm = ''; openSize(); return; }
-    if (m === 'help') openModal('<h2>Как играть</h2>' + helpHtml());
+    if (m === 'help') openModal(guideHtml());
+    else if (m === 'gsec') { var d = document.getElementById('g-' + b.dataset.s); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); } }
     else if (m === 'city') openModal(cityHtml());
     else if (m === 'view') { closeModal(); setView(b.dataset.v); }
     else if (m === 'mech') { closeModal(); openMech(); }
@@ -2233,6 +2252,29 @@
 
   // ---------- Цикл отрисовки ----------
   // Кадр рисуется только когда что-то изменилось — телефон не греется на пустом месте.
+  // ---------- Метка «нет дороги» над зданием (красный шар с белой полосой) ----------
+  function pinModel(K) {
+    var S = Shapes(K, 0, 0), sc = K.scene;
+    function glow(name, c, e) { var m = new B.StandardMaterial(name, sc); m.diffuseColor = hex(c); m.emissiveColor = hex(e); m.specularColor = B.Color3.Black(); return m; }
+    var red = glow('pinRed', '#e8352b', '#8a1810'), white = glow('pinWhite', '#ffffff', '#9a9a9a');
+    var cone = B.MeshBuilder.CreateCylinder('pc', { diameterTop: 0.2, diameterBottom: 0, height: 0.26, tessellation: 16 }, sc);
+    cone.position.set(0, 0.13, 0); cone.material = red; S.parts.push(cone);
+    var ball = B.MeshBuilder.CreateSphere('ps', { diameter: 0.34, segments: 12 }, sc);
+    ball.position.set(0, 0.4, 0); ball.material = red; S.parts.push(ball);
+    var band = B.MeshBuilder.CreateCylinder('pb', { diameter: 0.352, height: 0.075, tessellation: 24 }, sc);
+    band.position.set(0, 0.4, 0); band.material = white; S.parts.push(band);
+    return S.merge();
+  }
+  function pinBatch() { return getBatch('noroad', function () { return pinModel(kit); }); }
+  function pinFor(b) {
+    var pb = pinBatch(), bt = placed[b.id];
+    var show = bt && !isSite(b) && !hasRoad(b) && !(moving && moving.b.id === b.id);
+    if (!show) { batchRemove(pb, b.id); dirty(); return; }
+    var p = bPos(b);
+    batchSet(pb, b.id, p.x, bt.h + 0.2, p.z, 0, 1.6, 1.6, 1.6);
+    dirty();
+  }
+
   var needRender = true, lastT = performance.now(), lastSave = 0, lastUi = 0, frames = 0;
   function dirty() { needRender = true; }
   function loop() {
@@ -2268,12 +2310,13 @@
   try {
     var seen = localStorage.getItem(SEEN_KEY);
     if (seen !== G.version) {
-      openModal(seen ? '<h2>Что нового в ' + G.version + '</h2>' + changelogHtml() : '<h2>Добро пожаловать в «Мое_город»!</h2><p>Купите бригаду в 🚚 «Механизмы», стройте дома, службы и дороги. Нажмите на любое здание, чтобы узнать, кто там живёт.</p>' + helpHtml());
+      openModal(seen ? '<h2>Что нового в ' + G.version + '</h2>' + changelogHtml() : '<h2>Добро пожаловать в «Мое_город»!</h2><p>Купите бригаду в 🚚 «Механизмы», проложите дорогу и стройте вдоль неё дома и службы. Здание без дороги не работает! Нажмите на любое здание, чтобы узнать, кто там живёт.</p>' + guideHtml(true));
       localStorage.setItem(SEEN_KEY, G.version);
     }
   } catch (e) {}
   window.__gorod = {
     state: function () { return state; }, size: function () { return N; }, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam,
+    road: function (x, z, t) { setRoad(x, z, t); }, stats: updateStats,
     scene: scene, buy: buyBrigade, siteAt: function (id, p) { var b = getB(id); b.prog = p; writeBuilding(b); updateSite(b, 0.016); }, openMech: openMech, setView: setView, sim: function () { return sim; }, frames: function () { return frames; },
     batches: function () { return Object.keys(batches).map(function (k) { return k + ':' + batches[k].ids.length; }); },
     place: function (cat, size, x, z) { buildCat = cat; buildSize = size; buildRot = 0; placeBuilding({ px: x + G.sizes[size].w / 2, pz: z + G.sizes[size].d / 2 }); },
