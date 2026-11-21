@@ -149,97 +149,133 @@
   shadowGen.bias = 0.0015; shadowGen.normalBias = 0.01;
 
   // ---------- Материалы (на каждую сцену свой набор) ----------
-  function windowCanvas(style, wall) {
-    var c = document.createElement('canvas'); c.width = c.height = 64;
-    var g = c.getContext('2d');
-    g.fillStyle = wall; g.fillRect(0, 0, 64, 64);
-    function win(x, y, w, h, glass, frame) {
-      if (frame) { g.fillStyle = frame; g.fillRect(x - 2, y - 2, w + 4, h + 4); }
-      var gr = g.createLinearGradient(x, y, x + w, y + h);
-      gr.addColorStop(0, glass[0]); gr.addColorStop(1, glass[1]);
-      g.fillStyle = gr; g.fillRect(x, y, w, h);
-    }
-    if (style === 'res') win(18, 18, 28, 28, ['#a9cbe8', '#5f86ad'], '#fbf8f0');
-    else if (style === 'office') win(4, 20, 56, 24, ['#9bbbd9', '#557aa1'], '#e8edf2');
-    else if (style === 'glass') {
-      var gr = g.createLinearGradient(0, 0, 64, 64); gr.addColorStop(0, '#7fb0dd'); gr.addColorStop(1, wall);
-      g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
-      g.fillStyle = 'rgba(220,235,250,.75)'; g.fillRect(0, 0, 64, 3); g.fillRect(0, 0, 3, 64);
-    }
-    else if (style === 'army') win(22, 24, 20, 14, ['#56634f', '#303a2c'], '#4b553a');
-    else if (style === 'gov') win(22, 12, 20, 40, ['#a3c1dc', '#5d7fa0'], '#fffdf6');
-    else if (style === 'shop') win(6, 14, 52, 42, ['#c3def2', '#6f98bd'], '#ffffff');
-    return c;
-  }
-  // Окна для «ИЗО HD»: та же раскладка, но 256×256 — рамы, подоконники, блики на стекле, фактура стен.
+  // Стены (с 0.16.0 — Западная Европа начала XX века): текстура = один пролёт × один этаж, рисуется в «метрах» (клетках).
+  // Стили: euro — оштукатуренный доходный дом, brick — красный кирпич, archb — кирпич с арочными окнами,
+  // gov — камень с классическими окнами, arcade — рустованный цоколь с арками, shop — витрина лавки,
+  // iron — большие окна в чугунном переплёте, dorm — слуховое окно мансарды, clock — башенные часы.
+  var FH = 0.3; // высота одного этажа
+  var TILE = { euro: [0.5, 0.3], brick: [0.5, 0.3], archb: [0.6, 0.3], gov: [0.6, 0.3], arcade: [0.6, 0.3], shop: [0.7, 0.3], iron: [0.5, 0.3], dorm: [0.3, 0.3], clock: [0.6, 0.6] };
   function shade(c, k) { // осветлить (k>0) или затемнить (k<0) цвет #rrggbb
     var n = parseInt(c.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
     function f(v) { return Math.round(k > 0 ? v + (255 - v) * k : v * (1 + k)); }
     return 'rgb(' + f(r) + ',' + f(g) + ',' + f(b) + ')';
   }
-  function windowCanvasHD(style, wall) {
-    var S = 256, c = document.createElement('canvas'); c.width = c.height = S;
+  function paintWall(style, wall, S) {
+    var T = TILE[style] || TILE.euro, tw = T[0], th = T[1], kx = S / tw, ky = S / th, hi = S >= 128;
+    var c = document.createElement('canvas'); c.width = c.height = S;
     var g = c.getContext('2d'), r = rng(style.length * 131 + parseInt(wall.slice(1), 16));
-    g.fillStyle = wall; g.fillRect(0, 0, S, S);
-    // штукатурка: мелкий шум
-    for (var i = 0; i < 1800; i++) {
-      g.fillStyle = r() > 0.5 ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
-      g.fillRect(r() * S, r() * S, 1 + r() * 2, 1 + r() * 2);
-    }
-    // межэтажный пояс сверху и тень снизу
-    g.fillStyle = shade(wall, 0.18); g.fillRect(0, 0, S, 6);
-    g.fillStyle = 'rgba(0,0,0,.10)'; g.fillRect(0, 6, S, 3);
-    g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(0, S - 4, S, 4);
-    function glass(x, y, w, h, c0, c1) {
-      var gr = g.createLinearGradient(x, y, x + w * 0.4, y + h);
-      gr.addColorStop(0, c0); gr.addColorStop(1, c1);
-      g.fillStyle = gr; g.fillRect(x, y, w, h);
-      // отражение неба — косая светлая полоса
-      g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
-      g.fillStyle = 'rgba(255,255,255,.22)';
-      g.beginPath(); g.moveTo(x + w * 0.15, y + h); g.lineTo(x + w * 0.45, y); g.lineTo(x + w * 0.62, y); g.lineTo(x + w * 0.32, y + h); g.fill();
-      g.fillStyle = 'rgba(255,255,255,.12)';
-      g.beginPath(); g.moveTo(x + w * 0.5, y + h); g.lineTo(x + w * 0.8, y); g.lineTo(x + w * 0.88, y); g.lineTo(x + w * 0.58, y + h); g.fill();
-      // тень от рамы сверху
-      g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x, y, w, Math.max(3, h * 0.06));
-      g.restore();
-    }
-    function win(x, y, w, h, c0, c1, frame, opt) {
-      opt = opt || {};
-      x *= 4; y *= 4; w *= 4; h *= 4;
-      var fw = opt.fw || 7;
-      g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x - fw + 3, y - fw + 4, w + fw * 2, h + fw * 2); // тень проёма
-      g.fillStyle = frame; g.fillRect(x - fw, y - fw, w + fw * 2, h + fw * 2);
-      g.fillStyle = shade(frame, -0.18); g.fillRect(x - fw, y + h, w + fw * 2, fw);            // низ рамы темнее
-      glass(x, y, w, h, c0, c1);
-      g.fillStyle = frame;
-      if (opt.cross) { g.fillRect(x + w / 2 - 3, y, 6, h); g.fillRect(x, y + h * 0.38 - 3, w, 6); }
-      if (opt.vbars) for (var k = 1; k < opt.vbars; k++) g.fillRect(x + w * k / opt.vbars - 3, y, 6, h);
-      if (opt.curtain) { g.fillStyle = opt.curtain; g.fillRect(x + 2, y + 2, w * 0.22, h - 4); g.fillRect(x + w - w * 0.22 - 2, y + 2, w * 0.22, h - 4); }
-      if (opt.sill) { // подоконник
-        g.fillStyle = '#f4f2ec'; g.fillRect(x - fw - 6, y + h + fw, w + fw * 2 + 12, 8);
-        g.fillStyle = 'rgba(0,0,0,.22)'; g.fillRect(x - fw - 4, y + h + fw + 8, w + fw * 2 + 8, 5);
+    function R(x, y, w, h, col) { g.fillStyle = col; g.fillRect(x * kx, y * ky, Math.max(1, w * kx), Math.max(1, h * ky)); }
+    function grain(n, a) { if (!hi) return; for (var i = 0; i < n; i++) { g.fillStyle = r() > 0.5 ? 'rgba(255,255,255,' + a + ')' : 'rgba(0,0,0,' + a + ')'; g.fillRect(r() * S, r() * S, 1 + r() * 2, 1 + r() * 2); } }
+    function glassRect(x, y, w, h, c0, c1) {
+      var gr = g.createLinearGradient(x * kx, y * ky, (x + w * 0.5) * kx, (y + h) * ky); gr.addColorStop(0, c0); gr.addColorStop(1, c1);
+      g.fillStyle = gr; g.fillRect(x * kx, y * ky, w * kx, h * ky);
+      if (hi) { // отражение неба — косая светлая полоса
+        g.save(); g.beginPath(); g.rect(x * kx, y * ky, w * kx, h * ky); g.clip();
+        g.fillStyle = 'rgba(255,255,255,.2)'; g.beginPath(); g.moveTo((x + w * 0.1) * kx, (y + h) * ky); g.lineTo((x + w * 0.45) * kx, y * ky); g.lineTo((x + w * 0.62) * kx, y * ky); g.lineTo((x + w * 0.28) * kx, (y + h) * ky); g.fill();
+        g.restore();
       }
     }
-    var CUR = ['#f3e6c4', '#e9c9c0', '#d8e4c9', '#f1efe9'];
-    if (style === 'res') win(18, 18, 28, 28, '#b9d6ee', '#557ca3', '#fbf8f0', { cross: true, sill: true, curtain: pick(r, CUR) });
-    else if (style === 'office') win(4, 20, 56, 24, '#a9c7e3', '#4c7099', '#e8edf2', { vbars: 4, fw: 5 });
-    else if (style === 'glass') {
-      var gr = g.createLinearGradient(0, 0, S * 0.5, S); gr.addColorStop(0, '#9cc6ea'); gr.addColorStop(0.55, shade(wall, 0.1)); gr.addColorStop(1, shade(wall, -0.25));
-      g.fillStyle = gr; g.fillRect(0, 0, S, S);
-      g.fillStyle = 'rgba(255,255,255,.18)';
-      g.beginPath(); g.moveTo(0, S * 0.9); g.lineTo(S * 0.55, 0); g.lineTo(S * 0.75, 0); g.lineTo(S * 0.2, S); g.lineTo(0, S); g.fill();
-      g.fillStyle = 'rgba(200,225,248,.85)'; g.fillRect(0, 0, S, 8); g.fillRect(0, 0, 8, S);
-      g.fillStyle = 'rgba(20,40,70,.35)'; g.fillRect(0, 8, S, 4); g.fillRect(S / 2 - 2, 8, 4, S - 8);
+    function line(x0, y0, x1, y1, col, wm) { g.strokeStyle = col; g.lineWidth = Math.max(1, wm * kx); g.beginPath(); g.moveTo(x0 * kx, y0 * ky); g.lineTo(x1 * kx, y1 * ky); g.stroke(); }
+    function archPath(cx, yb, w, h) { // проём с круглой аркой сверху: yb — низ, h — полная высота
+      g.beginPath(); g.moveTo((cx - w / 2) * kx, yb * ky); g.lineTo((cx - w / 2) * kx, (yb - h + w / 2) * ky);
+      g.ellipse(cx * kx, (yb - h + w / 2) * ky, w / 2 * kx, w / 2 * ky, 0, Math.PI, 0); g.lineTo((cx + w / 2) * kx, yb * ky); g.closePath();
     }
-    else if (style === 'army') win(22, 24, 20, 14, '#6a7a60', '#2c3628', '#4b553a', { fw: 5, vbars: 2 });
-    else if (style === 'gov') win(22, 12, 20, 40, '#b4cfe6', '#53769a', '#fffdf6', { cross: true, sill: true, fw: 6 });
-    else if (style === 'shop') {
-      win(6, 14, 52, 42, '#d2e8f7', '#6690b6', '#ffffff', { vbars: 3, fw: 6 });
-      g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(0, 0, S, 40);   // тень от козырька
+    function archWin(cx, yb, w, h, trim, c0, c1, frame, sill) {
+      var t = 0.022;
+      archPath(cx, yb + 0.004, w + 2 * t, h + t + 0.004); g.fillStyle = trim; g.fill();
+      archPath(cx, yb, w, h); g.save(); g.clip(); glassRect(cx - w / 2, yb - h, w, h, c0, c1); g.restore();
+      archPath(cx, yb, w, h); g.strokeStyle = frame; g.lineWidth = Math.max(1, 0.012 * kx); g.stroke();
+      line(cx, yb - h + w / 2, cx, yb, frame, 0.008); line(cx - w / 2, yb - h * 0.42, cx + w / 2, yb - h * 0.42, frame, 0.008);
+      if (sill) { R(cx - w / 2 - t - 0.012, yb, w + 2 * t + 0.024, 0.014, sill); R(cx - w / 2 - t, yb + 0.014, w + 2 * t, 0.006, 'rgba(0,0,0,.22)'); }
+      if (hi) R(cx - 0.012, yb - h - t - 0.004, 0.024, 0.02, shade(trim, 0.25)); // замковый камень
     }
+    function rectWin(cx, y, w, h, trim, frame, c0, c1, o) {
+      o = o || {}; var t = o.t === undefined ? 0.02 : o.t;
+      R(cx - w / 2 - t, y - t, w + 2 * t, h + t, trim);
+      R(cx - w / 2 - 0.004, y - 0.004, w + 0.008, h + 0.008, 'rgba(0,0,0,.35)');
+      glassRect(cx - w / 2, y, w, h, c0, c1);
+      line(cx, y, cx, y + h, frame, 0.008); line(cx - w / 2, y + h * 0.38, cx + w / 2, y + h * 0.38, frame, 0.008);
+      if (o.lintel) R(cx - w / 2 - t - 0.02, y - t - 0.026, w + 2 * t + 0.04, 0.026, o.lintel);
+      if (o.sill !== false) { R(cx - w / 2 - t - 0.014, y + h, w + 2 * t + 0.028, 0.014, o.sillCol || trim); R(cx - w / 2 - t, y + h + 0.014, w + 2 * t, 0.006, 'rgba(0,0,0,.22)'); }
+    }
+    function bricks(col) {
+      R(0, 0, tw, th, col);
+      var rows = 15, rh = th / rows, bl = 0.05, nb = Math.round(tw / bl), i, j;
+      if (hi) for (i = 0; i < rows; i++) for (j = 0; j < nb; j++) { var k = r(); R(j * tw / nb + (i % 2 ? tw / nb / 2 : 0), i * rh, tw / nb, rh, k > 0.6 ? 'rgba(255,255,255,.07)' : k < 0.25 ? 'rgba(0,0,0,.1)' : 'rgba(0,0,0,0)'); }
+      g.fillStyle = 'rgba(224,210,182,.5)';
+      for (i = 0; i < rows; i++) {
+        g.fillRect(0, i * rh * ky, S, Math.max(1, 0.0028 * ky));
+        if (hi) for (j = 0; j < nb; j++) g.fillRect((j * tw / nb + (i % 2 ? tw / nb / 2 : 0)) * kx, i * rh * ky, Math.max(1, 0.0022 * kx), rh * ky);
+      }
+    }
+    function ashlar(col) {
+      R(0, 0, tw, th, col); grain(900, 0.05);
+      var rows = Math.round(th / 0.05), i, j;
+      for (i = 1; i < rows; i++) {
+        R(0, i * th / rows, tw, 0.003, 'rgba(0,0,0,.16)');
+        if (hi) for (j = 0; j < 5; j++) R(((j * 0.1 + (i % 2) * 0.05) % tw), i * th / rows, 0.003, th / rows, 'rgba(0,0,0,.12)');
+      }
+    }
+    function band(col) { R(0, 0, tw, 0.018, shade(col, 0.2)); R(0, 0.018, tw, 0.008, 'rgba(0,0,0,.14)'); }
+    var wl = wall, GL0 = '#bcd6ea', GL1 = '#4f7497', cx = tw / 2, i;
+    if (style === 'euro') { // оштукатуренный дом: высокое окно, каменное обрамление, чугунная решётка балкона
+      R(0, 0, tw, th, wl); grain(1500, 0.05); band(wl);
+      var wy = 0.055, wh = 0.2, ww = 0.19;
+      R(cx - ww / 2 - 0.024, wy - 0.034, ww + 0.048, wh + 0.04, shade(wl, 0.3));
+      R(cx - ww / 2 - 0.036, wy - 0.05, ww + 0.072, 0.018, shade(wl, 0.34));
+      glassRect(cx - ww / 2, wy, ww, wh, GL0, GL1);
+      line(cx, wy, cx, wy + wh, '#f6f2e6', 0.008); line(cx - ww / 2, wy + wh * 0.36, cx + ww / 2, wy + wh * 0.36, '#f6f2e6', 0.008);
+      R(cx - ww / 2, wy, ww, 0.012, 'rgba(0,0,0,.28)');
+      R(cx - ww / 2 - 0.04, wy + wh - 0.06, ww + 0.08, 0.006, '#25282d');
+      if (hi) for (i = 0; i < 12; i++) R(cx - ww / 2 - 0.04 + i * (ww + 0.08) / 11, wy + wh - 0.06, 0.0035, 0.06, '#25282d'); else R(cx - ww / 2 - 0.04, wy + wh - 0.05, ww + 0.08, 0.05, 'rgba(25,28,33,.55)');
+      R(cx - ww / 2 - 0.044, wy + wh, ww + 0.088, 0.014, shade(wl, 0.34)); R(cx - ww / 2 - 0.04, wy + wh + 0.014, ww + 0.08, 0.008, 'rgba(0,0,0,.22)');
+    } else if (style === 'brick') { // кирпич, прямоугольное окно с каменной перемычкой и подоконником
+      bricks(wl); R(0, 0, tw, 0.014, 'rgba(235,228,210,.7)');
+      rectWin(cx, 0.075, 0.18, 0.18, '#ece6d4', '#f6f2e6', GL0, GL1, { lintel: '#ece6d4', t: 0.016 });
+    } else if (style === 'archb') { // кирпич, высокое арочное окно с каменной оправой
+      bricks(wl); R(0, 0, tw, 0.014, 'rgba(235,228,210,.7)');
+      archWin(cx, 0.265, 0.2, 0.24, '#e9e2d0', GL0, GL1, '#f6f2e6', '#e9e2d0');
+    } else if (style === 'gov') { // камень, окно с треугольным фронтоном
+      ashlar(wl); band(wl);
+      rectWin(cx, 0.1, 0.16, 0.16, shade(wl, 0.28), '#f6f2e6', GL0, GL1, { t: 0.018 });
+      g.fillStyle = shade(wl, 0.34); g.beginPath(); g.moveTo((cx - 0.12) * kx, 0.075 * ky); g.lineTo(cx * kx, 0.026 * ky); g.lineTo((cx + 0.12) * kx, 0.075 * ky); g.closePath(); g.fill();
+      g.fillStyle = 'rgba(0,0,0,.14)'; g.beginPath(); g.moveTo((cx - 0.08) * kx, 0.072 * ky); g.lineTo(cx * kx, 0.04 * ky); g.lineTo((cx + 0.08) * kx, 0.072 * ky); g.closePath(); g.fill();
+    } else if (style === 'arcade') { // рустованный цоколь с арками
+      ashlar(shade(wl, -0.06));
+      archWin(cx, 0.3, 0.22, 0.26, shade(wl, 0.18), '#3a424a', '#161a1f', '#25282d', null);
+      if (hi) for (i = 1; i < 5; i++) line(cx - 0.11 + i * 0.044, 0.18, cx - 0.11 + i * 0.044, 0.3, '#25282d', 0.004);
+    } else if (style === 'shop') { // витрина: деревянная рама (цвет стены), вывеска сверху, глухая панель снизу
+      R(0, 0, tw, th, wl); grain(600, 0.05);
+      R(0, 0, tw, 0.075, '#eadfbd'); R(0, 0.075, tw, 0.008, 'rgba(0,0,0,.3)');
+      if (hi) for (i = 0; i < 7; i++) R(0.07 + r() * 0.5, 0.02 + r() * 0.035, 0.04 + r() * 0.05, 0.008, 'rgba(60,40,20,.65)');
+      glassRect(0.05, 0.1, tw - 0.1, 0.14, '#f7e3a6', '#9d7640');
+      for (i = 1; i < 4; i++) line(0.05 + i * (tw - 0.1) / 4, 0.1, 0.05 + i * (tw - 0.1) / 4, 0.24, wl, 0.012);
+      R(0.05, 0.1, tw - 0.1, 0.03, 'rgba(0,0,0,.2)'); line(0.05, 0.13, tw - 0.05, 0.13, wl, 0.008);
+      R(0.05, 0.24, tw - 0.1, 0.06, shade(wl, -0.2)); R(0, 0, 0.03, th, shade(wl, 0.15)); R(tw - 0.03, 0, 0.03, th, shade(wl, 0.15));
+    } else if (style === 'iron') { // каменные пилоны и широкое окно в чугунном переплёте
+      R(0, 0, tw, th, wl); grain(900, 0.05); band(wl);
+      var iw = 0.34, ix = cx - iw / 2;
+      R(ix - 0.016, 0.034, iw + 0.032, 0.236, '#2f393d');
+      glassRect(ix, 0.05, iw, 0.2, '#b2d0e4', '#46698a');
+      for (i = 1; i < 3; i++) line(ix + i * iw / 3, 0.05, ix + i * iw / 3, 0.25, '#2f393d', 0.01);
+      line(ix, 0.12, ix + iw, 0.12, '#2f393d', 0.01);
+      R(ix - 0.016, 0.25, iw + 0.032, 0.03, '#3b4448'); if (hi) for (i = 0; i < 6; i++) R(ix + 0.01 + i * iw / 6, 0.256, 0.02, 0.018, 'rgba(200,170,90,.55)');
+    } else if (style === 'dorm') { // слуховое окно на цинковой мансарде
+      R(0, 0, tw, th, wl); grain(500, 0.05);
+      archWin(cx, 0.27, 0.12, 0.19, shade(wl, 0.3), GL0, GL1, '#f6f2e6', shade(wl, 0.3));
+    } else if (style === 'clock') { // часы на башне
+      R(0, 0, tw, th, wl); grain(900, 0.05);
+      R(cx - 0.26, 0.04, 0.52, 0.52, shade(wl, 0.2));
+      g.fillStyle = '#c9a24a'; g.beginPath(); g.ellipse(cx * kx, 0.3 * ky, 0.23 * kx, 0.23 * ky, 0, 0, 7); g.fill();
+      g.fillStyle = '#f7f3e6'; g.beginPath(); g.ellipse(cx * kx, 0.3 * ky, 0.2 * kx, 0.2 * ky, 0, 0, 7); g.fill();
+      for (i = 0; i < 12; i++) { var a = i * Math.PI / 6, rr = i % 3 ? 0.17 : 0.155; line(cx + Math.sin(a) * rr, 0.3 - Math.cos(a) * rr, cx + Math.sin(a) * 0.19, 0.3 - Math.cos(a) * 0.19, '#26282c', 0.012); }
+      line(cx, 0.3, cx - 0.09, 0.3 - 0.07, '#26282c', 0.016); line(cx, 0.3, cx + 0.03, 0.3 - 0.15, '#26282c', 0.012);
+      g.fillStyle = '#26282c'; g.beginPath(); g.ellipse(cx * kx, 0.3 * ky, 0.012 * kx, 0.012 * ky, 0, 0, 7); g.fill();
+    } else { R(0, 0, tw, th, wl); }
     return c;
   }
+  function windowCanvas(style, wall) { return paintWall(style, wall, 64); }
+  function windowCanvasHD(style, wall) { return paintWall(style, wall, 256); }
   function makeKit(sc) {
     var mats = {}, wallM = {}, wallInfo = [], kitHD = false;
     function base(name) { var m = new B.StandardMaterial(name, sc); m.specularColor = B.Color3.Black(); return m; }
@@ -273,15 +309,47 @@
   }
   var kit = makeKit(scene);
 
-  // ---------- Модели зданий ----------
+  // ---------- Модели зданий (с 0.16.0 — архитектура Западной Европы начала XX века) ----------
   // Модель собирается из простых фигур и сливается в ОДНУ сетку (с несколькими материалами).
-  var RES_WALL = ['#f2d3a2', '#e9b98f', '#f4e7c8', '#d9c2a7', '#f0c9c0', '#cfe0c3', '#e3d0e8'];
-  var RES_ROOF = ['#b8553a', '#8e4a3a', '#6b4c3b', '#a0522d', '#5e6a7a', '#3f6b5a'];
-  var perUnit = { res: 1.5, office: 2.5, glass: 2.5, army: 2, gov: 2, shop: 1, plain: 0 };
+  // Стиль: доходные дома с мансардами (Париж, Осман), кирпичные виллы и школы, ар-нуво, неоклассика,
+  // ратуша с часовой башней, кирпичные фабрики с высокой трубой, чугунные порталы метро.
+  var RES_WALL = ['#efe3c4', '#e7d4a6', '#ddd0bc', '#ecd5c3', '#a9513a', '#b86c48'];   // четыре штукатурки и два кирпича
+  var BRICKS = ['#a9513a', '#b86c48'];
+  var RES_ROOF = ['#a9482f', '#4d5660', '#6a7683', '#8a4630', '#5b4a44'];
+  var STONE = '#e6ddc9', STONE2 = '#cfc5af', TRIM = '#f4efe2', ZINC = '#56616c', ZINC2 = '#66717c', SLATE = '#3d444c', TILEC = '#b04a2f',
+    PAT = '#5aa593', IRON = '#2b2f35', GOLD = '#d9b04a', BRK = '#a2503a', RED = '#c8342c', WOODC = '#6e4a2e';
 
   function Shapes(K, ox, oz) {
     var sc = K.scene, parts = [];
     function put(m, material, x, y, z) { m.position.set(x - ox, y, z - oz); m.material = material; parts.push(m); return m; }
+    // Произвольная грань-многоугольник: faces — списки точек [x,y,z] в координатах здания, ins — точка внутри тела (чтобы повернуть нормали наружу).
+    function solid(faces, color, ins) {
+      var pos = [], nor = [], uv = [], ind = [];
+      faces.forEach(function (f) {
+        var a = f[0], b = f[1], c = f[2];
+        var nx = (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]), ny = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]), nz = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+        var cx = 0, cy = 0, cz = 0; f.forEach(function (p) { cx += p[0]; cy += p[1]; cz += p[2]; }); cx /= f.length; cy /= f.length; cz /= f.length;
+        if ((cx - ins[0]) * nx + (cy - ins[1]) * ny + (cz - ins[2]) * nz < 0) { f = f.slice().reverse(); nx = -nx; ny = -ny; nz = -nz; }
+        var l = Math.hypot(nx, ny, nz) || 1, o = pos.length / 3;
+        f.forEach(function (p) { pos.push(p[0] - ox, p[1], p[2] - oz); nor.push(nx / l, ny / l, nz / l); uv.push(p[0] * 0.3, p[2] * 0.3); });
+        for (var i = 1; i < f.length - 1; i++) ind.push(o, o + i, o + i + 1);
+      });
+      var mesh = new B.Mesh('s', sc), vd = new B.VertexData();
+      vd.positions = pos; vd.normals = nor; vd.uvs = uv; vd.indices = ind; vd.applyToMesh(mesh);
+      mesh.material = K.mat(color); parts.push(mesh); return mesh;
+    }
+    // усечённая пирамида: низ — прямоугольник, верх — он же, сдвинутый внутрь на i
+    function frust(x0, z0, x1, z1, y0, i, h, color, noTop) {
+      var y1 = y0 + h, ins = [(x0 + x1) / 2, y0 + h * 0.4, (z0 + z1) / 2];
+      var fs = [
+        [[x0, y0, z1], [x1, y0, z1], [x1 - i, y1, z1 - i], [x0 + i, y1, z1 - i]],
+        [[x0, y0, z0], [x1, y0, z0], [x1 - i, y1, z0 + i], [x0 + i, y1, z0 + i]],
+        [[x0, y0, z0], [x0, y0, z1], [x0 + i, y1, z1 - i], [x0 + i, y1, z0 + i]],
+        [[x1, y0, z0], [x1, y0, z1], [x1 - i, y1, z1 - i], [x1 - i, y1, z0 + i]]
+      ];
+      if (!noTop) fs.push([[x0 + i, y1, z0 + i], [x1 - i, y1, z0 + i], [x1 - i, y1, z1 - i], [x0 + i, y1, z1 - i]]);
+      return solid(fs, color, ins);
+    }
     var api = {
       parts: parts,
       box: function (w, h, d, material, x, y, z, faceUV) {
@@ -295,6 +363,47 @@
       },
       // поворот «запекается» в вершины, затем масштаб — как в прежней версии
       bake: function (m, rx, ry, rz) { m.rotation.set(rx || 0, ry || 0, rz || 0); var p = m.position.clone(); m.position.set(0, 0, 0); m.bakeCurrentTransformIntoVertices(); m.position.copyFrom(p); return m; },
+      sph: function (rad, color, x, y, z, sy) {
+        var q = B.MeshBuilder.CreateSphere('p', { diameter: rad * 2, segments: 6 }, sc); q.scaling.y = sy || 1; return put(q, K.mat(color), x, y, z);
+      },
+      // купол: полусфера, y — уровень основания
+      dome: function (rad, color, x, y, z, sy) {
+        var q = B.MeshBuilder.CreateSphere('d', { diameter: rad * 2, segments: 14, slice: 0.5 }, sc); q.scaling.y = sy || 1; return put(q, K.mat(color), x, y, z);
+      },
+      // башня с окнами по кругу (текстура стены): uw окон по окружности, fl этажей
+      twr: function (rad, h, seg, material, x, y0, z, uw, fl) {
+        var q = B.MeshBuilder.CreateCylinder('t', { diameter: rad * 2, height: h, tessellation: seg,
+          faceUV: [new B.Vector4(0.02, 0.02, 0.03, 0.03), new B.Vector4(0, 0, uw, fl), new B.Vector4(0.02, 0.02, 0.03, 0.03)] }, sc);
+        return put(q, material, x, y0 + h / 2, z);
+      },
+      solid: solid,
+      // двускатная крыша; гребень вдоль оси ax ('x' или 'z'); end — цвет торцевых треугольников (фронтонов)
+      gable: function (x0, z0, x1, z1, y0, rh, color, ax, ov, endColor) {
+        ov = ov === undefined ? 0.05 : ov;
+        var u0 = ax === 'x' ? x0 : z0, u1 = ax === 'x' ? x1 : z1, v0 = ax === 'x' ? z0 : x0, v1 = ax === 'x' ? z1 : x1;
+        var vc = (v0 + v1) / 2, k = rh / ((v1 - v0) / 2), yE = y0 - k * ov, ua = u0 - ov * 0.6, ub = u1 + ov * 0.6, yr = y0 + rh;
+        function P(u, v, y) { return ax === 'x' ? [u, y, v] : [v, y, u]; }
+        var ins = P((u0 + u1) / 2, vc, y0 + rh * 0.3);
+        solid([[P(ua, v0 - ov, yE), P(ub, v0 - ov, yE), P(ub, vc, yr), P(ua, vc, yr)], [P(ua, v1 + ov, yE), P(ub, v1 + ov, yE), P(ub, vc, yr), P(ua, vc, yr)]], color, ins);
+        if (endColor) solid([[P(u0, v0, y0), P(u0, v1, y0), P(u0, vc, yr)], [P(u1, v0, y0), P(u1, v1, y0), P(u1, vc, yr)]], endColor, ins);
+      },
+      // вальмовая крыша (у квадрата — шатёр-пирамида)
+      hip: function (x0, z0, x1, z1, y0, rh, color, ov) {
+        ov = ov === undefined ? 0.05 : ov;
+        var w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, yr = y0 + rh, k = rh / (Math.min(w, d) / 2), yE = y0 - k * ov;
+        var xa = x0 - ov, xb = x1 + ov, za = z0 - ov, zb = z1 + ov, rx = Math.max(0, (w - d) / 2), rz = Math.max(0, (d - w) / 2), ins = [cx, y0 + rh * 0.3, cz];
+        solid([
+          [[xa, yE, zb], [xb, yE, zb], [cx + rx, yr, cz + rz], [cx - rx, yr, cz + rz]],
+          [[xa, yE, za], [xb, yE, za], [cx + rx, yr, cz - rz], [cx - rx, yr, cz - rz]],
+          [[xa, yE, za], [xa, yE, zb], [cx - rx, yr, cz + rz], [cx - rx, yr, cz - rz]],
+          [[xb, yE, za], [xb, yE, zb], [cx + rx, yr, cz + rz], [cx + rx, yr, cz - rz]]
+        ], color, ins);
+      },
+      // мансардная крыша: крутой нижний скат (hl, вглубь на i1) и пологий верхний (hu, ещё на i2)
+      mansard: function (x0, z0, x1, z1, y0, hl, hu, i1, i2, c1, c2) {
+        frust(x0, z0, x1, z1, y0, i1, hl, c1, true);
+        return frust(x0 + i1, z0 + i1, x1 - i1, z1 - i1, y0 + hl, i2, hu, c2 || c1, false);
+      },
       merge: function () {
         var m = B.Mesh.MergeMeshes(parts, true, true, undefined, false, true);
         m.refreshBoundingInfo();
@@ -306,275 +415,457 @@
 
   function buildModel(K, cat, size, seed) {
     var s = G.sizes[size], W = s.w, D = s.d, m = 0.08;
-    var r = rng(seed), S = Shapes(K, W / 2, D / 2);
-    function part(x0, z0, x1, z1, y0, h, floors, style, wall, roof, roofType, roofH) {
-      var w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-      if (style === 'plain') S.box(w, h, d, K.mat(wall), cx, y0 + h / 2, cz);
-      else {
-        var uw = Math.max(1, Math.round(w * perUnit[style])), ud = Math.max(1, Math.round(d * perUnit[style])), cap = new B.Vector4(0.02, 0.02, 0.03, 0.03);
-        S.box(w, h, d, K.wall(style, wall), cx, y0 + h / 2, cz,
-          [new B.Vector4(0, 0, uw, floors), new B.Vector4(0, 0, uw, floors), new B.Vector4(0, 0, ud, floors), new B.Vector4(0, 0, ud, floors), cap, cap]);
-      }
-      if (roofType === 'hip') {
-        var cone = B.MeshBuilder.CreateCylinder('r', { diameterTop: 0, diameterBottom: Math.SQRT2, height: 1, tessellation: 4 }, K.scene);
-        cone.material = K.mat(roof);
-        S.bake(cone, 0, Math.PI / 4, 0);
-        cone.convertToFlatShadedMesh();
-        cone.scaling.set(w * 1.12, roofH, d * 1.12);
-        cone.position.set(cx - W / 2, y0 + h + roofH / 2, cz - D / 2);
-        S.parts.push(cone);
-      } else if (roofType === 'flat') {
-        S.box(w + 0.04, 0.05, d + 0.04, K.mat(roof), cx, y0 + h + 0.025, cz);
-      } else if (roofType === 'none' && style !== 'plain') {
-        S.box(w, 0.01, d, K.mat(roof), cx, y0 + h + 0.005, cz);
-      }
+    var r = rng(seed), S = Shapes(K, W / 2, D / 2), cube = S.cube;
+    var F = [m, m, W - m, D - m];
+    function V4(a, b, c, d) { return new B.Vector4(a, b, c, d); }
+    var CAP = V4(0.02, 0.02, 0.03, 0.03);
+    // ---- общие детали ----
+    // стены с окнами: этажи по fl штук, высота этажа fh; возвращает высоту верха
+    function wallBox(x0, z0, x1, z1, y0, fl, style, col, fh) {
+      fh = fh || FH; var h = fl * fh, w = x1 - x0, d = z1 - z0, tw = TILE[style][0];
+      var uw = Math.max(1, Math.round(w / tw)), ud = Math.max(1, Math.round(d / tw));
+      S.box(w, h, d, K.wall(style, col), (x0 + x1) / 2, y0 + h / 2, (z0 + z1) / 2, [V4(0, 0, uw, fl), V4(0, 0, uw, fl), V4(0, 0, ud, fl), V4(0, 0, ud, fl), CAP, CAP]);
+      return y0 + h;
     }
-    var cube = S.cube;
+    function chim(x, z, y0, h) {
+      cube(x - 0.035, z - 0.03, x + 0.035, z + 0.03, y0, h, '#9a4b35'); cube(x - 0.047, z - 0.042, x + 0.047, z + 0.042, y0 + h, 0.025, '#d9d2c2'); cube(x - 0.03, z - 0.025, x + 0.03, z + 0.025, y0 + h + 0.025, 0.012, '#2b2b2b');
+    }
     function flag(x, y, z, color) {
       S.cyl(0.015, 0.015, 0.6, 6, '#c9ccd1', x, y + 0.3, z);
-      S.box(0.26, 0.15, 0.01, K.mat(color || '#19a7c9'), x + 0.14, y + 0.51, z);
+      S.box(0.26, 0.15, 0.01, K.mat(color || '#c8342c'), x + 0.14, y + 0.51, z);
     }
-    function tree(x, z, sc) {
-      sc = sc || 1;
-      S.cyl(0.03 * sc, 0.04 * sc, 0.2 * sc, 6, '#7a5634', x, 0.1 * sc, z);
-      S.cyl(0, 0.17 * sc, 0.42 * sc, 7, '#3f8f46', x, 0.38 * sc, z);
+    function tree(x, z, k) { k = k || 1; S.cyl(0.025 * k, 0.035 * k, 0.16 * k, 6, '#6b4a2e', x, 0.08 * k, z); S.sph(0.13 * k, '#4f8f4a', x, 0.27 * k, z, 1); }
+    function cornice(x0, z0, x1, z1, y, col) { cube(x0 - 0.035, z0 - 0.035, x1 + 0.035, z1 + 0.035, y, 0.04, col || STONE); }
+    function sband(x0, z0, x1, z1, y, col) { cube(x0 - 0.015, z0 - 0.015, x1 + 0.015, z1 + 0.015, y, 0.018, col || STONE); }
+    // чугунные балконы по сторонам: f — перед (+z), b — зад, l — слева, r — справа
+    function balc(x0, z0, x1, z1, y, sides) {
+      var BS = '#383c42', e = 0.06;
+      if (sides.indexOf('f') >= 0) { cube(x0, z1, x1, z1 + e, y, 0.022, BS); cube(x0, z1 + e - 0.008, x1, z1 + e, y + 0.022, 0.045, IRON); }
+      if (sides.indexOf('b') >= 0) { cube(x0, z0 - e, x1, z0, y, 0.022, BS); cube(x0, z0 - e, x1, z0 - e + 0.008, y + 0.022, 0.045, IRON); }
+      if (sides.indexOf('l') >= 0) { cube(x0 - e, z0, x0, z1, y, 0.022, BS); cube(x0 - e, z0, x0 - e + 0.008, z1, y + 0.022, 0.045, IRON); }
+      if (sides.indexOf('r') >= 0) { cube(x1, z0, x1 + e, z1, y, 0.022, BS); cube(x1 + e - 0.008, z0, x1 + e, z1, y + 0.022, 0.045, IRON); }
     }
-    function cross(x, y, z, color, flat) {
+    // полосатый тент над витриной
+    function awning(x0, x1, z, y, dp, ca, cb) {
+      var n = Math.max(2, Math.round((x1 - x0) / 0.1)), w = (x1 - x0) / n;
+      for (var i = 0; i < n; i++) S.bake(S.box(w, 0.012, dp, K.mat(i % 2 ? cb : ca), x0 + (i + 0.5) * w, y, z + dp / 2), 0.45, 0, 0);
+      cube(x0, z + dp - 0.005, x1, z + dp + 0.005, y - dp * 0.4 - 0.012, 0.02, ca);
+    }
+    // слуховое окно с двускатной крышей; (fx,fz) — центр лицевой стенки на скате, dir: 0 +z, 1 +x, 2 -z, 3 -x
+    function dorm(fx, fz, yb, dir, wc, rc) {
+      var w = 0.13, h = 0.14, dp = 0.1, dx = [0, 1, 0, -1][dir], dz = [1, 0, -1, 0][dir];
+      var cx = fx - dx * dp / 2, cz = fz - dz * dp / 2, bw = dir % 2 ? dp : w, bd = dir % 2 ? w : dp, fu = [0, 2, 1, 3][dir], uv = [CAP, CAP, CAP, CAP, CAP, CAP];
+      uv[fu] = V4(0, 0, 1, 1);
+      S.box(bw, h, bd, K.wall('dorm', wc), cx, yb + h / 2, cz, uv);
+      S.gable(cx - bw / 2, cz - bd / 2, cx + bw / 2, cz + bd / 2, yb + h, 0.07, rc, dir % 2 ? 'x' : 'z', 0.02, wc);
+    }
+    // ряд слуховых окон по скату мансарды (стороны sides), n — по шагу ≈ 0.46
+    function mdorms(X0, Z0, X1, Z1, y0, hl, i1, wc, rc, sides, yd) {
+      yd = yd || 0.045; var ins = i1 * yd / hl;
+      function row(a0, a1, fixed, dir, alongX) {
+        var n = Math.max(1, Math.round((a1 - a0) / 0.46));
+        for (var k = 0; k < n; k++) { var a = a0 + (k + 0.5) * (a1 - a0) / n; if (alongX) dorm(a, fixed, y0 + yd, dir, wc, rc); else dorm(fixed, a, y0 + yd, dir, wc, rc); }
+      }
+      if (sides.indexOf('f') >= 0) row(X0 + 0.1, X1 - 0.1, Z1 - ins, 0, true);
+      if (sides.indexOf('b') >= 0) row(X0 + 0.1, X1 - 0.1, Z0 + ins, 2, true);
+      if (sides.indexOf('l') >= 0) row(Z0 + 0.1, Z1 - 0.1, X0 + ins, 3, false);
+      if (sides.indexOf('r') >= 0) row(Z0 + 0.1, Z1 - 0.1, X1 - ins, 1, false);
+    }
+    function mans(x0, z0, x1, z1, y, hl, hu, i1, i2, col, col2, wc, sides) { // карниз + мансарда + слуховые окна
+      cube(x0 - 0.03, z0 - 0.03, x1 + 0.03, z1 + 0.03, y, 0.04, STONE);
+      S.mansard(x0 - 0.01, z0 - 0.01, x1 + 0.01, z1 + 0.01, y + 0.04, hl, hu, i1, i2, col, col2);
+      if (sides) mdorms(x0 - 0.01, z0 - 0.01, x1 + 0.01, z1 + 0.01, y + 0.04, hl, i1, wc || '#cfc6b2', col, sides);
+      return y + 0.04 + hl + hu;
+    }
+    function cross(x, y, z, color, flat) { // крест
       if (flat) { cube(x - 0.25, z - 0.07, x + 0.25, z + 0.07, y, 0.03, color); cube(x - 0.07, z - 0.25, x + 0.07, z + 0.25, y, 0.03, color); }
       else { cube(x - 0.1, z - 0.012, x + 0.1, z + 0.012, y - 0.03, 0.06, color); cube(x - 0.03, z - 0.012, x + 0.03, z + 0.012, y - 0.1, 0.2, color); }
     }
-    var F = [m, m, W - m, D - m];
+    function door(x0, x1, z, h, col) { cube(x0, z - 0.006, x1, z + 0.008, 0, h, col || '#4a3322'); }
+    function steps(x0, x1, z, n, wd) { for (var i = 0; i < n; i++) cube(x0 - i * 0.01, z + (n - 1 - i) * wd, x1 + i * 0.01, z + (n - i) * wd + 0.01, 0, 0.022 * (i + 1), STONE2); }
+    function lamp(x, z, h) { // газовый фонарь
+      h = h || 0.32; S.cyl(0.008, 0.012, h, 6, '#1f3a2f', x, h / 2, z); S.cyl(0.02, 0.014, 0.012, 6, '#1f3a2f', x, 0.02, z); S.sph(0.026, '#fff1b8', x, h + 0.02, z, 1.2);
+    }
+    function pavilionRoof(x0, z0, x1, z1, y, rh, col) { S.hip(x0, z0, x1, z1, y, rh, col, 0.04); }
 
+    var wc, rc, br, st;
     if (cat === 'res') {
-      var wall = pick(r, RES_WALL), roof = pick(r, RES_ROOF);
-      if (size === '1x1') { part(F[0], F[1], F[2], F[3], 0, 0.5, 1, 'res', wall, roof, 'hip', 0.38); cube(0.62, 0.3, 0.72, 0.4, 0.55, 0.35, '#8a6b5a'); }
-      else if (size === '2x1') { part(F[0], F[1], F[2], F[3], 0, 0.55, 1, 'res', wall, roof, 'hip', 0.42); cube(1.45, 0.35, 1.56, 0.46, 0.6, 0.35, '#8a6b5a'); tree(0.25, 0.85, 0.6); }
-      else if (size === '2x2') { part(F[0], F[1], F[2], F[3], 0, 1.5, 5, 'res', wall, roof, 'flat'); cube(0.4, 0.4, 0.75, 0.75, 1.55, 0.2, '#b9b2a6'); }
-      else {
-        part(m, m, W - m, 1.7, 0, 1.8, 6, 'res', wall, roof, 'flat');
-        part(m, 1.7, 1.7, D - m, 0, 1.8, 6, 'res', pick(r, RES_WALL), roof, 'flat');
-        part(2.3, 2.3, W - m, D - m, 0, 3.0, 10, 'res', wall, roof, 'flat');
-        cube(1.75, 1.75, 3.92, 2.25, 0, 0.02, '#7fb25e'); cube(1.75, 2.25, 2.25, 3.92, 0, 0.02, '#7fb25e');
-        tree(2.0, 3.4); tree(2.0, 2.6, 0.8); tree(3.2, 2.0, 0.9);
+      wc = pick(r, RES_WALL); rc = pick(r, RES_ROOF); br = BRICKS.indexOf(wc) >= 0; st = br ? 'brick' : 'euro';
+      if (size === '1x1') { // вилла начала века: щипцовая крыша, эркер, труба, палисадник
+        var y1 = wallBox(0.12, 0.16, 0.88, 0.84, 0, 2, st, wc);
+        cube(0.1, 0.14, 0.9, 0.86, 0, 0.05, STONE2); sband(0.12, 0.16, 0.88, 0.84, 0.3, br ? STONE : TRIM);
+        S.gable(0.12, 0.16, 0.88, 0.84, y1, 0.3, rc, 'x', 0.05, wc);
+        var by = wallBox(0.3, 0.84, 0.62, 0.95, 0, 1, st, wc); S.hip(0.3, 0.84, 0.62, 0.95, by, 0.12, rc, 0.02);
+        door(0.7, 0.8, 0.842, 0.19); S.gable(0.67, 0.84, 0.83, 0.93, 0.2, 0.05, rc, 'z', 0.015);
+        chim(0.22, 0.5, y1, 0.42);
+        cube(0.08, 0.96, 0.92, 0.974, 0.02, 0.014, TRIM); cube(0.08, 0.96, 0.92, 0.974, 0.065, 0.014, TRIM);
+        [0.1, 0.3, 0.5, 0.7, 0.9].forEach(function (x) { cube(x - 0.01, 0.958, x + 0.01, 0.976, 0, 0.08, TRIM); });
+        tree(0.2, 0.91, 0.55);
+      } else if (size === '2x1') { // дом на две семьи: две половины, каждая со своим щипцом, эркером и входом
+        var wc2 = pick(r, RES_WALL), st2 = BRICKS.indexOf(wc2) >= 0 ? 'brick' : 'euro';
+        var yy = wallBox(0.1, 0.14, 1.0, 0.86, 0, 2, st, wc); wallBox(1.0, 0.14, 1.9, 0.86, 0, 2, st2, wc2);
+        cube(0.08, 0.12, 1.92, 0.88, 0, 0.05, STONE2);
+        S.gable(0.1, 0.14, 1.0, 0.86, yy, 0.3, rc, 'z', 0.03, wc); S.gable(1.0, 0.14, 1.9, 0.86, yy, 0.3, rc, 'z', 0.03, wc2);
+        [[0.28, 0.58, st, wc], [1.42, 1.72, st2, wc2]].forEach(function (e) { var q = wallBox(e[0], 0.86, e[1], 0.96, 0, 1, e[2], e[3]); S.hip(e[0], 0.86, e[1], 0.96, q, 0.11, rc, 0.02); });
+        door(0.72, 0.82, 0.862, 0.19); S.gable(0.69, 0.86, 0.85, 0.94, 0.2, 0.05, rc, 'z', 0.015);
+        door(1.18, 1.28, 0.862, 0.19); S.gable(1.15, 0.86, 1.31, 0.94, 0.2, 0.05, rc, 'z', 0.015);
+        chim(1.0, 0.5, yy, 0.4); chim(0.4, 0.4, yy + 0.05, 0.28); chim(1.6, 0.4, yy + 0.05, 0.28);
+        tree(0.2, 0.93, 0.5); tree(1.8, 0.93, 0.5);
+      } else if (size === '2x2') { // доходный дом в духе османовского Парижа: рустованный цоколь, балконы, мансарда с окнами, трубы
+        var a = m, b = W - m, y2 = wallBox(a, a, b, b, 0, 1, 'arcade', '#ddd2bb', 0.34), y3 = wallBox(a, a, b, b, y2, 4, st, wc);
+        sband(a, a, b, b, y2 - 0.012, STONE); cornice(a, a, b, b, y3 - 0.005, STONE);
+        balc(a + 0.04, a + 0.04, b - 0.04, b - 0.04, y2, 'fblr'); balc(a + 0.04, a + 0.04, b - 0.04, b - 0.04, y3 - 0.3, 'fb');
+        var yt = mans(a, a, b, b, y3 + 0.035, 0.26, 0.07, 0.14, 0.2, ZINC, ZINC2, '#cfc6b2', 'fbrl');
+        [[0.62, 0.62], [1.38, 0.62], [0.62, 1.38], [1.38, 1.38]].forEach(function (c) { chim(c[0], c[1], yt - 0.03, 0.2); });
+        door(0.86, 1.14, b + 0.001, 0.26, '#2c241c'); cube(0.8, b, 1.2, b + 0.05, 0.28, 0.03, STONE);
+      } else { // жилой комплекс: квартал с внутренним двором, сквозная арка, угловые башенки
+        var CORN = [[m, m, 1.0, 1.0], [3.0, m, W - m, 1.0], [m, 3.0, 1.0, D - m], [3.0, 3.0, W - m, D - m]];
+        var WING = [[1.0, m, 3.0, 1.0, 'z'], [1.0, 3.0, 3.0, D - m, 'z'], [m, 1.0, 1.0, 3.0, 'x'], [3.0, 1.0, W - m, 3.0, 'x']];
+        var base = 0.34, ytw = 0, ytc = 0;
+        CORN.forEach(function (c) {
+          var q = wallBox(c[0], c[1], c[2], c[3], 0, 1, 'arcade', '#ddd2bb', base); ytc = wallBox(c[0], c[1], c[2], c[3], q, 5, st, wc);
+          cornice(c[0], c[1], c[2], c[3], ytc - 0.005, STONE); S.hip(c[0], c[1], c[2], c[3], ytc + 0.035, 0.38, ZINC, 0.05);
+        });
+        WING.forEach(function (w, i) {
+          var x0 = w[0], z0 = w[1], x1 = w[2], z1 = w[3];
+          if (i === 1) { // передний корпус с аркой посередине
+            wallBox(x0, z0, 1.8, z1, 0, 1, 'arcade', '#ddd2bb', base); wallBox(2.2, z0, x1, z1, 0, 1, 'arcade', '#ddd2bb', base);
+            cube(1.8, z0, 2.2, z1, 0, 0.012, '#6c6760'); cube(1.8, z0, 1.82, z1, 0, base, STONE2); cube(2.18, z0, 2.2, z1, 0, base, STONE2);
+            cube(1.8, z0 + 0.4, 2.2, z0 + 0.42, 0, 0.3, '#15181c');
+            cube(1.78, z0, 2.22, z1, 0.3, 0.04, STONE);
+            ytw = wallBox(x0, z0, x1, z1, base, 4, st, wc);
+          } else { var q2 = wallBox(x0, z0, x1, z1, 0, 1, 'arcade', '#ddd2bb', base); ytw = wallBox(x0, z0, x1, z1, q2, 4, st, wc); }
+          cornice(x0, z0, x1, z1, ytw - 0.005, STONE);
+          S.gable(x0, z0, x1, z1, ytw + 0.035, 0.3, i % 2 ? ZINC : ZINC2, w[4], 0.05, STONE2);
+        });
+        balc(1.0, 3.0, 3.0, D - m, base, 'f');
+        // двор: газон, дорожки, фонтан, деревья
+        cube(1.04, 1.04, 2.96, 2.96, 0, 0.02, '#7fb25e'); cube(1.96, 1.04, 2.04, 2.96, 0.02, 0.006, '#d9cfb7'); cube(1.04, 1.96, 2.96, 2.04, 0.02, 0.006, '#d9cfb7');
+        S.cyl(0.22, 0.24, 0.07, 14, '#cfc9bb', 2.0, 0.055, 2.0); S.cyl(0.19, 0.19, 0.01, 14, '#7fc1e0', 2.0, 0.095, 2.0); S.cyl(0.02, 0.03, 0.18, 8, '#cfc9bb', 2.0, 0.17, 2.0);
+        tree(1.35, 1.35, 0.9); tree(2.65, 1.35, 0.9); tree(1.35, 2.65, 0.9); tree(2.65, 2.65, 0.9);
+        // угловые башенки в стиле ар-нуво
+        [[0.17, 3.83], [3.83, 0.17]].forEach(function (p) {
+          S.twr(0.17, 1.0, 10, K.wall('euro', wc), p[0], 0.9, p[1], 2, 3);
+          S.cyl(0.19, 0.19, 0.03, 10, STONE, p[0], 1.9, p[1]); S.cyl(0, 0.2, 0.5, 10, PAT, p[0], 2.17, p[1]); S.sph(0.025, GOLD, p[0], 2.46, p[1], 1);
+        });
+        [[1.5, 0.55], [2.5, 0.55], [0.55, 1.5], [3.45, 1.5], [0.55, 2.5], [3.45, 2.5]].forEach(function (c) { chim(c[0], c[1], 1.5, 0.3); });
       }
     } else if (cat === 'social') {
-      if (size === '1x1') { part(F[0], F[1], F[2], F[3], 0, 0.5, 1, 'shop', '#f3f0e6', '#9aa7ad', 'flat'); cross(0.5, 0.42, D - m + 0.015, '#2fa64a'); }
-      else if (size === '2x1') {
-        part(F[0], F[1], F[2], F[3], 0, 0.5, 1, 'res', '#fff1c9', '#e5664d', 'hip', 0.35);
-        cube(0.15, 0.78, 0.45, 0.92, 0, 0.05, '#f2d16b');
-      } else if (size === '2x2') {
-        part(m, m, W - m, 1.25, 0, 0.95, 3, 'res', '#efe0c8', '#7a8d99', 'flat');
-        part(m, 1.25, 1.05, D - m, 0, 0.7, 2, 'office', '#e9d6b8', '#7a8d99', 'flat');
-        cube(1.15, 1.35, 1.92, 1.92, 0, 0.02, '#c9725a'); flag(1.85, 0.97, 0.15);
-      } else {
-        part(F[0], F[1], F[2], F[3], 0, 0.7, 2, 'office', '#f4f6f7', '#9aa7ad', 'flat');
-        part(0.6, 0.8, 3.4, 3.2, 0.7, 1.6, 5, 'res', '#f4f6f7', '#b5c0c6', 'flat');
-        cross(2.0, 2.35, 2.0, '#e03b3b', true);
-        cube(0.3, D - m - 0.02, 1.0, D - m + 0.25, 0, 0.35, '#e03b3b');
+      if (size === '1x1') { // аптека в стиле модерн: зелёная витрина, ступенчатый фронтон, подвесной крест
+        var g1 = wallBox(0.1, 0.16, 0.9, 0.84, 0, 1, 'shop', '#2f6f55', 0.36), g2 = wallBox(0.1, 0.16, 0.9, 0.84, g1, 1, 'euro', '#efe6cc');
+        sband(0.1, 0.16, 0.9, 0.84, g1 - 0.01, STONE);
+        cube(0.1, 0.78, 0.9, 0.86, g2, 0.09, '#efe6cc'); cube(0.22, 0.78, 0.78, 0.86, g2 + 0.09, 0.09, '#efe6cc'); cube(0.36, 0.78, 0.64, 0.86, g2 + 0.18, 0.08, '#efe6cc');
+        cube(0.08, 0.76, 0.92, 0.88, g2 + 0.085, 0.012, STONE); cube(0.2, 0.76, 0.8, 0.88, g2 + 0.175, 0.012, STONE); S.sph(0.03, GOLD, 0.5, g2 + 0.3, 0.82, 1);
+        S.gable(0.1, 0.16, 0.9, 0.84, g2, 0.26, TILEC, 'z', 0.0, '#efe6cc');
+        awning(0.14, 0.86, 0.84, 0.33, 0.1, '#2f6f55', '#f1ece0');
+        cube(0.93, 0.84, 0.97, 0.9, 0.47, 0.02, IRON);
+        cube(0.9, 0.9, 0.99, 0.914, 0.42, 0.03, '#2fa64a'); cube(0.935, 0.9, 0.955, 0.914, 0.36, 0.09, '#2fa64a');
+        chim(0.78, 0.4, g2, 0.38);
+      } else if (size === '2x1') { // детский сад: невысокий дом в стиле «города-сада», высокая черепичная крыша, фонарь, площадка
+        var yk = wallBox(0.1, 0.12, 1.9, 0.62, 0, 1, 'euro', '#f3e4b4', 0.4);
+        cube(0.08, 0.1, 1.92, 0.64, 0, 0.05, STONE2);
+        S.hip(0.1, 0.12, 1.9, 0.62, yk, 0.36, '#c25a35', 0.06);
+        dorm(0.55, 0.56, yk + 0.02, 0, '#f3e4b4', '#c25a35'); dorm(1.45, 0.56, yk + 0.02, 0, '#f3e4b4', '#c25a35');
+        wallBox(0.75, 0.62, 1.25, 0.78, 0, 1, 'euro', '#f8edc9', 0.32); S.gable(0.75, 0.62, 1.25, 0.78, 0.32, 0.16, '#c25a35', 'z', 0.03, '#f8edc9');
+        door(0.93, 1.07, 0.782, 0.2, '#3f7f9c'); steps(0.9, 1.1, 0.78, 2, 0.04);
+        chim(0.35, 0.3, yk + 0.12, 0.3); chim(1.65, 0.3, yk + 0.12, 0.3);
+        cube(0.06, 0.82, 0.9, 0.834, 0.02, 0.012, TRIM); cube(1.1, 0.82, 1.94, 0.834, 0.02, 0.012, TRIM);
+        [0.1, 0.3, 0.5, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7, 1.9].forEach(function (x) { cube(x - 0.008, 0.818, x + 0.008, 0.836, 0, 0.07, TRIM); });
+        cube(0.2, 0.86, 0.55, 0.96, 0, 0.025, '#e6cf8f');                                                    // песочница
+        cube(1.4, 0.88, 1.43, 0.91, 0, 0.2, '#7a5634'); cube(1.7, 0.88, 1.73, 0.91, 0, 0.2, '#7a5634'); cube(1.4, 0.88, 1.73, 0.91, 0.2, 0.025, '#7a5634'); // качели
+        tree(1.1, 0.93, 0.5);
+      } else if (size === '2x2') { // школа: красный кирпич с каменными поясами, часовая башня с медным шпилем
+        var BR = '#a64f3a', ysc = wallBox(0.08, 0.95, 1.92, 1.92, 0, 3, 'archb', BR);
+        wallBox(0.08, 0.08, 0.7, 0.95, 0, 3, 'archb', BR); wallBox(1.3, 0.08, 1.92, 0.95, 0, 3, 'archb', BR);
+        [[0.08, 0.95, 1.92, 1.92], [0.08, 0.08, 0.7, 0.95], [1.3, 0.08, 1.92, 0.95]].forEach(function (q) { sband(q[0], q[1], q[2], q[3], 0.29, STONE); sband(q[0], q[1], q[2], q[3], 0.59, STONE); cornice(q[0], q[1], q[2], q[3], ysc - 0.005, STONE); });
+        S.gable(0.08, 0.95, 1.92, 1.92, ysc + 0.035, 0.3, SLATE, 'x', 0.05, BR);
+        S.gable(0.08, 0.08, 0.7, 0.95, ysc + 0.035, 0.28, SLATE, 'z', 0.04, BR); S.gable(1.3, 0.08, 1.92, 0.95, ysc + 0.035, 0.28, SLATE, 'z', 0.04, BR);
+        var yw = wallBox(0.78, 1.48, 1.22, 1.94, 0, 5, 'archb', BR); sband(0.78, 1.48, 1.22, 1.94, 0.29, STONE); sband(0.78, 1.48, 1.22, 1.94, 0.59, STONE);
+        S.box(0.4, 0.4, 0.5, K.wall('clock', '#e0d7c2'), 1.0, yw + 0.2, 1.71, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP, CAP, CAP]);
+        cornice(0.78, 1.48, 1.22, 1.94, yw + 0.4, STONE); S.hip(0.76, 1.46, 1.24, 1.96, yw + 0.44, 0.5, PAT, 0.04);
+        S.cyl(0.006, 0.012, 0.18, 6, GOLD, 1.0, yw + 0.44 + 0.5 + 0.08, 1.71); flag(1.0, yw + 1.05, 1.71, '#c8342c');
+        door(0.9, 1.1, 1.945, 0.2); steps(0.84, 1.16, 1.94, 2, 0.03);
+        cube(0.7, 0.08, 1.3, 0.95, 0, 0.012, '#cdbf9b'); tree(1.0, 0.45, 0.7);
+        chim(0.5, 1.4, ysc + 0.04, 0.3); chim(1.5, 1.4, ysc + 0.04, 0.3); chim(0.4, 0.4, ysc + 0.04, 0.26); chim(1.6, 0.4, ysc + 0.04, 0.26);
+      } else { // больница-павильон: центральный корпус с медным куполом, боковые крылья, красный крест, навес приёма
+        var HS = '#ede5d1', yh = wallBox(1.4, 2.0, 2.6, 3.78, 0, 4, 'gov', HS);
+        cornice(1.4, 2.0, 2.6, 3.78, yh - 0.005, STONE); sband(1.4, 2.0, 2.6, 3.78, 0.5, STONE2);
+        var yl = wallBox(0.08, 2.4, 1.4, 3.78, 0, 3, 'gov', HS); var yr2 = wallBox(2.6, 2.4, 3.92, 3.78, 0, 3, 'gov', HS);
+        cornice(0.08, 2.4, 1.4, 3.78, yl - 0.005, STONE); cornice(2.6, 2.4, 3.92, 3.78, yl - 0.005, STONE);
+        S.hip(0.08, 2.4, 1.4, 3.78, yl + 0.035, 0.28, SLATE, 0.05); S.hip(2.6, 2.4, 3.92, 3.78, yl + 0.035, 0.28, SLATE, 0.05);
+        var BRH = '#b05a40';
+        wallBox(0.08, 0.08, 1.0, 2.4, 0, 3, 'brick', BRH); wallBox(3.0, 0.08, 3.92, 2.4, 0, 3, 'brick', BRH);
+        [[0.08, 0.08, 1.0, 2.4], [3.0, 0.08, 3.92, 2.4]].forEach(function (q) { cornice(q[0], q[1], q[2], q[3], 0.895, STONE); S.gable(q[0], q[1], q[2], q[3], 0.935, 0.3, SLATE, 'z', 0.04, BRH); sband(q[0], q[1], q[2], q[3], 0.29, STONE); sband(q[0], q[1], q[2], q[3], 0.59, STONE); });
+        S.hip(1.4, 2.0, 2.6, 3.78, yh + 0.035, 0.3, SLATE, 0.05);
+        S.cyl(0.3, 0.3, 0.26, 14, HS, 2.0, yh + 0.035 + 0.3 + 0.0, 2.9); S.dome(0.31, PAT, 2.0, yh + 0.035 + 0.43, 2.9, 0.95);
+        S.cyl(0.07, 0.09, 0.14, 10, HS, 2.0, yh + 0.035 + 0.43 + 0.3 + 0.05, 2.9); S.cyl(0, 0.08, 0.14, 10, PAT, 2.0, yh + 0.035 + 0.43 + 0.3 + 0.19, 2.9); S.sph(0.02, GOLD, 2.0, yh + 0.035 + 0.43 + 0.3 + 0.28, 2.9, 1);
+        cross(2.0, 0.98, 3.785, RED, true); S.bake(S.box(0.5, 0.012, 0.14, K.mat(RED), 2.0, 1.0, 3.8), Math.PI / 2, 0, 0); S.bake(S.box(0.14, 0.012, 0.5, K.mat(RED), 2.0, 1.0, 3.8), Math.PI / 2, 0, 0);
+        cube(1.6, 3.78, 2.4, 3.96, 0.42, 0.04, '#7a8a96'); [1.62, 2.38].forEach(function (x) { cube(x - 0.02, 3.9, x + 0.02, 3.94, 0, 0.42, STONE); });
+        door(1.85, 2.15, 3.781, 0.3, '#3c4a52'); steps(1.7, 2.3, 3.78, 2, 0.05);
+        cube(1.04, 0.1, 2.96, 2.38, 0, 0.02, '#7fb25e'); cube(1.96, 0.1, 2.04, 2.38, 0.02, 0.006, '#d9cfb7');
+        S.cyl(0.2, 0.22, 0.07, 14, '#cfc9bb', 2.0, 1.2, 1.2); S.cyl(0.17, 0.17, 0.01, 14, '#7fc1e0', 2.0, 0.095, 1.2);
+        tree(1.4, 0.5, 0.9); tree(2.6, 0.5, 0.9); tree(1.4, 1.9, 0.9); tree(2.6, 1.9, 0.9); tree(1.5, 1.2, 0.7); tree(2.5, 1.2, 0.7);
+        chim(0.9, 0.5, 1.0, 0.3); chim(3.1, 0.5, 1.0, 0.3);
       }
     } else if (cat === 'gov') {
-      if (size === '1x1') { part(F[0], F[1], F[2], F[3], 0, 0.5, 1, 'gov', '#e8e3d2', '#3a6ea5', 'hip', 0.3); cube(0.75, D - m, 0.86, D - m + 0.1, 0, 0.22, '#2f6fc2'); }
-      else if (size === '2x1') {
-        part(F[0], F[1], F[2], F[3], 0, 0.75, 2, 'office', '#e3e7ee', '#7d8794', 'flat');
-        cube(m - 0.01, m - 0.01, W - m + 0.01, D - m + 0.01, 0.33, 0.06, '#2c5aa0');
-        flag(1.8, 0.8, 0.2);
-      } else if (size === '2x2') {
-        part(m, m, W - m, D - 0.45, 0, 1.0, 3, 'gov', '#e6e2d6', '#8c949e', 'flat');
-        for (var i = 0; i < 5; i++) S.cyl(0.045, 0.05, 0.9, 10, '#f5f2ea', 0.25 + i * 0.375, 0.45, D - 0.22);
-        cube(m, D - 0.45, W - m, D - m, 0.9, 0.12, '#e6e2d6');
-        cube(m, D - 0.45, W - m, D - m + 0.04, 0, 0.05, '#cfcabd');
-        flag(1.0, 1.05, 0.8);
-      } else {
-        part(F[0], F[1], F[2], F[3], 0, 0.8, 2, 'gov', '#ece6d6', '#8c949e', 'flat');
-        part(0.8, 0.6, 3.2, 3.0, 0.8, 1.4, 4, 'gov', '#f1ebdc', '#8c949e', 'flat');
-        var dome = B.MeshBuilder.CreateSphere('d', { diameter: 1.1, segments: 12, slice: 0.5 }, K.scene);
-        dome.material = K.mat('#3f8fbf'); dome.position.set(2.0 - W / 2, 2.25, 1.8 - D / 2); S.parts.push(dome);
-        flag(2.0, 2.8, 1.8);
-        for (var j = 0; j < 6; j++) S.cyl(0.05, 0.055, 0.75, 10, '#fbf8f0', 0.9 + j * 0.44, 0.4, D - 0.02);
-        cube(0.7, D - 0.1, 3.3, D - 0.0, 0.76, 0.1, '#ece6d6');
+      if (size === '1x1') { // почтовое отделение: каменное здание с мансардой, часы и красная почтовая тумба
+        var gp = wallBox(0.1, 0.16, 0.9, 0.84, 0, 1, 'arcade', '#e3dbc8', 0.34), yp = wallBox(0.1, 0.16, 0.9, 0.84, gp, 1, 'gov', '#e3dbc8');
+        sband(0.1, 0.16, 0.9, 0.84, gp - 0.01, STONE); cube(0.3, 0.84, 0.7, 0.855, gp - 0.07, 0.06, '#2a4f8f');
+        var ym = mans(0.1, 0.16, 0.9, 0.84, yp, 0.17, 0.05, 0.1, 0.16, ZINC, ZINC2, '#cfc6b2', 'f');
+        S.box(0.16, 0.16, 0.1, K.wall('clock', '#e3dbc8'), 0.5, yp + 0.12, 0.86, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP, CAP, CAP]);
+        flag(0.14, ym - 0.04, 0.22, '#2a4f8f');
+        S.cyl(0.045, 0.045, 0.16, 10, RED, 0.22, 0.08, 0.93); S.sph(0.045, RED, 0.22, 0.16, 0.93, 0.6);
+        door(0.43, 0.57, 0.842, 0.22, '#3a2a1c');
+      } else if (size === '2x1') { // полицейский участок: кирпич, угловая башенка, синий фонарь у входа
+        var BP = '#a4533c', yq = wallBox(0.1, 0.14, 1.9, 0.86, 0, 3, 'archb', BP);
+        sband(0.1, 0.14, 1.9, 0.86, 0.29, STONE); sband(0.1, 0.14, 1.9, 0.86, 0.59, STONE); cornice(0.1, 0.14, 1.9, 0.86, yq - 0.005, STONE);
+        S.hip(0.1, 0.14, 1.9, 0.86, yq + 0.035, 0.34, SLATE, 0.05);
+        wallBox(0.78, 0.72, 1.22, 0.96, 0, 3, 'archb', BP); cornice(0.78, 0.72, 1.22, 0.96, yq - 0.005, STONE); S.gable(0.78, 0.72, 1.22, 0.96, yq + 0.035, 0.2, SLATE, 'z', 0.03, BP);
+        door(0.9, 1.1, 0.962, 0.22, '#2c3a52'); steps(0.84, 1.16, 0.96, 1, 0.02);
+        S.twr(0.14, 0.9, 8, K.wall('archb', BP), 0.2, 0, 0.74, 2, 3); S.cyl(0.16, 0.16, 0.03, 8, STONE, 0.2, 0.915, 0.74); S.cyl(0, 0.18, 0.32, 8, SLATE, 0.2, 1.09, 0.74);
+        S.cyl(0.006, 0.006, 0.22, 6, IRON, 0.74, 0.11, 0.97); S.sph(0.035, '#3f8cf0', 0.74, 0.28, 0.97, 1.2);
+        chim(0.45, 0.4, yq, 0.4); chim(1.55, 0.4, yq, 0.4); flag(1.0, yq + 0.2, 0.5, '#2a4f8f');
+      } else if (size === '2x2') { // здание суда: неоклассика, портик из шести колонн с фронтоном, купол-фонарь
+        cube(0.06, 1.5, 1.94, 1.96, 0, 0.06, STONE2);
+        var yc = wallBox(0.08, 0.08, 1.92, 1.55, 0, 3, 'gov', '#e8e2d2'); cornice(0.08, 0.08, 1.92, 1.55, yc - 0.005, STONE);
+        S.hip(0.08, 0.08, 1.92, 1.55, yc + 0.035, 0.22, SLATE, 0.04);
+        for (var kcol = 0; kcol < 6; kcol++) { var cxk = 0.45 + kcol * 0.22; S.cyl(0.032, 0.036, 0.78, 10, TRIM, cxk, 0.06 + 0.39, 1.82); S.cyl(0.048, 0.04, 0.03, 10, STONE, cxk, 0.855, 1.82); S.cyl(0.044, 0.044, 0.02, 10, STONE, cxk, 0.065, 1.82); }
+        cube(0.36, 1.58, 1.64, 1.94, 0.87, 0.07, STONE); S.gable(0.34, 1.56, 1.66, 1.96, 0.94, 0.17, STONE, 'z', 0.0, '#f0ebdc');
+        cube(0.4, 1.9, 1.6, 1.98, 0.0, 0.03, STONE2); door(0.88, 1.12, 1.552, 0.42, '#3a2a1c');
+        S.cyl(0.2, 0.2, 0.22, 12, STONE, 1.0, yc + 0.035 + 0.14, 0.82); S.dome(0.2, PAT, 1.0, yc + 0.035 + 0.25, 0.82, 0.95); S.cyl(0.006, 0.01, 0.16, 6, GOLD, 1.0, yc + 0.035 + 0.25 + 0.27, 0.82);
+        flag(0.2, yc + 0.0, 0.3, '#c8342c');
+      } else { // ратуша (акимат): часовая башня со шпилем, мансардные крылья, угловые башенки
+        var HC = '#ece4d0', yt1 = wallBox(0.9, 0.5, 3.1, 3.8, 0, 4, 'gov', HC);
+        cornice(0.9, 0.5, 3.1, 3.8, yt1 - 0.005, STONE); sband(0.9, 0.5, 3.1, 3.8, 0.5, STONE2);
+        var ywng = wallBox(0.08, 1.2, 0.9, 3.8, 0, 3, 'gov', HC); wallBox(3.1, 1.2, 3.92, 3.8, 0, 3, 'gov', HC);
+        cornice(0.08, 1.2, 0.9, 3.8, ywng - 0.005, STONE); cornice(3.1, 1.2, 3.92, 3.8, ywng - 0.005, STONE);
+        mans(0.08, 1.2, 0.9, 3.8, ywng, 0.2, 0.05, 0.16, 0.18, ZINC, ZINC2, '#cfc6b2', 'f'); mans(3.1, 1.2, 3.92, 3.8, ywng, 0.2, 0.05, 0.16, 0.18, ZINC, ZINC2, '#cfc6b2', 'f');
+        mans(0.9, 0.5, 3.1, 3.8, yt1, 0.3, 0.08, 0.3, 0.4, SLATE, '#5a636d', '#cfc6b2', 'fbrl');
+        var ytw2 = wallBox(1.7, 3.0, 2.3, 3.7, yt1 - 0.4 + 0.4, 5, 'gov', HC);          // башня
+        cornice(1.7, 3.0, 2.3, 3.7, ytw2 - 0.005, STONE);
+        S.box(0.5, 0.42, 0.5, K.wall('clock', '#e8dfc9'), 2.0, ytw2 + 0.21, 3.35, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP]);
+        cornice(1.72, 3.02, 2.28, 3.68, ytw2 + 0.42, STONE);
+        var ybf = wallBox(1.76, 3.06, 2.24, 3.64, ytw2 + 0.46, 1, 'arcade', '#e8dfc9', 0.3);
+        S.hip(1.7, 3.0, 2.3, 3.7, ybf + 0.0, 0.75, PAT, 0.05); S.cyl(0.008, 0.014, 0.28, 6, GOLD, 2.0, ybf + 0.75 + 0.12, 3.35); S.sph(0.03, GOLD, 2.0, ybf + 0.75 + 0.06, 3.35, 1);
+        steps(1.55, 2.45, 3.78, 3, 0.04); door(1.85, 2.15, 3.781, 0.34, '#3c2a1c'); balc(1.75, 3.7, 2.25, 3.78, 0.45, 'f');
+        [[0.2, 3.7], [3.8, 3.7]].forEach(function (p) {
+          S.twr(0.14, 0.95, 10, K.wall('gov', HC), p[0], 0, p[1], 2, 3); S.cyl(0.16, 0.16, 0.03, 10, STONE, p[0], 0.965, p[1]); S.cyl(0, 0.18, 0.4, 10, PAT, p[0], 1.18, p[1]);
+        });
+        flag(0.5, 1.3, 2.4, '#c8342c'); flag(3.5, 1.3, 2.4, '#c8342c');
+        S.cyl(0.015, 0.02, 0.1, 6, '#6c6760', 2.0, 0.05, 3.95);
       }
     } else if (cat === 'army') {
-      var aw = '#7d8b5a', ar = '#58623f';
-      if (size === '1x1') {
-        part(0.3, 0.3, 0.72, 0.72, 0, 0.45, 1, 'army', aw, ar, 'flat');
-        cube(0.15, 0.82, 0.95, 0.86, 0.22, 0.04, '#e25b4a'); cube(0.12, 0.78, 0.18, 0.9, 0, 0.25, '#555555');
-      } else if (size === '2x1') {
-        part(F[0], F[1], F[2], F[3], 0, 0.7, 2, 'army', '#c9c2a0', ar, 'flat');
-        cube(m - 0.01, m - 0.01, W - m + 0.01, D - m + 0.01, 0.05, 0.08, aw);
-        flag(1.75, 0.75, 0.25, '#2f6b3a');
-      } else if (size === '2x2') {
-        part(m, 0.18, W - m, 0.92, 0, 0.55, 1, 'army', aw, ar, 'hip', 0.2);
-        part(m, 1.1, W - m, 1.84, 0, 0.55, 1, 'army', aw, ar, 'hip', 0.2);
-        flag(0.15, 0, 1.0, '#2f6b3a');
-      } else {
-        var fc = '#6b6b5e', fh = 0.18, ft = 0.04;
-        cube(m, m, W - m, m + ft, 0, fh, fc); cube(m, D - m - ft, W - m, D - m, 0, fh, fc);
-        cube(m, m, m + ft, D - m, 0, fh, fc); cube(W - m - ft, m, W - m, 1.6, 0, fh, fc); cube(W - m - ft, 2.4, W - m, D - m, 0, fh, fc);
-        part(0.3, 0.35, 1.8, 1.05, 0, 0.5, 1, 'army', aw, ar, 'hip', 0.18);
-        part(0.3, 1.35, 1.8, 2.05, 0, 0.5, 1, 'army', aw, ar, 'hip', 0.18);
-        part(2.2, 0.35, 3.7, 1.75, 0, 0.8, 1, 'plain', '#8a9465', '#6c7650', 'flat');
-        cube(2.2, 2.2, 3.7, 3.7, 0, 0.02, '#9e9e94');
-        // танк
-        cube(2.65, 2.75, 3.25, 3.15, 0.02, 0.16, '#4e5a35'); cube(2.8, 2.82, 3.1, 3.08, 0.18, 0.1, '#5b6840');
-        S.bake(S.cyl(0.02, 0.02, 0.38, 6, '#3f4a2b', 2.95, 0.24, 2.72), Math.PI / 2, 0, 0);
-        // вышка
-        cube(0.35, 3.25, 0.65, 3.55, 0, 1.0, '#6c6a5a'); cube(0.25, 3.15, 0.75, 3.65, 1.0, 0.25, aw); cube(0.22, 3.12, 0.78, 3.68, 1.25, 0.04, ar);
-        flag(1.2, 0, 2.8, '#2f6b3a');
+      var ARM = '#9a4f3b';
+      if (size === '1x1') { // блокпост: кирпичная караулка, полосатый шлагбаум, мешки с песком, флаг
+        cube(0.06, 0.06, 0.94, 0.94, 0, 0.008, '#8c8678');
+        var ya = wallBox(0.55, 0.28, 0.9, 0.7, 0, 1, 'brick', ARM, 0.4); cornice(0.55, 0.28, 0.9, 0.7, ya - 0.005, STONE); S.hip(0.55, 0.28, 0.9, 0.7, ya + 0.035, 0.2, SLATE, 0.04);
+        door(0.66, 0.78, 0.702, 0.2, '#2f3a2c');
+        cube(0.1, 0.6, 0.14, 0.66, 0, 0.3, '#444a52');
+        for (var ib = 0; ib < 6; ib++) cube(0.14 + ib * 0.07, 0.585, 0.14 + (ib + 1) * 0.07, 0.625, 0.24, 0.045, ib % 2 ? '#d8262e' : '#f4f4ee');
+        for (var is = 0; is < 5; is++) { cube(0.58 + is * 0.06, 0.74, 0.63 + is * 0.06, 0.82, 0, 0.05, '#cdbd8f'); if (is < 4) cube(0.61 + is * 0.06, 0.745, 0.66 + is * 0.06, 0.815, 0.05, 0.05, '#c2b283'); }
+        flag(0.15, 0.2, 0.3, '#c8342c');
+      } else if (size === '2x1') { // военкомат: охристое здание с вальмовой крышей и фронтоном над входом
+        var yv = wallBox(0.1, 0.14, 1.9, 0.86, 0, 3, 'euro', '#e0c97a'); sband(0.1, 0.14, 1.9, 0.86, 0.29, TRIM); cornice(0.1, 0.14, 1.9, 0.86, yv - 0.005, STONE);
+        S.hip(0.1, 0.14, 1.9, 0.86, yv + 0.035, 0.32, '#8f4636', 0.05);
+        wallBox(0.75, 0.72, 1.25, 0.96, 0, 3, 'euro', '#e8d490'); cornice(0.75, 0.72, 1.25, 0.96, yv - 0.005, STONE); S.gable(0.75, 0.72, 1.25, 0.96, yv + 0.035, 0.2, '#8f4636', 'z', 0.03, '#e8d490');
+        door(0.9, 1.1, 0.962, 0.24, '#3a2a1c'); steps(0.84, 1.16, 0.96, 2, 0.03);
+        chim(0.45, 0.4, yv, 0.42); chim(1.55, 0.4, yv, 0.42); flag(1.0, yv + 0.2, 0.45, '#2f6b3a');
+      } else if (size === '2x2') { // казарма: два кирпичных корпуса и плац с флагштоком, угловые башенки
+        var yb2 = wallBox(0.08, 0.08, 1.92, 0.8, 0, 3, 'archb', ARM); wallBox(0.08, 1.2, 1.92, 1.92, 0, 3, 'archb', ARM); wallBox(0.08, 0.8, 0.5, 1.2, 0, 3, 'archb', ARM);
+        [[0.08, 0.08, 1.92, 0.8], [0.08, 1.2, 1.92, 1.92], [0.08, 0.8, 0.5, 1.2]].forEach(function (q) { sband(q[0], q[1], q[2], q[3], 0.29, STONE); sband(q[0], q[1], q[2], q[3], 0.59, STONE); cornice(q[0], q[1], q[2], q[3], yb2 - 0.005, STONE); });
+        S.hip(0.08, 0.08, 1.92, 0.8, yb2 + 0.035, 0.3, SLATE, 0.05); S.hip(0.08, 1.2, 1.92, 1.92, yb2 + 0.035, 0.3, SLATE, 0.05); S.gable(0.08, 0.8, 0.5, 1.2, yb2 + 0.035, 0.2, SLATE, 'z', 0.03, ARM);
+        cube(0.5, 0.8, 1.92, 1.2, 0, 0.012, '#c8bb98'); S.cyl(0.012, 0.016, 0.55, 6, '#c9ccd1', 1.4, 0.275, 1.0); S.box(0.22, 0.13, 0.01, K.mat('#c8342c'), 1.51, 0.48, 1.0);
+        [[1.8, 1.8], [1.8, 0.2]].forEach(function (p) { S.twr(0.12, 1.2, 8, K.wall('archb', ARM), p[0], 0, p[1], 2, 4); S.cyl(0, 0.15, 0.3, 8, SLATE, p[0], 1.35, p[1]); });
+        door(0.9, 1.1, 1.922, 0.22, '#2f3a2c');
+      } else { // военная база: зубчатая каменная ограда, ворота между двумя круглыми башнями, казармы, плац, пушки
+        var WALL = '#b8ae98', WH = 0.28, TH = 0.07;
+        function wallRun(x0, z0, x1, z1) {
+          var horiz = z0 === z1, len = horiz ? x1 - x0 : z1 - z0, n = Math.max(2, Math.round(len / 0.22)), q = len / n, i;
+          if (horiz) cube(x0, z0 - TH / 2, x1, z0 + TH / 2, 0, WH, WALL); else cube(x0 - TH / 2, z0, x0 + TH / 2, z1, 0, WH, WALL);
+          for (i = 0; i < n; i += 2) { if (horiz) cube(x0 + i * q, z0 - TH / 2, x0 + (i + 1) * q, z0 + TH / 2, WH, 0.06, WALL); else cube(x0 - TH / 2, z0 + i * q, x0 + TH / 2, z0 + (i + 1) * q, WH, 0.06, WALL); }
+        }
+        wallRun(0.12, 0.12, 3.88, 0.12); wallRun(0.12, 0.12, 0.12, 3.88); wallRun(3.88, 0.12, 3.88, 3.88); wallRun(0.12, 3.88, 1.6, 3.88); wallRun(2.4, 3.88, 3.88, 3.88);
+        cube(0.14, 0.14, 3.86, 3.86, 0, 0.008, '#b8ad92');
+        [[1.62, 3.88], [2.38, 3.88]].forEach(function (p) { S.twr(0.17, 0.72, 10, K.wall('archb', '#a89a82'), p[0], 0, p[1], 2, 2); S.cyl(0.19, 0.19, 0.03, 10, STONE2, p[0], 0.735, p[1]); S.cyl(0, 0.21, 0.4, 10, SLATE, p[0], 0.95, p[1]); });
+        cube(1.6, 3.82, 2.4, 3.94, 0.4, 0.06, '#a89a82'); cube(1.6, 3.82, 2.4, 3.94, 0.46, 0.04, WALL);
+        S.cyl(0.006, 0.006, 0.4, 6, '#c9ccd1', 2.0, 0.66, 3.88); S.box(0.2, 0.12, 0.01, K.mat('#c8342c'), 2.11, 0.78, 3.88);
+        var yb4 = wallBox(0.45, 0.5, 3.55, 1.4, 0, 3, 'archb', ARM); sband(0.45, 0.5, 3.55, 1.4, 0.29, STONE); sband(0.45, 0.5, 3.55, 1.4, 0.59, STONE); cornice(0.45, 0.5, 3.55, 1.4, yb4 - 0.005, STONE);
+        S.hip(0.45, 0.5, 3.55, 1.4, yb4 + 0.035, 0.34, SLATE, 0.05);
+        wallBox(1.7, 1.4, 2.3, 1.62, 0, 3, 'archb', ARM); S.gable(1.7, 1.4, 2.3, 1.62, yb4 + 0.035, 0.18, SLATE, 'z', 0.03, ARM);
+        var yo = wallBox(2.9, 2.3, 3.7, 3.1, 0, 2, 'euro', '#ecd9a8'); S.hip(2.9, 2.3, 3.7, 3.1, yo, 0.28, '#8f4636', 0.05); chim(3.3, 2.7, yo + 0.1, 0.3);
+        S.cyl(0.012, 0.016, 0.7, 6, '#c9ccd1', 2.0, 0.35, 2.55); S.box(0.28, 0.16, 0.01, K.mat('#c8342c'), 2.15, 0.62, 2.55);
+        [[1.0, 3.2], [2.6, 3.4]].forEach(function (p, ig) {
+          cube(p[0] - 0.14, p[1] - 0.04, p[0] + 0.14, p[1] + 0.04, 0.04, 0.05, '#4a3a2a'); S.bake(S.cyl(0.026, 0.034, 0.3, 8, '#3a3d42', p[0], 0.12, p[1] + 0.0), Math.PI / 2, ig ? 0.3 : -0.3, 0);
+          S.bake(S.cyl(0.05, 0.05, 0.02, 10, '#2a2c30', p[0] - 0.15, 0.06, p[1] - 0.045), 0, 0, Math.PI / 2); S.bake(S.cyl(0.05, 0.05, 0.02, 10, '#2a2c30', p[0] - 0.15, 0.06, p[1] + 0.045), 0, 0, Math.PI / 2);
+        });
+        for (var ib2 = 0; ib2 < 3; ib2++) for (var ic = 0; ic < 3 - ib2; ic++) S.sph(0.04, '#3a3d42', 0.5 + ic * 0.09 + ib2 * 0.045, 0.04 + ib2 * 0.07, 3.3, 1);
+        S.twr(0.16, 0.9, 8, K.wall('archb', '#a89a82'), 0.35, 0, 3.6, 2, 3); S.cyl(0.19, 0.19, 0.03, 8, STONE2, 0.35, 0.915, 3.6); S.cyl(0, 0.2, 0.35, 8, SLATE, 0.35, 1.11, 3.6);
+        chim(1.0, 0.95, yb4 + 0.1, 0.32); chim(3.0, 0.95, yb4 + 0.1, 0.32);
       }
     } else if (cat === 'corp') {
-      if (size === '1x1') {
-        part(F[0], F[1], F[2], F[3], 0, 0.5, 1, 'shop', '#f6d9a0', '#8d8d8d', 'flat');
-        S.bake(cube(0.12, D - m, 0.88, D - m + 0.16, 0.4, 0.03, '#d9534f'), 0.25, 0, 0);
-      } else if (size === '2x1') {
-        part(F[0], F[1], F[2], F[3], 0, 1.3, 4, 'office', '#cfd8e3', '#7b8794', 'flat');
-        cube(0.3, 0.3, 0.55, 0.55, 1.35, 0.12, '#a9b1b9'); cube(1.3, 0.35, 1.6, 0.6, 1.35, 0.12, '#a9b1b9');
-      } else if (size === '2x2') {
-        part(F[0], F[1], F[2], F[3], 0, 2.8, 9, 'glass', '#2f5f93', '#5c6b7a', 'flat');
-        cube(0.6, 0.6, 1.4, 1.4, 2.85, 0.25, '#8695a5');
-      } else {
-        part(F[0], F[1], F[2], F[3], 0, 0.6, 2, 'glass', '#264b78', '#5c6b7a', 'flat');
-        part(0.7, 0.7, 3.3, 3.3, 0.65, 5.2, 17, 'glass', '#2f5f93', '#5c6b7a', 'none');
-        part(1.0, 1.0, 3.0, 3.0, 5.85, 0.4, 1, 'plain', '#c7d2dd', '#9aa7b4', 'flat');
-        S.cyl(0.02, 0.05, 1.1, 8, '#d0d6dc', 2.0, 6.85, 2.0);
+      if (size === '1x1') { // лавка с полосатым тентом, вывеской и ящиками фруктов
+        var gs = wallBox(0.1, 0.16, 0.9, 0.84, 0, 1, 'shop', pick(r, ['#7a2f2f', '#2a3b52', '#35573f']), 0.36), ys = wallBox(0.1, 0.16, 0.9, 0.84, gs, 1, 'euro', '#f1dfb3');
+        sband(0.1, 0.16, 0.9, 0.84, gs - 0.01, STONE);
+        var yms = mans(0.1, 0.16, 0.9, 0.84, ys, 0.16, 0.05, 0.1, 0.16, ZINC, ZINC2, '#cfc6b2', 'f');
+        awning(0.12, 0.88, 0.84, 0.34, 0.12, '#d9534f', '#f6efe0');
+        cube(0.15, 0.92, 0.3, 0.98, 0, 0.05, '#a8844f'); cube(0.17, 0.93, 0.28, 0.97, 0.05, 0.02, '#d9733a'); cube(0.34, 0.92, 0.49, 0.98, 0, 0.05, '#a8844f'); cube(0.36, 0.93, 0.47, 0.97, 0.05, 0.02, '#6fae4a');
+        chim(0.78, 0.4, ys + 0.02, 0.3);
+      } else if (size === '2x1') { // торговая контора: каменный фасад, два эркера, чугунные окна, пологая мансарда
+        var gc = wallBox(0.1, 0.14, 1.9, 0.86, 0, 1, 'shop', '#2a3b52', 0.36), yc2 = wallBox(0.1, 0.14, 1.9, 0.86, gc, 3, 'iron', '#e2d8c2');
+        sband(0.1, 0.14, 1.9, 0.86, gc - 0.01, STONE); cornice(0.1, 0.14, 1.9, 0.86, yc2 - 0.005, STONE);
+        [[0.3, 0.75], [1.25, 1.7]].forEach(function (e) { var q = wallBox(e[0], 0.86, e[1], 0.98, gc, 2, 'iron', '#e2d8c2'); S.hip(e[0] - 0.01, 0.85, e[1] + 0.01, 0.99, q, 0.14, PAT, 0.02); });
+        mans(0.1, 0.14, 1.9, 0.86, yc2 + 0.035, 0.14, 0.05, 0.1, 0.2, ZINC, ZINC2, '#cfc6b2', 'f');
+        awning(0.9, 1.1, 0.86, 0.33, 0.1, '#2a3b52', '#e6d9a8'); door(0.92, 1.08, 0.862, 0.26, '#2c241c');
+        chim(0.5, 0.3, yc2 + 0.1, 0.25); chim(1.5, 0.3, yc2 + 0.1, 0.25);
+      } else if (size === '2x2') { // универмаг в духе «Галери Лафайет»: чугунные окна, угловые башенки, большой стеклянный купол
+        var gd = wallBox(0.08, 0.08, 1.92, 1.92, 0, 1, 'shop', '#2f3f58', 0.36), yd = wallBox(0.08, 0.08, 1.92, 1.92, gd, 5, 'iron', '#e6dcc4');
+        sband(0.08, 0.08, 1.92, 1.92, gd - 0.01, STONE); cornice(0.08, 0.08, 1.92, 1.92, yd - 0.005, STONE); sband(0.08, 0.08, 1.92, 1.92, gd + 0.6, STONE);
+        cube(0.08, 0.08, 1.92, 1.92, yd + 0.035, 0.02, '#8795a2');
+        [[0.12, 0.12], [1.88, 0.12], [0.12, 1.88], [1.88, 1.88]].forEach(function (p) { S.twr(0.15, 0.4, 10, K.wall('iron', '#e6dcc4'), p[0], yd + 0.03, p[1], 2, 1); S.cyl(0.17, 0.17, 0.03, 10, STONE, p[0], yd + 0.45, p[1]); S.cyl(0, 0.18, 0.32, 10, PAT, p[0], yd + 0.62, p[1]); S.sph(0.02, GOLD, p[0], yd + 0.8, p[1], 1); });
+        S.cyl(0.5, 0.52, 0.18, 16, STONE2, 1.0, yd + 0.13, 1.0); S.dome(0.5, '#8fc3b4', 1.0, yd + 0.22, 1.0, 0.8); S.cyl(0.07, 0.09, 0.12, 10, STONE, 1.0, yd + 0.22 + 0.4 + 0.04, 1.0); S.sph(0.03, GOLD, 1.0, yd + 0.22 + 0.4 + 0.12, 1.0, 1);
+        awning(0.2, 0.9, 1.92, 0.33, 0.1, '#a83a3a', '#f3ead3'); awning(1.1, 1.8, 1.92, 0.33, 0.1, '#a83a3a', '#f3ead3'); door(0.92, 1.08, 1.922, 0.26, '#2c241c');
+      } else { // высотное здание начала века: арочный цоколь, ступенчатый башенный объём, часы, медный шпиль
+        var gt = wallBox(0.08, 0.08, 3.92, 3.92, 0, 1, 'arcade', '#d8cdb5', 0.36), yt3 = wallBox(0.08, 0.08, 3.92, 3.92, gt, 3, 'iron', '#e4dac3');
+        sband(0.08, 0.08, 3.92, 3.92, gt - 0.01, STONE); cornice(0.08, 0.08, 3.92, 3.92, yt3 - 0.005, STONE);
+        [[0.08, 0.08], [3.0, 0.08], [0.08, 3.0], [3.0, 3.0]].forEach(function (p) { var q = wallBox(p[0], p[1], p[0] + 0.92, p[1] + 0.92, yt3, 1, 'iron', '#e4dac3'); S.hip(p[0], p[1], p[0] + 0.92, p[1] + 0.92, q, 0.3, PAT, 0.04); });
+        cube(0.08, 0.08, 3.92, 3.92, yt3 + 0.035, 0.015, '#8795a2');
+        var yt4 = wallBox(0.95, 0.95, 3.05, 3.05, yt3 + 0.035, 9, 'iron', '#e4dac3'); cornice(0.95, 0.95, 3.05, 3.05, yt4 - 0.005, STONE);
+        var yt5 = wallBox(1.4, 1.4, 2.6, 2.6, yt4 + 0.035, 4, 'iron', '#e4dac3'); cornice(1.4, 1.4, 2.6, 2.6, yt5 - 0.005, STONE);
+        S.box(0.7, 0.7, 0.7, K.wall('clock', '#e6ddc7'), 2.0, yt5 + 0.4, 2.0, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP]);
+        cornice(1.65, 1.65, 2.35, 2.35, yt5 + 0.75, STONE);
+        S.hip(1.65, 1.65, 2.35, 2.35, yt5 + 0.79, 0.85, PAT, 0.06); S.cyl(0.006, 0.014, 0.4, 6, GOLD, 2.0, yt5 + 0.79 + 0.85 + 0.15, 2.0); S.sph(0.04, GOLD, 2.0, yt5 + 0.79 + 0.85 + 0.0, 2.0, 1);
+        for (var iw2 = 0; iw2 < 5; iw2++) awning(0.3 + iw2 * 0.7, 0.9 + iw2 * 0.7, 3.92, 0.35, 0.08, iw2 % 2 ? '#2f3f58' : '#a83a3a', '#f3ead3');
+        door(1.8, 2.2, 3.922, 0.3, '#2c241c');
       }
     } else if (cat === 'factory') {
-      // Механический завод 3×3: цех с пилообразной крышей, ворота, офис, труба, бак, готовый грузовик во дворе
-      var ROOF = '#7d838c', HH = 0.85, RH = 0.3, ZB = 2.0;
-      part(m, m, W - m, ZB, 0, HH, 2, 'office', '#c4bdae', ROOF, 'none');
+      // Механический завод 3×3: кирпичный цех с пилообразной крышей и арочными окнами, ворота, контора с часами, высокая труба, готовый грузовик во дворе
+      var FB = '#a8482f', ROOF = '#6f7882', HH = 0.9, RH = 0.3, ZB = 2.0;
+      wallBox(m, m, W - m, ZB, 0, 3, 'archb', FB); cornice(m, m, W - m, ZB, HH - 0.005, STONE2); sband(m, m, W - m, ZB, 0.29, STONE2);
       var P = (ZB - m) / 4;
       for (var t = 0; t < 4; t++) {
         var z0 = m + t * P;
-        S.bake(S.box(W - 2 * m, 0.03, Math.hypot(P, RH), K.mat(ROOF), W / 2, HH + RH / 2, z0 + P / 2), Math.atan2(RH, P), 0, 0);
-        S.box(W - 2 * m - 0.02, RH, 0.02, K.mat('#9cc3dd'), W / 2, HH + RH / 2, z0 + 0.012);
+        S.bake(S.box(W - 2 * m, 0.03, Math.hypot(P, RH), K.mat(ROOF), W / 2, HH + RH / 2 + 0.035, z0 + P / 2), Math.atan2(RH, P), 0, 0);
+        S.box(W - 2 * m - 0.02, RH, 0.02, K.mat('#9cc3dd'), W / 2, HH + RH / 2 + 0.035, z0 + 0.012);
       }
-      cube(m - 0.01, m - 0.01, W - m + 0.01, ZB + 0.01, HH - 0.06, 0.06, '#e0a25a');                // оранжевый пояс
-      cube(1.5, ZB - 0.005, 2.75, ZB + 0.02, 0, 0.62, '#5b6068');                                  // ворота
-      for (var gl = 1; gl < 6; gl++) cube(1.5, ZB + 0.02, 2.75, ZB + 0.03, gl * 0.1, 0.012, '#7c828b');
-      cube(1.45, ZB - 0.01, 2.8, ZB + 0.12, 0.62, 0.04, '#e0a25a');                                // козырёк
-      part(m, ZB, 1.3, D - m, 0, 0.7, 2, 'office', '#e3dccb', '#6f7782', 'flat');                  // офис
-      cube(0.28, D - m - 0.06, 1.1, D - m - 0.02, 0.72, 0.2, '#e0a25a');                           // вывеска
-      S.bake(S.cyl(0.07, 0.07, 0.02, 12, '#3b3f45', 0.69, 0.82, D - m), Math.PI / 2, 0, 0);
-      cube(1.3, ZB, W - m, D - m, 0, 0.012, '#5c6066');                                            // двор
-      cube(1.42, D - 0.2, 1.62, D - m, 0, 0.016, '#f1f1e6');                                       // разметка выезда
+      cube(1.45, ZB - 0.005, 2.8, ZB + 0.025, 0, 0.66, STONE2); cube(1.5, ZB - 0.005, 2.75, ZB + 0.03, 0, 0.62, '#4f545c');       // ворота в каменной раме
+      for (var gl = 1; gl < 6; gl++) cube(1.5, ZB + 0.03, 2.75, ZB + 0.04, gl * 0.1, 0.012, '#7c828b');
+      cube(1.45, ZB - 0.01, 2.8, ZB + 0.1, 0.66, 0.05, STONE2);
+      var yoff = wallBox(m, ZB, 1.3, D - m, 0, 3, 'archb', FB); cornice(m, ZB, 1.3, D - m, yoff - 0.005, STONE2); S.hip(m, ZB, 1.3, D - m, yoff + 0.035, 0.3, SLATE, 0.05);
+      S.box(0.3, 0.3, 0.3, K.wall('clock', '#e0d7c2'), 0.69, yoff + 0.4, 2.42, [V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP]);
+      cube(1.3, ZB, W - m, D - m, 0, 0.012, '#6b6f74');                                              // двор
+      cube(1.42, D - 0.2, 1.62, D - m, 0, 0.016, '#f1f1e6');
       // готовый зелёный грузовик во дворе (смотрит к выезду)
       cube(2.05, 2.15, 2.33, 2.55, 0.06, 0.05, '#2c2c2a'); cube(2.04, 2.15, 2.34, 2.52, 0.11, 0.1, '#a8844f');
       cube(2.06, 2.55, 2.32, 2.78, 0.06, 0.2, '#4f8f3e'); cube(2.07, 2.7, 2.31, 2.79, 0.17, 0.07, '#9cc3dd');
       [[2.03, 2.25], [2.35, 2.25], [2.03, 2.68], [2.35, 2.68]].forEach(function (w) { cube(w[0] - 0.03, w[1] - 0.05, w[0] + 0.03, w[1] + 0.05, 0, 0.1, '#1c1c1c'); });
-      // труба и бак на крыше
-      S.cyl(0.1, 0.14, 2.3, 12, '#9a4a36', 0.45, 1.15, 0.42);
-      S.cyl(0.106, 0.106, 0.1, 12, '#f2f2ea', 0.45, 1.95, 0.42); S.cyl(0.103, 0.103, 0.1, 12, '#c8362b', 0.45, 2.2, 0.42);
-      S.cyl(0.2, 0.2, 0.32, 14, '#8f9aa6', 2.45, HH + RH + 0.2, 0.55); S.cyl(0, 0.21, 0.12, 14, '#6d7782', 2.45, HH + RH + 0.42, 0.55);
+      // высокая кирпичная труба с поясами и каменным оголовком
+      S.cyl(0.09, 0.14, 2.5, 12, '#9a4a36', 0.45, 1.25, 0.42); S.cyl(0.11, 0.11, 0.05, 12, STONE2, 0.45, 1.6, 0.42); S.cyl(0.115, 0.1, 0.12, 12, STONE2, 0.45, 2.54, 0.42);
+      S.cyl(0.095, 0.095, 0.1, 12, '#f2f2ea', 0.45, 2.1, 0.42); S.cyl(0.092, 0.092, 0.1, 12, '#c8362b', 0.45, 2.3, 0.42);
+      S.cyl(0.2, 0.2, 0.32, 14, '#8f9aa6', 2.45, HH + RH + 0.22, 0.55); S.cyl(0, 0.21, 0.12, 14, '#6d7782', 2.45, HH + RH + 0.44, 0.55);
     } else if (cat === 'depot') {
-      // Дорожное депо 2×2: гараж с двумя воротами, площадка, кучи щебня и асфальта, конусы
-      part(m, m, W - m, 1.15, 0, 0.7, 1, 'plain', '#d8c27e', '#5c5f66', 'flat');
+      // Дорожное депо 2×2: кирпичное каретное здание с двумя арочными воротами и щипцовой крышей, двор с мощёной площадкой, бочки и кучи материалов
+      var DB = '#b0802f';
+      var yde = wallBox(m, m, W - m, 1.15, 0, 2, 'brick', '#b4623f', 0.35); cornice(m, m, W - m, 1.15, yde - 0.005, STONE2);
+      S.gable(m, m, W - m, 1.15, yde + 0.035, 0.28, '#6a4a3d', 'x', 0.04, '#b4623f');
       [0.53, 1.47].forEach(function (x) {
-        cube(x - 0.36, 1.145, x + 0.36, 1.17, 0, 0.52, '#6b6f76');
-        for (var k = 1; k < 5; k++) cube(x - 0.36, 1.17, x + 0.36, 1.178, k * 0.1, 0.012, '#8d9299');
+        cube(x - 0.38, 1.145, x + 0.38, 1.18, 0, 0.5, STONE2); cube(x - 0.34, 1.145, x + 0.34, 1.19, 0, 0.46, '#5a4a3a');
+        S.bake(S.cyl(0.34, 0.34, 0.045, 12, '#5a4a3a', x, 0.46, 1.17), Math.PI / 2, 0, 0).scaling.y = 1;
+        for (var k = 1; k < 5; k++) cube(x - 0.34, 1.19, x + 0.34, 1.198, k * 0.09, 0.01, '#7a6650');
       });
-      cube(m - 0.005, 1.14, W - m + 0.005, 1.19, 0.56, 0.06, '#f08a24'); cube(m - 0.005, 1.14, W - m + 0.005, 1.19, 0.62, 0.04, '#f4f2ec');
-      cube(0.55, 0.9, 1.45, 0.94, 0.72, 0.2, '#f0c040'); cube(0.55, 0.94, 1.45, 0.95, 0.78, 0.06, '#2b2b2b');   // вывеска на крыше
-      cube(m, 1.15, W - m, D - m, 0, 0.014, '#3c4047');                                            // асфальт перед гаражом
-      S.cyl(0, 0.26, 0.24, 9, '#9b9384', 1.66, 0.12, 1.66);                                        // щебень
-      S.cyl(0, 0.17, 0.15, 9, '#26282b', 1.25, 0.075, 1.74);                                       // асфальт
-      [0.25, 0.45, 0.65].forEach(function (x) {
-        S.cyl(0.006, 0.04, 0.1, 8, '#ff7a1a', x, 0.05, D - 0.16); S.cyl(0.022, 0.026, 0.02, 8, '#ffffff', x, 0.055, D - 0.16);
-      });
+      cube(0.55, 0.96, 1.45, 1.0, yde + 0.03, 0.14, '#f0c040'); cube(0.55, 1.0, 1.45, 1.01, yde + 0.065, 0.05, '#2b2b2b');
+      cube(m, 1.15, W - m, D - m, 0, 0.014, '#6d6a62');                                          // булыжный двор
+      S.cyl(0, 0.26, 0.24, 9, '#9b9384', 1.66, 0.12, 1.66);                                       // щебень
+      S.cyl(0, 0.17, 0.15, 9, '#26282b', 1.25, 0.075, 1.74);                                      // асфальт
+      [0.2, 0.4].forEach(function (x) { S.cyl(0.04, 0.04, 0.1, 8, WOODC, x, 0.06, D - 0.16); S.cyl(0.042, 0.042, 0.01, 8, '#3a3d42', x, 0.085, D - 0.16); }); // бочки
+      chim(0.3, 0.45, yde + 0.1, 0.26);
     } else if (cat === 'saw') {
-      // Лесопилки (с 0.11.0). Брёвна — цилиндры вдоль x.
+      // Лесопилки: кирпичные цеха, паровая труба, брёвна и штабели досок
       var LOG = '#8a5a33', LOGE = '#d8b07a', BRD = '#e2c48c', DSP = '#c9a06a';
       function log(x0, x1, y, z, rr) { S.bake(S.cyl(rr, rr, x1 - x0, 10, LOG, (x0 + x1) / 2, y, z), 0, 0, Math.PI / 2); S.bake(S.cyl(rr * 0.8, rr * 0.8, 0.005, 10, LOGE, x1 + 0.002, y, z), 0, 0, Math.PI / 2); }
       function logPile(x0, x1, z0, rows, rr) { for (var a = 0; a < rows; a++) for (var q = 0; q < rows - a; q++) log(x0, x1, rr + a * rr * 1.7, z0 + (q + a / 2) * rr * 2.02, rr); }
       function boards(x0, z0, x1, z1, n) { for (var q = 0; q < n; q++) { cube(x0, z0, x1, z1, q * 0.045, 0.035, BRD); if (q % 3 === 2) cube(x0 + 0.02, z0 - 0.005, x0 + 0.05, z1 + 0.005, q * 0.045 + 0.035, 0.01, '#7a5a3a'); } }
       function shed(x0, z0, x1, z1, h, roof) {
         [[x0, z0], [x1 - 0.05, z0], [x0, z1 - 0.05], [x1 - 0.05, z1 - 0.05]].forEach(function (pp) { cube(pp[0], pp[1], pp[0] + 0.05, pp[1] + 0.05, 0, h, '#6b4a2e'); });
-        S.bake(S.box(x1 - x0 + 0.1, 0.03, z1 - z0 + 0.12, K.mat(roof), (x0 + x1) / 2, h + 0.05, (z0 + z1) / 2), 0.12, 0, 0);
+        S.gable(x0, z0, x1, z1, h, 0.2, roof, 'x', 0.04, '#7a5a3a');
       }
       function blade(x, y, z, rr) { S.bake(S.cyl(rr, rr, 0.015, 18, '#cfd3d8', x, y, z), 0, 0, Math.PI / 2); S.bake(S.cyl(rr * 0.25, rr * 0.25, 0.02, 10, '#4a4e55', x, y, z), 0, 0, Math.PI / 2); }
       cube(m, m, W - m, D - m, 0, 0.012, '#b8a07a');                                              // утоптанная площадка
       if (size === '2x2') {
-        shed(0.15, 0.2, 1.2, 1.25, 0.55, '#7f8a6a');                                               // навес
-        cube(0.3, 0.55, 1.05, 0.85, 0, 0.2, '#6d5b4a');                                            // станок
-        blade(0.68, 0.3, 0.7, 0.15);
-        log(0.35, 0.95, 0.26, 0.7, 0.06);
-        logPile(1.32, 1.9, 0.25, 3, 0.075);                                                        // штабель брёвен
-        boards(0.25, 1.45, 1.05, 1.75, 5); boards(1.25, 1.45, 1.85, 1.75, 3);                     // готовые доски
-        cube(1.4, 1.3, 1.44, 1.34, 0, 0.5, '#6b4a2e'); cube(1.3, 1.31, 1.75, 1.33, 0.4, 0.14, '#f0c040'); // вывеска
+        shed(0.15, 0.2, 1.2, 1.25, 0.55, '#7f4a3a');                                               // навес с черепицей
+        cube(0.3, 0.55, 1.05, 0.85, 0, 0.2, '#6d5b4a'); blade(0.68, 0.3, 0.7, 0.15); log(0.35, 0.95, 0.26, 0.7, 0.06);
+        logPile(1.32, 1.9, 0.25, 3, 0.075); boards(0.25, 1.45, 1.05, 1.75, 5); boards(1.25, 1.45, 1.85, 1.75, 3);
+        S.cyl(0.05, 0.07, 1.1, 10, '#9a4a36', 1.5, 0.55, 1.2); S.cyl(0.07, 0.06, 0.06, 10, STONE2, 1.5, 1.12, 1.2);   // труба паровой машины
+        cube(1.3, 1.31, 1.75, 1.33, 0.4, 0.14, '#f0c040');
       } else {
-        // цех распиловки (слева) и цех ДСП (справа), двор с брёвнами и складом
-        part(0.15, 0.15, 2.0, 1.7, 0, 0.8, 2, 'plain', '#a87a4e', '#6f5a48', 'hip', 0.32);
-        cube(0.7, 1.69, 1.45, 1.72, 0, 0.55, '#4f3a28');                                            // ворота
-        cube(0.14, 0.9, 2.01, 1.0, 0.45, 0.05, '#e2c48c');                                         // пояс
-        part(2.2, 0.15, 3.85, 1.9, 0, 1.1, 3, 'office', '#cfc7b8', '#7a8089', 'flat');             // цех ДСП
+        wallBox(0.15, 0.15, 2.0, 1.7, 0, 3, 'archb', '#a8582f'); cornice(0.15, 0.15, 2.0, 1.7, 0.895, STONE2); S.gable(0.15, 0.15, 2.0, 1.7, 0.935, 0.3, '#6f4a3d', 'x', 0.05, '#a8582f');
+        cube(0.7, 1.69, 1.45, 1.72, 0, 0.55, '#4f3a28'); cube(0.14, 0.9, 2.01, 1.0, 0.45, 0.05, '#e2c48c');
+        wallBox(2.2, 0.15, 3.85, 1.9, 0, 3, 'archb', '#c0b4a0'); cornice(2.2, 0.15, 3.85, 1.9, 0.895, STONE2); S.hip(2.2, 0.15, 3.85, 1.9, 0.935, 0.28, SLATE, 0.05);
         cube(2.6, 1.89, 3.4, 1.92, 0, 0.62, '#5b6068');
-        S.cyl(0.08, 0.11, 1.6, 12, '#9a4a36', 3.6, 1.1 + 0.8, 0.45);                               // труба сушилки
-        S.cyl(0.085, 0.085, 0.08, 12, '#f2f2ea', 3.6, 2.5, 0.45);
-        S.cyl(0.22, 0.22, 0.5, 14, '#8f9aa6', 2.55, 1.35, 0.6);                                    // бункер стружки
-        S.cyl(0, 0.23, 0.15, 14, '#6d7782', 2.55, 1.67, 0.6);
+        S.cyl(0.08, 0.12, 2.2, 12, '#9a4a36', 3.6, 1.1 + 0.55, 0.45); S.cyl(0.1, 0.095, 0.06, 12, STONE2, 3.6, 2.72, 0.45);
+        S.cyl(0.22, 0.22, 0.5, 14, '#8f9aa6', 2.55, 1.35, 0.6); S.cyl(0, 0.23, 0.15, 14, '#6d7782', 2.55, 1.67, 0.6);
         cube(1.95, 0.9, 2.25, 1.1, 0.95, 0.08, '#7d838c');                                         // конвейер между цехами
         logPile(0.2, 1.4, 2.2, 4, 0.08); logPile(0.2, 1.4, 3.0, 3, 0.08);                          // склад брёвен
-        S.cyl(0.035, 0.035, 1.3, 8, '#e0a25a', 1.65, 0.65, 2.6);                                   // кран-балка
-        cube(1.6, 2.1, 1.7, 3.55, 1.25, 0.07, '#e0a25a');
-        boards(2.2, 2.25, 3.0, 2.6, 6); boards(2.2, 2.8, 3.0, 3.15, 4);                           // доски
+        S.cyl(0.035, 0.035, 1.3, 8, '#5a6068', 1.65, 0.65, 2.6); cube(1.6, 2.1, 1.7, 3.55, 1.25, 0.07, '#5a6068');  // кран-балка
+        boards(2.2, 2.25, 3.0, 2.6, 6); boards(2.2, 2.8, 3.0, 3.15, 4);
         for (var q = 0; q < 6; q++) cube(3.15, 2.25, 3.8, 3.1, q * 0.05, 0.04, q % 2 ? DSP : '#d6b27c'); // листы ДСП
-        cube(2.2, 3.35, 2.55, 3.7, 0.04, 0.12, '#f0c040'); cube(2.32, 3.55, 2.36, 3.7, 0.16, 0.16, '#3b3f45'); // погрузчик
-        [[2.23, 3.4], [2.52, 3.4], [2.23, 3.65], [2.52, 3.65]].forEach(function (w) { cube(w[0] - 0.02, w[1] - 0.03, w[0] + 0.02, w[1] + 0.03, 0, 0.06, '#1c1c1c'); });
+        cube(2.2, 3.35, 2.55, 3.7, 0.04, 0.12, '#a8844f'); cube(2.32, 3.55, 2.36, 3.7, 0.16, 0.16, '#3b3f45'); // телега с грузом
+        [[2.23, 3.4], [2.52, 3.4], [2.23, 3.65], [2.52, 3.65]].forEach(function (w) { S.bake(S.cyl(0.05, 0.05, 0.02, 10, '#1c1c1c', w[0], 0.05, w[1]), 0, 0, Math.PI / 2); });
       }
     } else if (cat === 'park' || cat === 'upark') {
-      // Парковки (с 0.11.0): места поперёк длинной стороны, проезд посередине
-      var under = cat === 'upark', CARC = ['#c0392b', '#3d8fd6', '#e8dcc0', '#2e2e33', '#f2f2ea', '#5aa05a', '#d9a33a'];
-      function pcar(cx, cz, rotZ, col) {
-        var lw = rotZ ? 0.36 : 0.2, ld = rotZ ? 0.2 : 0.36;
-        cube(cx - lw / 2, cz - ld / 2, cx + lw / 2, cz + ld / 2, 0.03, 0.09, col);
-        cube(cx - lw * 0.38, cz - ld * 0.38, cx + lw * 0.38, cz + ld * 0.38, 0.12, 0.07, '#9cc3dd');
-        cube(cx - lw * 0.36, cz - ld * 0.36, cx + lw * 0.36, cz + ld * 0.36, 0.19, 0.012, col);
+      // Парковки: мощёные дворы с газовыми фонарями и старинными автомобилями; подземные — чугунные входы в стиле ар-нуво (как в Парижском метро)
+      var under = cat === 'upark', CARC = ['#2e3a2f', '#6b2a2a', '#e8dcc0', '#2e2e33', '#3a4a6a', '#7a5a2a'];
+      function pcar(cx, cz, rotZ, col) { // автомобиль 1910-х: длинный капот, высокий кузов, чёрный верх, тонкие колёса
+        var ww = rotZ ? 0.36 : 0.22, dd = rotZ ? 0.22 : 0.36, fx = rotZ ? 1 : 0, fz = rotZ ? 0 : 1;
+        cube(cx - ww / 2, cz - dd / 2, cx + ww / 2, cz + dd / 2, 0.045, 0.07, col);
+        cube(cx - ww * (rotZ ? 0.12 : 0.36), cz - dd * (rotZ ? 0.36 : 0.12), cx + ww * (rotZ ? 0.38 : 0.36), cz + dd * (rotZ ? 0.36 : 0.38), 0.115, 0.07, col);
+        cube(cx - ww * (rotZ ? 0.08 : 0.4), cz - dd * (rotZ ? 0.4 : 0.08), cx + ww * (rotZ ? 0.0 : 0.4), cz + dd * (rotZ ? 0.4 : 0.0), 0.185, 0.012, '#1b1b1b');
+        [[-0.4, -0.5], [0.4, -0.5], [-0.4, 0.5], [0.4, 0.5]].forEach(function (p) { S.bake(S.cyl(0.035, 0.035, 0.02, 8, '#1b1b1b', cx + (rotZ ? p[1] * ww : p[0] * ww), 0.035, cz + (rotZ ? p[0] * dd : p[1] * dd)), 0, 0, rotZ ? 0 : Math.PI / 2); });
       }
       if (!under) {
-        cube(m, m, W - m, D - m, 0, 0.014, '#4a4e55');                                               // асфальт
+        cube(m, m, W - m, D - m, 0, 0.014, '#7a746a');                                             // булыжник
+        for (var gi = 0; gi < Math.round((D - 2 * m) / 0.25); gi++) cube(m, m + gi * 0.25, W - m, m + gi * 0.25 + 0.006, 0.014, 0.003, '#5e5950');
         cube(m - 0.005, m - 0.005, W - m + 0.005, m + 0.03, 0, 0.05, '#cfcabd');                   // бордюр сзади
-        // ряды мест вдоль длинной стороны (D), шаг 0.5 клетки
         var nz = Math.round((D - 2 * m) / 0.5), rows = W >= 2 ? [[m, m + 0.5], [W - m - 0.5, W - m]] : [[m, W - m]], gz;
-        rows.forEach(function (rw, ri) {
-          for (gz = 0; gz <= nz; gz++) cube(rw[0], m + gz * 0.5 - 0.008, rw[1], m + gz * 0.5 + 0.008, 0.014, 0.004, '#f1f1e6');
+        rows.forEach(function (rw) {
+          for (gz = 0; gz <= nz; gz++) cube(rw[0], m + gz * 0.5 - 0.008, rw[1], m + gz * 0.5 + 0.008, 0.014, 0.004, '#d9d4c4');
           for (gz = 0; gz < nz; gz++) if (r() < 0.65) pcar((rw[0] + rw[1]) / 2, m + gz * 0.5 + 0.25, W >= 2, pick(r, CARC));
         });
-        if (W >= 3) for (var col = 1; col < W - 1; col++) { // средние ряды у больших парковок
-          for (gz = 0; gz <= nz; gz++) cube(col + 0.05, m + gz * 0.5 - 0.008, col + 0.95, m + gz * 0.5 + 0.008, 0.014, 0.004, '#f1f1e6');
-          for (gz = 0; gz < nz; gz++) if (r() < 0.6) pcar(col + 0.5, m + gz * 0.5 + 0.25, true, pick(r, CARC));
+        if (W >= 3) for (var col2 = 1; col2 < W - 1; col2++) {
+          for (gz = 0; gz <= nz; gz++) cube(col2 + 0.05, m + gz * 0.5 - 0.008, col2 + 0.95, m + gz * 0.5 + 0.008, 0.014, 0.004, '#d9d4c4');
+          for (gz = 0; gz < nz; gz++) if (r() < 0.6) pcar(col2 + 0.5, m + gz * 0.5 + 0.25, true, pick(r, CARC));
         }
-        if (W >= 2) {                                                                                // будка и шлагбаум у въезда
-          cube(W - m - 0.32, D - m - 0.3, W - m - 0.04, D - m - 0.04, 0, 0.32, '#e9e4d6'); cube(W - m - 0.34, D - m - 0.32, W - m - 0.02, D - m - 0.02, 0.32, 0.03, '#3a6ea5');
-          cube(W - m - 0.3, D - m - 0.05, W - m - 0.06, D - m - 0.03, 0.14, 0.1, '#9cc3dd');
-          cube(m + 0.05, D - m - 0.08, W - m - 0.35, D - m - 0.05, 0.22, 0.03, '#e03b3b');
-          S.cyl(0.03, 0.03, 0.25, 8, '#d0d6dc', W - m - 0.38, 0.12, D - m - 0.06);
+        if (W >= 2) {                                                                                // будка сторожа с черепичной крышей и шлагбаум
+          var ysg = wallBox(W - m - 0.34, D - m - 0.32, W - m - 0.04, D - m - 0.04, 0, 1, 'brick', '#a9553b', 0.3); S.hip(W - m - 0.34, D - m - 0.32, W - m - 0.04, D - m - 0.04, ysg, 0.14, '#6a4a3d', 0.03);
+          cube(m + 0.05, D - m - 0.08, W - m - 0.38, D - m - 0.05, 0.22, 0.03, '#e03b3b'); S.cyl(0.03, 0.03, 0.25, 8, '#d0d6dc', W - m - 0.4, 0.12, D - m - 0.06);
         }
-        if (W >= 3) [[0.1, 0.3], [W - 0.1, 0.3], [0.1, D - 0.6], [W - 0.1, D * 0.5]].forEach(function (lp) { // фонари
-          S.cyl(0.015, 0.02, 0.9, 6, '#7c828b', lp[0], 0.45, lp[1]); cube(lp[0] - 0.06, lp[1] - 0.03, lp[0] + 0.06, lp[1] + 0.03, 0.88, 0.03, '#fff4c2');
-        });
-        S.cyl(0.012, 0.012, 0.45, 6, '#c9ccd1', 0.12, 0.22, D - 0.12);                            // знак «P»
-        S.box(0.16, 0.16, 0.01, K.mat('#2f6fc2'), 0.12, 0.52, D - 0.12); S.box(0.06, 0.1, 0.012, K.mat('#ffffff'), 0.12, 0.52, D - 0.12);
+        if (W >= 3) [[0.1, 0.3], [W - 0.1, 0.3], [0.1, D - 0.6], [W - 0.1, D * 0.5]].forEach(function (lp) { lamp(lp[0], lp[1], 0.42); });
+        else lamp(0.14, D - 0.14, 0.34);
+        S.cyl(0.012, 0.012, 0.45, 6, '#2b2f35', 0.12, 0.22, D - 0.12);                            // знак «P»
+        S.box(0.16, 0.16, 0.01, K.mat('#2a4f8f'), 0.12, 0.52, D - 0.12); S.box(0.06, 0.1, 0.012, K.mat('#f1ece0'), 0.12, 0.52, D - 0.12);
       } else {
-        // подземная: газон сверху, бетонный пандус въезда у фасада, вентиляция, лифт
-        var rw0 = W >= 2 ? W / 2 - 0.42 : 0.12, rw1 = W >= 2 ? W / 2 + 0.42 : 0.88, rz0 = D - m - Math.min(1.2, D * 0.45);
-        cube(m - 0.005, m - 0.005, W - m + 0.005, D - m + 0.005, 0, 0.03, '#b9b2a6');              // бетонный край
-        cube(m, m, W - m, rz0, 0.03, 0.025, '#6fae5a');                                            // газон (без пандуса)
+        // подземная: газон сверху, пандус въезда у фасада, портал-арка из зелёного чугуна, фонари-шары, вентиляция
+        var rw0 = W >= 2 ? W / 2 - 0.42 : 0.12, rw1 = W >= 2 ? W / 2 + 0.42 : 0.88, rz0 = D - m - Math.min(1.2, D * 0.45), GRN = '#2f6a4f';
+        cube(m - 0.005, m - 0.005, W - m + 0.005, D - m + 0.005, 0, 0.03, '#b9b2a6');
+        cube(m, m, W - m, rz0, 0.03, 0.025, '#6fae5a');
         if (rw0 - 0.06 > m) cube(m, rz0, rw0 - 0.06, D - m, 0.03, 0.025, '#6fae5a');
         if (rw1 + 0.06 < W - m) cube(rw1 + 0.06, rz0, W - m, D - m, 0.03, 0.025, '#6fae5a');
-        cube(rw0, rz0, rw1, D - m, 0, 0.031, '#1d1f22');                                           // тёмная яма въезда
-        cube(rw0 - 0.06, rz0, rw0, D - m, 0, 0.2, '#a9a49a'); cube(rw1, rz0, rw1 + 0.06, D - m, 0, 0.2, '#a9a49a'); // стенки пандуса
-        var rl = (D - m - rz0) * 0.6;                                                              // наклонный асфальт уходит вниз
+        cube(rw0, rz0, rw1, D - m, 0, 0.031, '#1d1f22');
+        cube(rw0 - 0.06, rz0, rw0, D - m, 0, 0.2, '#a9a49a'); cube(rw1, rz0, rw1 + 0.06, D - m, 0, 0.2, '#a9a49a');
+        var rl = (D - m - rz0) * 0.6;
         S.bake(S.box(rw1 - rw0, 0.02, rl, K.mat('#4a4e55'), (rw0 + rw1) / 2, 0.035, D - m - rl / 2), -0.08, 0, 0);
-        for (var st2 = 0; st2 < 3; st2++) cube((rw0 + rw1) / 2 - 0.015, D - m - rl + 0.05 + st2 * rl / 3, (rw0 + rw1) / 2 + 0.015, D - m - rl + 0.05 + st2 * rl / 3 + rl / 6, 0.05, 0.004, '#f1f1e6');
-        cube(rw0 - 0.06, rz0 - 0.06, rw1 + 0.06, rz0, 0, 0.32, '#8c8a84');                          // портал
-        cube(rw0 - 0.08, rz0 - 0.08, rw1 + 0.08, rz0 + 0.18, 0.32, 0.04, '#2f6fc2');               // козырёк
-        S.box(0.14, 0.14, 0.01, K.mat('#ffffff'), (rw0 + rw1) / 2, 0.24, rz0 + 0.005);
-        cube(rw0, rz0 + 0.002, rw1, rz0 + 0.004, 0.02, 0.22, '#1d1f22');                           // тёмный проём
+        for (var st2 = 0; st2 < 3; st2++) cube((rw0 + rw1) / 2 - 0.015, D - m - rl + 0.05 + st2 * rl / 3, (rw0 + rw1) / 2 + 0.015, D - m - rl + 0.05 + st2 * rl / 3 + rl / 6, 0.05, 0.004, '#d9d4c4');
+        // портал в стиле Гимара: два зелёных столба, дуга, вывеска «METRO»-подобная и два светящихся шара
+        [rw0 - 0.05, rw1 + 0.05].forEach(function (x) { cube(x - 0.025, rz0 - 0.05, x + 0.025, rz0 + 0.01, 0.03, 0.3, GRN); S.sph(0.04, '#fff1b8', x, 0.4, rz0 - 0.02, 1.1); });
+        cube(rw0 - 0.075, rz0 - 0.05, rw1 + 0.075, rz0 + 0.01, 0.31, 0.035, GRN);
+        S.bake(S.cyl(0.0001 + (rw1 - rw0) / 2 + 0.05, (rw1 - rw0) / 2 + 0.05, 0.012, 14, GRN, (rw0 + rw1) / 2, 0.37, rz0 - 0.02), Math.PI / 2, 0, 0).scaling.y = 1;
+        S.box(0.3, 0.06, 0.012, K.mat('#f3ead3'), (rw0 + rw1) / 2, 0.375, rz0 + 0.012);
+        cube(rw0, rz0 + 0.002, rw1, rz0 + 0.004, 0.02, 0.22, '#1d1f22');
         var vz = W >= 2 ? 0.35 : 0.3;
-        [[W >= 2 ? 0.35 : 0.5, vz], [W - 0.35, vz]].slice(0, W >= 2 ? 2 : 1).forEach(function (v) { // вентиляция
-          cube(v[0] - 0.09, v[1] - 0.09, v[0] + 0.09, v[1] + 0.09, 0.05, 0.22, '#a6acb3'); cube(v[0] - 0.11, v[1] - 0.11, v[0] + 0.11, v[1] + 0.11, 0.27, 0.03, '#7c828b');
+        [[W >= 2 ? 0.35 : 0.5, vz], [W - 0.35, vz]].slice(0, W >= 2 ? 2 : 1).forEach(function (v) {
+          cube(v[0] - 0.09, v[1] - 0.09, v[0] + 0.09, v[1] + 0.09, 0.05, 0.22, '#6e7a72'); S.hip(v[0] - 0.1, v[1] - 0.1, v[0] + 0.1, v[1] + 0.1, 0.27, 0.07, GRN, 0.01);
         });
-        if (W >= 2) {                                                                                // лифт-павильон, деревья, лавочки
-          part(m + 0.05, D * 0.4, m + 0.4, D * 0.4 + 0.35, 0.05, 0.42, 1, 'glass', '#5a8fbf', '#5c6b7a', 'flat');
-          tree(W - 0.3, D * 0.45, 0.7); tree(0.7, 0.75, 0.6);
+        if (W >= 2) {
+          lamp(0.2, D * 0.55, 0.34); tree(W - 0.3, D * 0.45, 0.7); tree(0.7, 0.75, 0.6);
           cube(W / 2 - 0.2, D * 0.42, W / 2 + 0.2, D * 0.42 + 0.07, 0.05, 0.06, '#8a6b4a');
         }
         if (W >= 3) { tree(1.2, 1.5, 0.8); tree(2.2, 2.3, 0.75); tree(0.6, 2.6, 0.7); S.cyl(0.25, 0.28, 0.06, 16, '#c9c2b3', 1.5, 0.08, 2.9); S.cyl(0.18, 0.18, 0.02, 16, '#6fb6e0', 1.5, 0.11, 2.9); }
@@ -2331,7 +2622,7 @@
     var h = new B.HemisphericLight('h', new B.Vector3(0, 1, 0), sc); h.diffuse = hex('#eef6ff'); h.groundColor = hex('#6d8a55'); h.intensity = 0.85; h.specular = B.Color3.Black();
     var dl = new B.DirectionalLight('d', new B.Vector3(3, -6, -4), sc); dl.intensity = 0.6; dl.specular = B.Color3.Black();
     var c = new B.FreeCamera('c', new B.Vector3(0, 3, 3), sc); c.fov = 30 * Math.PI / 180; c.minZ = 0.05; c.maxZ = 100;
-    T = { canvas: tc, engine: en, scene: sc, cam: c, kit: makeKit(sc) };
+    T = { canvas: tc, engine: en, scene: sc, cam: c, kit: makeKit(sc) }; T.kit.setHD(true);
   }
   function pumpThumbs() { if (tBusy || !tq.length) return; tBusy = true; requestAnimationFrame(thumbStep); }
   function thumbStep() {
