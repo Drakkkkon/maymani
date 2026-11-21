@@ -60,8 +60,8 @@
     });
     return s;
   }
-  // wear — износ асфальта по клеткам (0…1), rq — очередь ремонта, fq / fprog — заказы грузовиков на заводе
-  function emptyState(n) { return { v: 1, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fq: 0, fprog: 0 }; }
+  // wear — износ асфальта по клеткам (0…1), rq — очередь ремонта, fql / fprog — очередь заказов завода, vehicles — машины завода
+  function emptyState(n) { return { v: 1, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fql: [], fprog: 0, vehicles: [], nextVeh: 1 }; }
   function fixState(s) {
     if (!sizeOk(s.size)) s.size = 48;
     if (!Array.isArray(s.brigades)) s.brigades = [];
@@ -69,7 +69,13 @@
     s.spent = s.spent || 0;
     if (!s.wear || typeof s.wear !== 'object') s.wear = {};
     if (!Array.isArray(s.rq)) s.rq = [];
-    s.autoRepair = !!s.autoRepair; s.fq = s.fq | 0; s.fprog = +s.fprog || 0;
+    s.autoRepair = !!s.autoRepair; s.fprog = +s.fprog || 0;
+    if (!Array.isArray(s.fql)) { s.fql = []; for (var i = 0; i < (s.fq | 0); i++) s.fql.push('brigade'); } // до 0.10.0 — число заказанных бригад
+    delete s.fq;
+    s.fql = s.fql.filter(function (k) { return k === 'brigade' || G.vehicles[k]; });
+    if (!Array.isArray(s.vehicles)) s.vehicles = [];
+    s.vehicles = s.vehicles.filter(function (v) { return v && G.vehicles[v.kind]; });
+    s.nextVeh = s.nextVeh || s.vehicles.reduce(function (m, v) { return Math.max(m, v.id); }, 0) + 1;
     s.buildings = s.buildings.filter(function (b) { return G.cats[b.cat] && G.sizes[b.size]; });
     return s;
   }
@@ -530,6 +536,116 @@
     box(0.08, 0.04, 0.33, '#e0c48a', 0.08, 0.205, -0.22);
     box(0.04, 0.02, 0.3, '#f0b23c', -0.07, 0.28, -0.26);                                  // стремянка
     return S.merge();
+  }
+
+  // ---------- Машины завода и легковые (с 0.10.0). Смотрят вперёд по +z ----------
+  function wheelSet(S, pts, r, w, hub) {
+    pts.forEach(function (p) {
+      S.bake(S.cyl(r, r, w, 14, '#1c1c1c', p[0], r, p[1]), 0, 0, Math.PI / 2);
+      S.bake(S.cyl(r * 0.5, r * 0.5, w + 0.004, 10, hub || '#c9ccd0', p[0], r, p[1]), 0, 0, Math.PI / 2);
+    });
+  }
+  // кабина грузовика: cz — центр по длине, col — цвет
+  function cabin(S, K, col, cz, w, h, y0) {
+    function box(bw, bh, bd, c, x, y, z) { return S.box(bw, bh, bd, K.mat(c), x, y, z); }
+    box(w, h, 0.22, col, 0, y0 + h / 2, cz);
+    box(w * 0.82, h * 0.42, 0.012, '#9cc3dd', 0, y0 + h * 0.68, cz + 0.111);          // лобовое
+    box(w + 0.004, h * 0.36, 0.13, '#9cc3dd', 0, y0 + h * 0.68, cz + 0.01);            // боковые окна
+    box(w + 0.01, 0.03, 0.035, '#d9dcd2', 0, y0 + 0.02, cz + 0.12);                    // бампер
+    [w / 2 - 0.05, -w / 2 + 0.05].forEach(function (x) { box(0.045, 0.03, 0.01, '#fff4c2', x, y0 + 0.08, cz + 0.112); }); // фары
+  }
+  function vehicleModel(K, kind) {
+    var S = Shapes(K, 0, 0);
+    function box(w, h, d, c, x, y, z) { return S.box(w, h, d, K.mat(c), x, y, z); }
+    var y0 = 0.13;
+    if (kind === 'garbage') {                     // мусоровоз: белая кабина, синий кузов с прессом
+      box(0.26, 0.04, 0.84, '#2c2c2a', 0, 0.11, 0);
+      wheelSet(S, [[0.14, 0.28], [-0.14, 0.28], [0.14, -0.2], [-0.14, -0.2], [0.14, -0.32], [-0.14, -0.32]], 0.07, 0.06);
+      cabin(S, K, '#f1f1ec', 0.3, 0.3, 0.24, y0);
+      box(0.32, 0.3, 0.5, '#2f6fb3', 0, y0 + 0.17, -0.1);
+      for (var i = 0; i < 4; i++) box(0.326, 0.02, 0.5, '#255a93', 0, y0 + 0.06 + i * 0.07, -0.1);
+      box(0.3, 0.26, 0.1, '#7b8691', 0, y0 + 0.15, -0.39);                              // задний пресс
+      box(0.2, 0.06, 0.02, '#ffcf3a', 0, y0 + 0.05, -0.445);
+      box(0.04, 0.03, 0.04, '#ff9a2e', 0, y0 + 0.26, 0.26);
+    } else if (kind === 'ambulance') {           // скорая: белый фургон, красная полоса, маячки
+      box(0.24, 0.04, 0.78, '#2c2c2a', 0, 0.1, 0);
+      wheelSet(S, [[0.13, 0.25], [-0.13, 0.25], [0.13, -0.24], [-0.13, -0.24]], 0.065, 0.055);
+      box(0.3, 0.12, 0.18, '#f6f6f2', 0, y0 + 0.04, 0.3);                               // капот
+      box(0.3, 0.32, 0.6, '#f6f6f2', 0, y0 + 0.16, -0.08);                              // кузов
+      box(0.244, 0.11, 0.012, '#9cc3dd', 0, y0 + 0.21, 0.222);
+      box(0.304, 0.1, 0.12, '#9cc3dd', 0, y0 + 0.21, 0.15);
+      box(0.306, 0.045, 0.6, '#d8262e', 0, y0 + 0.08, -0.08);                           // полоса
+      box(0.308, 0.1, 0.03, '#d8262e', 0, y0 + 0.2, -0.12); box(0.308, 0.03, 0.1, '#d8262e', 0, y0 + 0.2, -0.12); // крест
+      box(0.07, 0.04, 0.05, '#2f7cf0', 0.08, y0 + 0.34, 0.16); box(0.07, 0.04, 0.05, '#ff3030', -0.08, y0 + 0.34, 0.16);
+      box(0.32, 0.03, 0.03, '#d9dcd2', 0, 0.12, 0.39);
+      [0.1, -0.1].forEach(function (x) { box(0.05, 0.03, 0.01, '#fff4c2', x, y0 + 0.06, 0.391); });
+    } else if (kind === 'police') {              // полиция: бело-синий седан с мигалкой
+      box(0.26, 0.1, 0.66, '#f4f4f0', 0, 0.13, 0);
+      wheelSet(S, [[0.12, 0.21], [-0.12, 0.21], [0.12, -0.2], [-0.12, -0.2]], 0.06, 0.05);
+      box(0.262, 0.05, 0.66, '#1f4fa8', 0, 0.15, 0);                                     // синяя полоса
+      box(0.23, 0.1, 0.3, '#f4f4f0', 0, 0.23, -0.04);                                   // салон
+      box(0.234, 0.07, 0.24, '#5d7fa0', 0, 0.23, -0.04);
+      box(0.2, 0.03, 0.08, '#2a2a2a', 0, 0.295, -0.04);
+      box(0.08, 0.035, 0.07, '#2f7cf0', 0.05, 0.3, -0.04); box(0.08, 0.035, 0.07, '#ff3030', -0.05, 0.3, -0.04);
+      [0.09, -0.09].forEach(function (x) { box(0.05, 0.025, 0.01, '#fff4c2', x, 0.15, 0.331); });
+    } else if (kind === 'army') {                // армейский грузовик: хаки, тент
+      var KH = '#5f6b3a', KD = '#4b5530';
+      box(0.26, 0.05, 0.86, '#2a2a26', 0, 0.12, 0);
+      wheelSet(S, [[0.15, 0.3], [-0.15, 0.3], [0.15, -0.16], [-0.15, -0.16], [0.15, -0.31], [-0.15, -0.31]], 0.075, 0.065, '#3b3f2c');
+      box(0.26, 0.11, 0.16, KH, 0, y0 + 0.07, 0.36);                                     // капот
+      cabin(S, K, KH, 0.2, 0.3, 0.24, y0);
+      box(0.34, 0.04, 0.5, KD, 0, y0 + 0.05, -0.2);                                     // кузов
+      box(0.34, 0.24, 0.5, '#6f7a47', 0, y0 + 0.19, -0.2);                              // тент
+      S.bake(S.cyl(0.17, 0.17, 0.5, 14, '#6f7a47', 0, y0 + 0.31, -0.2), Math.PI / 2, 0, 0).scaling.set(1, 0.35, 1);
+      box(0.25, 0.16, 0.012, '#3d4428', 0, y0 + 0.18, -0.451);
+    } else if (kind === 'van') {                 // фургон доставки: синяя будка
+      box(0.24, 0.04, 0.78, '#2c2c2a', 0, 0.1, 0);
+      wheelSet(S, [[0.13, 0.26], [-0.13, 0.26], [0.13, -0.24], [-0.13, -0.24]], 0.065, 0.055);
+      cabin(S, K, '#f2f2ee', 0.27, 0.28, 0.22, y0);
+      box(0.32, 0.34, 0.5, '#2563c9', 0, y0 + 0.19, -0.12);
+      box(0.324, 0.07, 0.36, '#ffcf3a', 0, y0 + 0.22, -0.12);                           // полоса компании
+      box(0.3, 0.3, 0.012, '#1d4c9c', 0, y0 + 0.18, -0.372);
+    } else if (kind === 'semi') {                // тягач с прицепом-контейнером
+      box(0.24, 0.05, 0.36, '#2a2a28', 0, 0.12, 0.3);
+      wheelSet(S, [[0.13, 0.4], [-0.13, 0.4], [0.13, 0.2], [-0.13, 0.2]], 0.07, 0.06);
+      cabin(S, K, '#c8342c', 0.4, 0.3, 0.3, y0);
+      box(0.3, 0.12, 0.08, '#a82a23', 0, y0 + 0.3, 0.38);                               // спальник
+      box(0.24, 0.05, 0.72, '#2a2a28', 0, 0.14, -0.2);
+      wheelSet(S, [[0.14, -0.4], [-0.14, -0.4], [0.14, -0.52], [-0.14, -0.52]], 0.07, 0.06);
+      box(0.34, 0.32, 0.78, '#3c7d7a', 0, y0 + 0.24, -0.22);                            // контейнер
+      for (var j = 0; j < 7; j++) box(0.346, 0.3, 0.015, '#336b68', 0, y0 + 0.24, -0.56 + j * 0.11);
+      box(0.3, 0.28, 0.012, '#2c5e5b', 0, y0 + 0.24, -0.612);
+    } else if (kind === 'dump') {                // самосвал: жёлтая кабина, оранжевый кузов со щебнем
+      box(0.26, 0.05, 0.84, '#2c2c2a', 0, 0.12, 0);
+      wheelSet(S, [[0.15, 0.28], [-0.15, 0.28], [0.15, -0.18], [-0.15, -0.18], [0.15, -0.31], [-0.15, -0.31]], 0.075, 0.065);
+      cabin(S, K, '#f2c230', 0.3, 0.3, 0.26, y0);
+      box(0.34, 0.04, 0.52, '#e0702a', 0, y0 + 0.06, -0.16);
+      box(0.03, 0.16, 0.52, '#e0702a', 0.155, y0 + 0.14, -0.16); box(0.03, 0.16, 0.52, '#e0702a', -0.155, y0 + 0.14, -0.16);
+      box(0.34, 0.16, 0.03, '#e0702a', 0, y0 + 0.14, -0.41); box(0.34, 0.22, 0.04, '#c45e1f', 0, y0 + 0.17, 0.1);
+      box(0.28, 0.08, 0.44, '#6e6a64', 0, y0 + 0.17, -0.17);                            // щебень
+      box(0.16, 0.05, 0.22, '#58554f', 0.03, y0 + 0.22, -0.2);
+    }
+    return S.merge();
+  }
+  function carModel(K, m) {
+    var S = Shapes(K, 0, 0), info = G.cars.models.filter(function (c) { return c.id === m; })[0] || G.cars.models[0], C = info.color, GL = '#6f8fae';
+    function box(w, h, d, c, x, y, z) { return S.box(w, h, d, K.mat(c), x, y, z); }
+    var len = m === 'hatch' ? 0.48 : 0.58;
+    box(0.26, 0.09, len, C, 0, 0.11, 0);                                                // кузов
+    wheelSet(S, [[0.12, len / 2 - 0.1], [-0.12, len / 2 - 0.1], [0.12, -len / 2 + 0.1], [-0.12, -len / 2 + 0.1]], 0.055, 0.045, '#bfc3c8');
+    if (m === 'sedan') { box(0.23, 0.09, 0.26, C, 0, 0.2, -0.03); box(0.234, 0.065, 0.2, GL, 0, 0.2, -0.03); box(0.2, 0.06, 0.012, GL, 0, 0.2, 0.1); }
+    else if (m === 'hatch') { box(0.23, 0.1, 0.27, C, 0, 0.2, -0.06); box(0.234, 0.07, 0.22, GL, 0, 0.2, -0.05); box(0.2, 0.07, 0.012, GL, 0, 0.2, 0.076); }
+    else { box(0.23, 0.1, 0.38, C, 0, 0.2, -0.07); box(0.234, 0.07, 0.33, GL, 0, 0.2, -0.06); box(0.2, 0.07, 0.012, GL, 0, 0.2, 0.121); box(0.18, 0.015, 0.3, '#3a3a3a', 0, 0.26, -0.08); }
+    box(0.27, 0.025, 0.025, '#d9dcd2', 0, 0.08, len / 2); box(0.27, 0.025, 0.025, '#d9dcd2', 0, 0.08, -len / 2);
+    [0.09, -0.09].forEach(function (x) { box(0.045, 0.022, 0.008, '#fff4c2', x, 0.13, len / 2 + 0.002); box(0.045, 0.022, 0.008, '#d8262e', x, 0.13, -len / 2 - 0.002); });
+    return S.merge();
+  }
+  function vehicleThumb(k, car) {
+    return thumbReq((car ? 'car_' : 'veh_') + k, function (K) {
+      var root = new B.Mesh('thumb', K.scene), t = car ? carModel(K, k) : vehicleModel(K, k); t.rotation.y = -0.35; t.parent = root;
+      var pad = B.MeshBuilder.CreateBox('pad', { width: 0.75, height: 0.04, depth: car ? 0.8 : 1.3 }, K.scene); pad.position.y = -0.02; pad.material = K.mat('#8cc068'); pad.parent = root;
+      return root;
+    });
   }
 
   // ---------- Пачки (thin instances): одна сетка — много копий ----------
@@ -1275,22 +1391,38 @@
   }
 
 
-  // ---------- Механический завод: выпуск грузовиков «Бригада» (с 0.9.0) ----------
+  // ---------- Механический завод: выпуск машин (с 0.9.0; общая очередь и 7 новых машин — с 0.10.0) ----------
   function working(cat) { return state.buildings.filter(function (b) { return b.cat === cat && isWorking(b); }); }
   // точка здания в его собственных координатах (lx, lz от центра; +z — фасад) → мир
   function localPos(b, lx, lz) {
     var c = siteCenter(b), yaw = -b.rot * Math.PI / 2, cs = Math.cos(yaw), sn = Math.sin(yaw);
     return { x: c.x + lx * cs + lz * sn, z: c.z - lx * sn + lz * cs, yaw: yaw };
   }
+  // Что заказывают: 'brigade' или ключ из G.vehicles
+  function prodInfo(kind) {
+    if (kind === 'brigade') { var u = G.units.brigade; return { name: 'Бригада', icon: '🚚', price: u.factoryPrice, time: u.makeTime }; }
+    var v = G.vehicles[kind]; return { name: v.name, icon: v.icon, price: v.price, time: v.makeTime };
+  }
+  function queued(kind) { var n = 0; state.fql.forEach(function (k) { if (k === kind) n++; }); return n; }
   var factoryTurn = 0;
-  function factoryNext() { var n = working('factory').length; return n ? (G.units.brigade.makeTime - state.fprog) / n : 0; }
+  // Сколько секунд до выхода машины номер i в очереди (число заводов скорость не меняет — правило 0.10.0)
+  function factoryEta(i) {
+    var t = 0;
+    for (var j = 0; j <= i && j < state.fql.length; j++) t += prodInfo(state.fql[j]).time - (j === 0 ? state.fprog : 0);
+    return Math.max(0, t);
+  }
+  function factoryNext() { return state.fql.length ? factoryEta(0) : 0; }
   function tickFactory(dt) {
-    if (state.fq <= 0) { state.fprog = 0; return false; }
+    if (!state.fql.length) { state.fprog = 0; return false; }
     var F = working('factory'); if (!F.length) return false;
-    var T = G.units.brigade.makeTime;
-    state.fprog += dt * F.length;
-    while (state.fprog >= T && state.fq > 0) { state.fprog -= T; state.fq--; spawnTruck(F[factoryTurn++ % F.length]); }
-    if (!state.fq) state.fprog = 0;
+    state.fprog += dt;
+    var guard = 0;
+    while (state.fql.length && state.fprog >= prodInfo(state.fql[0]).time && guard++ < 20) {
+      state.fprog -= prodInfo(state.fql[0]).time;
+      var kind = state.fql.shift(), fb = F[factoryTurn++ % F.length];
+      if (kind === 'brigade') spawnTruck(fb); else spawnVehicle(fb, kind);
+    }
+    if (!state.fql.length) state.fprog = 0;
     return false;
   }
   function spawnTruck(fb) {
@@ -1304,23 +1436,245 @@
     return state.buildings.some(function (b) { return b.cat === 'factory' && !isSite(b); }) ? '🏭 Завод не работает — подведите к нему дорогу' :
       state.buildings.some(function (b) { return b.cat === 'factory'; }) ? '🏭 Завод ещё строится' : '🏭 Сначала постройте Механический завод: 🚚 Механизмы → 🏭 Здания';
   }
-  function orderTruck() {
-    var u = G.units.brigade;
+  function orderKind(kind) {
+    var p = prodInfo(kind);
     if (!working('factory').length) { hint(noFactoryMsg(), true); return; }
-    if (!canPay(u.factoryPrice)) { hint('Не хватает долларов: нужно ' + usd(u.factoryPrice), true); return; }
-    pay(u.factoryPrice); state.fq++; save(); renderMech(); refreshLive();
-    hint('🏭 Грузовик заказан: в очереди ' + state.fq + ', следующий через ≈ ' + secText(factoryNext()));
+    if (!canPay(p.price)) { hint('Не хватает долларов: нужно ' + usd(p.price), true); return; }
+    pay(p.price); state.fql.push(kind); save(); renderMech(); refreshLive();
+    var n = state.fql.length;
+    hint('🏭 ' + p.icon + ' «' + p.name + '» заказан' + (n > 1 ? ': в очереди ' + n + ', выйдет через ≈ ' + secText(factoryEta(n - 1)) : ' — выйдет через ≈ ' + secText(factoryEta(0))));
   }
-  function cancelOrder() {
-    if (state.fq <= 0) return;
-    state.fq--; state.spent -= G.units.brigade.factoryPrice; if (!state.fq) state.fprog = 0;
+  function orderTruck() { orderKind('brigade'); }
+  function cancelKind(kind) {
+    var i = state.fql.lastIndexOf(kind); if (i < 0) return;
+    state.fql.splice(i, 1); if (i === 0) state.fprog = 0;
+    var p = prodInfo(kind); state.spent -= p.price;
     updateMoney(); save(); renderMech(); refreshLive();
-    hint('Заказ грузовика отменён, вернули ' + usd(G.units.brigade.factoryPrice));
+    hint('Заказ «' + p.name + '» отменён, вернули ' + usd(p.price));
   }
-  function fqText() {
-    if (!state.fq) return 'нет заказов';
-    var n = working('factory').length;
-    return '<b>' + state.fq + '</b> · ' + (n ? 'следующий через ≈ ' + secText(factoryNext()) : '<span class="bad">завод не работает</span>');
+  function cancelOrder() { cancelKind('brigade'); }
+  function fqText(kind) {
+    var L = state.fql;
+    if (kind) {
+      var n = queued(kind); if (!n) return 'нет заказов';
+      return '<b>' + n + '</b> · ' + (working('factory').length ? 'выйдет через ≈ ' + secText(factoryEta(L.indexOf(kind))) : '<span class="bad">завод не работает</span>');
+    }
+    if (!L.length) return 'нет заказов';
+    var p = prodInfo(L[0]);
+    return '<b>' + L.length + '</b> · ' + (working('factory').length ? 'сейчас ' + p.icon + ' ' + esc(p.name) + ', ≈ ' + secText(factoryNext()) : '<span class="bad">завод не работает</span>');
+  }
+
+  // ---------- Машины на дорогах (с 0.10.0) ----------
+  // Машины завода (state.vehicles) и легковые жителей ездят по клеткам дорог по правой полосе.
+  var agents = {}, carAgents = {}, LANE = 0.17, planBudget = 0, carsDriving = 0;
+  function vehBatch(kind) { return getBatch('veh_' + kind, function () { return vehicleModel(kit, kind); }); }
+  function carBatch(m) { return getBatch('car_' + m, function () { return carModel(kit, m); }); }
+  function agentBatch(a) { return a.car ? carBatch(a.model) : vehBatch(a.kind); }
+  function writeAgent(a) { var s = a.car ? 0.8 : 0.72; batchSet(agentBatch(a), a.id, a.x, 0, a.z, a.yaw, s, s, s); }
+  function cellOf(x, z) { return { x: Math.floor(x + N / 2), z: Math.floor(z + N / 2) }; }
+  // клетки дороги у стороны здания и место «у входа» на каждой (у бордюра, вдоль стороны)
+  function curbSpots(b, inset) {
+    inset = inset || 0.33;
+    var f = foot(b.size, b.rot), out = [];
+    edgeKeys(b, function (k) {
+      if (!state.roads[k]) return;
+      var p = k.split(','), x = +p[0], z = +p[1], nx = 0, nz = 0;
+      if (x === b.x - 1) nx = 1; else if (x === b.x + f.w) nx = -1; else if (z === b.z - 1) nz = 1; else nz = -1;
+      var c = cellCenter(x, z);
+      out.push({ k: k, x: c.x + nx * inset, z: c.z + nz * inset, tx: nz, tz: nx, yaw: nx ? 0 : Math.PI / 2 });
+    });
+    return out;
+  }
+  function spotAt(b, n, inset) {
+    var S = curbSpots(b, inset); if (!S.length) return null;
+    var s = S[n % S.length], sh = (Math.floor(n / S.length) % 3 - 1) * 0.3; // если машин больше, чем клеток, — сдвиг вдоль бордюра
+    return { k: s.k, x: s.x + s.tx * sh, z: s.z + s.tz * sh, yaw: s.yaw };
+  }
+  // Поиск пути по дорогам (в ширину). Возвращает список клеток от start до любой из goal.
+  function roadPath(start, goal) {
+    if (!state.roads[start] || !goal) return null;
+    if (goal[start]) return [start];
+    var prev = {}, q = [start], h = 0; prev[start] = '';
+    while (h < q.length) {
+      var k = q[h++], p = k.split(','), x = +p[0], z = +p[1];
+      for (var d = 0; d < 4; d++) {
+        var nk = key(x + DIRS[d][0], z + DIRS[d][1]);
+        if (prev[nk] !== undefined || !state.roads[nk]) continue;
+        prev[nk] = k;
+        if (goal[nk]) { var path = [nk]; while (prev[path[0]]) path.unshift(prev[path[0]]); return path; }
+        q.push(nk);
+      }
+    }
+    return null;
+  }
+  // Клетки → точки на правой полосе (на поворотах — точка пересечения полос)
+  function lanePoints(cells) {
+    var pts = [], C = cells.map(function (k) { var p = k.split(','); return cellCenter(+p[0], +p[1]); });
+    for (var i = 0; i < C.length; i++) {
+      var a = C[i - 1], b = C[i], c = C[i + 1];
+      var din = a ? { x: b.x - a.x, z: b.z - a.z } : null, dout = c ? { x: c.x - b.x, z: c.z - b.z } : null;
+      din = din || dout; dout = dout || din; if (!din) { pts.push({ x: b.x, z: b.z }); continue; }
+      var ri = { x: din.z, z: -din.x }, ro = { x: dout.z, z: -dout.x };
+      if (ri.x === ro.x && ri.z === ro.z) pts.push({ x: b.x + ri.x * LANE, z: b.z + ri.z * LANE });
+      else if (ri.x === -ro.x && ri.z === -ro.z) { // разворот в тупике
+        pts.push({ x: b.x + ri.x * LANE + din.x * 0.3, z: b.z + ri.z * LANE + din.z * 0.3 });
+        pts.push({ x: b.x + ro.x * LANE + din.x * 0.3, z: b.z + ro.z * LANE + din.z * 0.3 });
+      } else pts.push({ x: b.x + (ri.x + ro.x) * LANE, z: b.z + (ri.z + ro.z) * LANE });
+    }
+    return pts;
+  }
+  function goalSet(b) { var g = {}, n = 0; curbSpots(b).forEach(function (s) { g[s.k] = 1; n++; }); return n ? g : null; }
+  // Отправить машину к зданию b. Возвращает true, если путь найден.
+  function sendTo(a, b, slot) {
+    var inset = a.car ? 0.33 : 0.08; // машины завода встают прямо в полосе — не налезают на легковые у бордюра
+    var spot = spotAt(b, slot, inset); if (!spot) return false;
+    var path = roadPath(a.cell, goalSet(b));
+    if (!path) return false;
+    var pts = lanePoints(path);
+    var last = path[path.length - 1];
+    if (last !== spot.k) { var S2 = curbSpots(b, inset).filter(function (s) { return s.k === last; }); if (S2.length) spot = { k: last, x: S2[0].x, z: S2[0].z, yaw: S2[0].yaw }; }
+    pts.push({ x: spot.x, z: spot.z });
+    a.pts = pts; a.pi = 0; a.dest = b.id; a.spot = spot; a.mode = 'drive';
+    return true;
+  }
+  function nearestRoad(x, z) {
+    var c = cellOf(x, z);
+    for (var r = 0; r <= 4; r++) for (var dx = -r; dx <= r; dx++) for (var dz = -r; dz <= r; dz++) {
+      if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+      var k = key(c.x + dx, c.z + dz); if (state.roads[k]) return k;
+    }
+    return null;
+  }
+  // --- машины завода ---
+  function spawnVehicle(fb, kind) {
+    var g = localPos(fb, 0.6, 0.65), v = { id: state.nextVeh++, kind: kind };
+    state.vehicles.push(v);
+    var a = makeAgent(v, g.x, g.z, g.yaw);
+    var S = curbSpots(fb); if (S.length) a.cell = S[0].k;
+    a.t = 0.3; saveNow(); renderMech(); dirty();
+    var info = G.vehicles[kind], has = working(info.serves).length;
+    hint('🏭 Завод выпустил ' + info.icon + ' «' + info.name + '»' + (has ? ' — машина поехала по делам' : ' — машина ждёт: нет работающих зданий «' + G.cats[info.serves].label + '»'));
+  }
+  function makeAgent(v, x, z, yaw) {
+    var a = agents[v.id] = { id: v.id, kind: v.kind, x: x, z: z, yaw: yaw || 0, cell: nearestRoad(x, z), mode: 'park', t: 0.5 + Math.random() * 2, pts: null };
+    v.x = x; v.z = z; writeAgent(a); return a;
+  }
+  function sellVehicle(kind) {
+    var j = -1; for (var i = state.vehicles.length - 1; i >= 0; i--) if (state.vehicles[i].kind === kind) { j = i; break; }
+    if (j < 0) return;
+    var v = state.vehicles.splice(j, 1)[0], a = agents[v.id];
+    if (a) { batchRemove(agentBatch(a), a.id); delete agents[v.id]; }
+    var p = G.vehicles[kind].price; state.spent -= Math.round(p / 2); updateMoney(); save(); renderMech(); dirty();
+    hint('«' + G.vehicles[kind].name + '» продана, вернули ' + usd(p / 2));
+  }
+  function vehCount(kind) { var n = 0; state.vehicles.forEach(function (v) { if (v.kind === kind) n++; }); return n; }
+  function clearAgents() {
+    Object.keys(agents).forEach(function (id) { batchRemove(agentBatch(agents[id]), +id); });
+    Object.keys(carAgents).forEach(function (id) { batchRemove(agentBatch(carAgents[id]), +id); });
+    agents = {}; carAgents = {}; carsDriving = 0;
+  }
+  function rebuildAgents() {
+    clearAgents();
+    state.vehicles.forEach(function (v, i) {
+      var p = typeof v.x === 'number' ? { x: clamp(v.x, -N / 2, N / 2), z: clamp(v.z, -N / 2, N / 2 + 2) } : parkSpot(i + state.brigades.length);
+      makeAgent(v, p.x, p.z, 0);
+    });
+    syncCars();
+  }
+  // --- легковые жителей: сколько и где стоят ---
+  function syncCars() {
+    var C = G.cars, want = {}, total = 0;
+    state.buildings.forEach(function (b) {
+      if (b.cat !== 'res' || !isWorking(b) || total >= C.max) return;
+      var n = Math.min(C.perHouse[b.size] || 1, C.max - total);
+      for (var k = 0; k < n; k++) { want[b.id * 10 + k] = { b: b, k: k }; total++; }
+    });
+    Object.keys(carAgents).forEach(function (id) {
+      var a = carAgents[id], w = want[id];
+      if (!w || (a.mode === 'park' && a.dest === a.home && !spotAt(w.b, w.k))) { if (a.mode === 'drive') carsDriving--; batchRemove(agentBatch(a), +id); delete carAgents[id]; }
+    });
+    Object.keys(want).forEach(function (id) {
+      var old = carAgents[id];
+      if (old) { // стоит у дома, а дорогу у дома переложили — переставить к новому бордюру
+        if (old.mode === 'park' && old.dest === old.home) { var s2 = spotAt(want[id].b, want[id].k); if (s2 && s2.k !== old.cell) { old.x = s2.x; old.z = s2.z; old.yaw = s2.yaw; old.cell = s2.k; writeAgent(old); } }
+        return;
+      }
+      var w = want[id], s = spotAt(w.b, w.k); if (!s) return;
+      var m = G.cars.models[((w.b.seed >>> 0) + w.k * 7) % G.cars.models.length].id;
+      var a = carAgents[id] = { id: +id, car: 1, model: m, home: w.b.id, slot: w.k, x: s.x, z: s.z, yaw: s.yaw, cell: s.k, mode: 'park', dest: w.b.id,
+        t: C.wait[0] + Math.random() * (C.wait[1] - C.wait[0]) };
+      writeAgent(a);
+    });
+    dirty();
+  }
+  function carCount(bid) { var n = 0; for (var id in carAgents) if (carAgents[id].home === bid) n++; return n; }
+  function randomOf(list, r) { return list.length ? list[Math.floor((r === undefined ? Math.random() : r) * list.length)] : null; }
+  // Куда ехать машине: жители — на работу, в магазин, школу и т. п. (и назад домой); машины завода — к своим зданиям
+  function planAgent(a) {
+    if (planBudget <= 0) { a.t = 0.1; return; }
+    planBudget--;
+    if (!a.cell || !state.roads[a.cell]) a.cell = nearestRoad(a.x, a.z);
+    var ok = false, target = null;
+    if (a.car) {
+      var home = getB(a.home);
+      if (!home) return;
+      if (a.dest !== a.home) target = home;
+      else if (carsDriving < G.cars.driveMax) {
+        var W = state.buildings.filter(function (b) { return b.cat !== 'res' && isWorking(b); });
+        // предпочитаем места поближе: берём лучшее из нескольких случайных
+        var hb = siteCenter(home), best = null, bd = 1e9;
+        for (var i = 0; i < 4 && W.length; i++) { var c = randomOf(W), cc = siteCenter(c), d = Math.hypot(cc.x - hb.x, cc.z - hb.z) * (0.6 + Math.random()); if (d < bd) { bd = d; best = c; } }
+        target = best;
+      }
+      if (target) ok = sendTo(a, target, target === home ? a.slot : 4 + (a.id % 5));
+      if (ok) carsDriving++;
+      a.t = ok ? 0 : 6 + Math.random() * 10;
+    } else {
+      var info = G.vehicles[a.kind], L = working(info.serves).filter(function (b) { return b.id !== a.dest; });
+      if (!L.length) L = working(info.serves);
+      for (var tries = 0; tries < 3 && L.length && !ok; tries++) { target = randomOf(L); ok = sendTo(a, target, 6 + (a.id % 3)); }
+      a.t = ok ? 0 : 4 + Math.random() * 4;
+    }
+  }
+  function tickAgent(a, dt) {
+    if (a.mode === 'park') { a.t -= dt; if (a.t <= 0) planAgent(a); return a.mode === 'drive'; }
+    var sp = (a.car ? G.cars.speed : G.vehicleSpeed) * dt, moved = false;
+    while (sp > 0 && a.pts) {
+      var p = a.pts[a.pi], dx = p.x - a.x, dz = p.z - a.z, d = Math.hypot(dx, dz);
+      // дорогу убрали прямо перед машиной — встаём и ищем путь заново
+      if (a.pi < a.pts.length - 1) { var ck = cellOf(p.x, p.z), kk = key(ck.x, ck.z); if (!state.roads[kk]) { arrive(a, false); return true; } }
+      if (d > 1e-4) { a.yawT = Math.atan2(dx, dz); }
+      if (d <= sp) { a.x = p.x; a.z = p.z; sp -= d; a.pi++; var c2 = cellOf(a.x, a.z), k2 = key(c2.x, c2.z); if (state.roads[k2]) a.cell = k2; if (a.pi >= a.pts.length) { arrive(a, true); break; } }
+      else { a.x += dx / d * sp; a.z += dz / d * sp; sp = 0; }
+      moved = true;
+    }
+    if (a.yawT !== undefined) a.yaw = angTo(a.yaw, a.mode === 'park' && a.spot ? a.spot.yaw : a.yawT, Math.min(1, dt * 9));
+    writeAgent(a);
+    return moved;
+  }
+  function arrive(a, ok) {
+    if (a.car && a.mode === 'drive') carsDriving--;
+    a.mode = 'park'; a.pts = null;
+    if (ok && a.spot) { a.cell = a.spot.k; a.yaw = a.spot.yaw; a.yawT = undefined; }
+    else { a.dest = a.car ? -1 : 0; a.cell = nearestRoad(a.x, a.z); }
+    if (a.car) a.t = a.dest === a.home ? G.cars.wait[0] + Math.random() * (G.cars.wait[1] - G.cars.wait[0]) : 4 + Math.random() * 10;
+    else a.t = 3 + Math.random() * 6;
+    if (!a.car) { var v = state.vehicles.filter(function (x) { return x.id === a.id; })[0]; if (v) { v.x = a.x; v.z = a.z; } }
+    writeAgent(a);
+  }
+  function tickTraffic(dt) {
+    planBudget = 6;
+    var any = false, id;
+    for (id in agents) if (tickAgent(agents[id], dt)) any = true;
+    for (id in carAgents) if (tickAgent(carAgents[id], dt)) any = true;
+    if (any) dirty();
+    return any;
+  }
+  // Какие машины завода обслуживают здания этого вида
+  function servingText(cat) {
+    var out = [];
+    Object.keys(G.vehicles).forEach(function (k) { var v = G.vehicles[k]; if (v.serves === cat) out.push(v.icon + ' ' + v.name + ': ' + vehCount(k)); });
+    return out.join(', ');
   }
 
   // ---------- Износ асфальта (с 0.9.0) ----------
@@ -1510,7 +1864,7 @@
   // Живые надписи в справке и в «Механизмах» — обновляются по id, без пересборки кнопок.
   function refreshLive() {
     function set(id, v) { var e = $(id); if (e && e.innerHTML !== v) e.innerHTML = v; }
-    var need = $('iRs') || $('mRs') || $('irWear') || $('iFq') || $('mFq');
+    var need = $('iRs') || $('mRs') || $('irWear') || $('iFq') || $('mFq') || $('mFqAll') || $('mVq_garbage');
     if (!need && !infoRoad) return;
     if (infoRoad) {
       var t = state.roads[infoRoad];
@@ -1536,8 +1890,15 @@
       set('iRep', rb); set('mRep', rb);
       ['iAuto', 'mAuto'].forEach(function (id) { var e = $(id); if (e) { set(id, autoLabel()); e.classList.toggle('on', state.autoRepair); } });
     }
-    set('iFq', fqText()); set('mFq', fqText());
-    ['iCancel', 'mCancel'].forEach(function (id) { var e = $(id); if (e) e.disabled = !state.fq; });
+    set('iFq', fqText()); set('mFq', fqText('brigade')); set('mFqAll', fqText());
+    ['iCancel', 'mCancel'].forEach(function (id) { var e = $(id); if (e) e.disabled = !queued('brigade'); });
+    if ($('mVq_garbage')) Object.keys(G.vehicles).forEach(function (k) {
+      set('mVq_' + k, fqText(k)); set('mVn_' + k, String(vehCount(k)));
+      var c = $('mVc_' + k); if (c) c.disabled = !queued(k);
+      var sl = $('mVs_' + k); if (sl) sl.disabled = !vehCount(k);
+      var w = working(G.vehicles[k].serves).length; set('mVw_' + k, w ? w + ' ' + plural(w, 'здание', 'здания', 'зданий') : '<span class="bad">нет работающих</span>');
+    });
+    if ($('mCarsN')) set('mCarsN', String(Object.keys(carAgents).length));
   }
 
   function rebuildAll() {
@@ -1548,7 +1909,7 @@
     rebuildOcc();
     state.buildings.forEach(addBuildingMesh);
     Object.keys(state.roads).forEach(function (k) { var p = k.split(','); markRoad(+p[0], +p[1]); });
-    rebuildTrucks(); assignBrigades(); clearRollers();
+    rebuildTrucks(); assignBrigades(); clearRollers(); rebuildAgents();
     resCache = {}; workCache = {};
     updateStats(); updateMoney(); refreshNeed(); dirty();
   }
@@ -1974,7 +2335,7 @@
     var sel = $('bGrid').querySelector('.bcard.on');
     if (sel) sel.scrollIntoView({ block: 'nearest' });
   }
-  function secText(s) { s = Math.max(1, Math.ceil(s)); return s < 60 ? s + ' с' : Math.floor(s / 60) + ' мин ' + (s % 60 ? s % 60 + ' с' : ''); }
+  function secText(s) { if (s < 10) { var h = Math.max(0.5, Math.ceil(s * 2) / 2); return String(h).replace('.', ',') + ' с'; } s = Math.ceil(s); return s < 60 ? s + ' с' : Math.floor(s / 60) + ' мин ' + (s % 60 ? s % 60 + ' с' : ''); }
   function buildHint() {
     var n = state.brigades.length;
     if (!n) { hint(NO_BRIGADE, true); return; }
@@ -2278,7 +2639,7 @@
     $('mech').hidden = false;
     document.querySelector('.tool.mech').classList.add('open');
     $('mechTabs').innerHTML = G.mechTabs.map(function (t) { return '<button class="tab' + (t.id === mechTab ? ' on' : '') + '" data-tab="' + t.id + '">' + t.label + '</button>'; }).join('');
-    $('mechBody').innerHTML = mechTab === 'plants' ? plantsHtml() : brigadeHtml();
+    $('mechBody').innerHTML = mechTab === 'plants' ? plantsHtml() : mechTab === 'cars' ? carsHtml() : brigadeHtml();
     $('mechBody').scrollTop = 0;
     renderMech();
   }
@@ -2318,10 +2679,11 @@
         '<div class="ubtns"><button class="btn-buy" data-act="place" data-cat="' + ck + '">🏗️ Построить</button></div>';
     }
     return card('factory') +
-      '<div class="pbox"><b>🚚 Выпуск грузовиков «Бригада»</b>' +
-      '<div class="ukv"><span>Заказано</span><span id="mFq">—</span><span>Цена</span><span class="usd">' + usd(u.factoryPrice) + '</span>' +
-      '<span>Время</span><span>' + u.makeTime + ' с на грузовик; два завода — вдвое быстрее</span></div>' +
-      '<div class="ubtns"><button class="btn-buy alt" data-act="order">🏭 Заказать грузовик</button><button class="btn-sell" data-act="cancel" id="mCancel">Отменить</button></div></div>' +
+      '<div class="pbox"><b>🏭 Выпуск машин</b>' +
+      '<div class="ukv"><span>Очередь завода</span><span id="mFqAll">—</span><span>«Бригада»</span><span class="usd">' + usd(u.factoryPrice) + '</span>' +
+      '<span>Время</span><span>' + secText(u.makeTime) + ' на грузовик; машины выходят по очереди, число заводов скорость не меняет</span></div>' +
+      '<div class="ubtns wrap"><button class="btn-buy alt" data-act="order">🚚 Заказать «Бригаду»</button><button class="btn-sell" data-act="cancel" id="mCancel">Отменить</button>' +
+      '<button class="btn-buy" data-act="cars">🚗 Ещё 7 машин</button></div></div>' +
       card('depot') +
       '<div class="pbox"><b>🛠️ Ремонт дорог</b>' +
       '<div class="ukv"><span>Асфальт</span><span id="mRs">—</span><span>Средний износ</span><span id="mMid">0</span><span>Почти изношен</span><span id="mWorn">0</span>' +
@@ -2332,9 +2694,37 @@
       ' (ямы и заплатки), при 100% асфальт разбит и становится простой дорогой. Ремонт клетки стоит до ' + usd(R.full) + ' (зависит от износа). ' +
       'Кнопка «Отремонтировать изношенные» отправляет в ремонт всё с износом от ' + pctText(R.manualAt) + '; автоматический ремонт сам чинит клетки с износом от ' + pctText(R.autoAt) + '. Простая дорога не изнашивается.</p>';
   }
+  function carsHtml() {
+    var h = '<div class="pbox"><b>🏭 Очередь Механического завода</b><div class="ukv"><span>В очереди</span><span id="mFqAll">—</span></div>' +
+      '<div class="unote" style="margin-top:6px">' + (working('factory').length ? 'Машины собираются по одной, по очереди. Число заводов скорость не меняет — ворота заводов чередуются.' : esc(noFactoryMsg())) + '</div></div>';
+    Object.keys(G.vehicles).forEach(function (k) {
+      var v = G.vehicles[k];
+      h += '<div class="unit">' + thumbImg('uimg', 'veh_' + k, vehicleThumb(k)) +
+        '<div class="uinfo"><h3>' + v.icon + ' ' + esc(v.name) + '</h3><p>' + esc(v.about) + '</p>' +
+        '<div class="ukv"><span>Обслуживает</span><span>' + esc(G.cats[v.serves].label) + ' · <span id="mVw_' + k + '">—</span></span>' +
+        '<span>Цена</span><span class="usd">' + usd(v.price) + '</span>' +
+        '<span>Сборка</span><span>' + secText(v.makeTime) + '</span>' +
+        '<span>В городе</span><span><b id="mVn_' + k + '">0</b></span>' +
+        '<span>Заказано</span><span id="mVq_' + k + '">—</span></div></div></div>' +
+        '<div class="ubtns wrap"><button class="btn-buy alt" data-act="vorder" data-kind="' + k + '">🏭 Заказать · ' + usd(v.price) + '</button>' +
+        '<button class="btn-sell" data-act="vcancel" data-kind="' + k + '" id="mVc_' + k + '">Отменить</button>' +
+        '<button class="btn-sell" data-act="vsell" data-kind="' + k + '" id="mVs_' + k + '">Продать</button></div>';
+    });
+    h += '<h4>🚗 Легковые машины жителей</h4>';
+    G.cars.models.forEach(function (m) {
+      h += '<div class="unit">' + thumbImg('uimg', 'car_' + m.id, vehicleThumb(m.id, true)) +
+        '<div class="uinfo"><h3>' + esc(m.name) + '</h3><p>Появляется сама у жилых домов с дорогой. Ездит к работе, магазинам и школам и возвращается домой.</p></div></div>';
+    });
+    var P = G.cars.perHouse;
+    h += '<p class="note">Сейчас легковых машин в городе: <b id="mCarsN">0</b>. У частного дома и дома на две семьи — ' + P['1x1'] + ' машина, у многоквартирного — ' + P['2x2'] +
+      ', у жилого комплекса — ' + P['4x4'] + '. Машины ездят только по дорогам, по правой полосе. Машина завода ездит между работающими зданиями своего вида; если таких нет — стоит и ждёт. ' +
+      'Продажа возвращает половину цены, отмена заказа — всю.</p>';
+    return h;
+  }
   function closeMech() { $('mech').hidden = true; document.querySelector('.tool.mech').classList.remove('open'); }
   function renderMech() {
     if ($('mech').hidden) return;
+    if (mechTab === 'cars') { refreshLive(); return; }
     if (mechTab === 'plants') {
       ['factory', 'depot'].forEach(function (ck) {
         var e = $('mCnt_' + ck); if (!e) return;
@@ -2355,7 +2745,7 @@
     $('mBuy').disabled = n >= u.importMax;
     $('mOrder').disabled = !nf;
     var note = n >= u.importMax ? 'Привезти из другого города можно только ' + u.importMax + ' бригады. ' : '';
-    note += nf ? '🏭 Завод работает: грузовик ' + usd(u.factoryPrice) + ', ' + u.makeTime + ' с' + (nf > 1 ? ' (заводов: ' + nf + ' — быстрее)' : '') + '.' : noFactoryMsg().replace('🏭 ', '🏭 Чтобы собирать свои грузовики: ') + '.';
+    note += nf ? '🏭 Завод работает: грузовик ' + usd(u.factoryPrice) + ', ' + secText(u.makeTime) + '.' : noFactoryMsg().replace('🏭 ', '🏭 Чтобы собирать свои грузовики: ') + '.';
     if ($('mBuyNote').textContent !== note) $('mBuyNote').textContent = note;
     refreshLive();
     var S = state.buildings.filter(isSite), h = '';
@@ -2375,6 +2765,8 @@
     else if (a === 'place') startPlace(el.dataset.cat);
     else if (a === 'repair') repairAllAct(); else if (a === 'auto') toggleAuto();
     else if (a === 'fixone' && infoRoad) repairOneAct(infoRoad);
+    else if (a === 'vorder') orderKind(el.dataset.kind); else if (a === 'vcancel') cancelKind(el.dataset.kind); else if (a === 'vsell') sellVehicle(el.dataset.kind);
+    else if (a === 'cars') { openMech('cars'); return; }
     renderMech();
   }
   $('mechClose').addEventListener('click', closeMech);
@@ -2512,6 +2904,8 @@
       var R = residents(b), emp = sim.home[b.id];
       h += '<div class="kv"><span>Живут</span><span><b>' + R.total + '</b> чел., ' + R.families.length + ' ' + plural(R.families.length, 'семья', 'семьи', 'семей') + '</span>' +
         '<span>Работают</span><span>' + (emp === undefined ? '…считаем' : emp + ' из ' + R.adults + ' взрослых' + (emp < R.adults ? ' — ' + (R.adults - emp) + ' ищут работу' : '')) + '</span>' +
+        '<span>Машины жильцов</span><span>🚗 ' + carCount(b.id) + '</span>' +
+        '<span>Мусоровозы в городе</span><span>' + vehCount('garbage') + '</span>' +
         '<span>Дорога рядом</span><span>' + roadNear(b) + '</span></div>';
       var show = R.families.slice(0, 8);
       show.forEach(function (f) {
@@ -2526,9 +2920,10 @@
       h += '<div class="about">' + esc(c.about[b.size]) + '</div>';
       if (b.cat === 'factory') {
         var u = G.units.brigade;
-        h += '<div class="pbox"><b>🚚 Выпуск грузовиков «Бригада»</b><div class="kv"><span>Заказано</span><span id="iFq">' + fqText() + '</span>' +
-          '<span>Цена</span><span>' + usd(u.factoryPrice) + '</span><span>Время</span><span>' + u.makeTime + ' с на грузовик</span></div>' +
-          '<div class="ubtns"><button class="btn-buy alt" data-act="order">🏭 Заказать грузовик</button><button class="btn-sell" data-act="cancel" id="iCancel"' + (state.fq ? '' : ' disabled') + '>Отменить</button></div></div>';
+        h += '<div class="pbox"><b>🏭 Выпуск машин</b><div class="kv"><span>Очередь</span><span id="iFq">' + fqText() + '</span>' +
+          '<span>«Бригада»</span><span>' + usd(u.factoryPrice) + ', ' + secText(u.makeTime) + '</span><span>Другие машины</span><span>7 моделей, от ' + secText(3) + '</span></div>' +
+          '<div class="ubtns wrap"><button class="btn-buy alt" data-act="order">🚚 Заказать «Бригаду»</button><button class="btn-sell" data-act="cancel" id="iCancel"' + (queued('brigade') ? '' : ' disabled') + '>Отменить</button>' +
+          '<button class="btn-buy" data-act="cars">🚗 Другие машины</button></div></div>';
       } else if (b.cat === 'depot') {
         h += '<div class="pbox"><b>🛠️ Ремонт дорог</b><div class="kv"><span>Каток</span><span id="iRoller">' + rollerText(b.id) + '</span>' +
           '<span>Асфальт</span><span id="iRs">—</span><span>Средний / почти изношен</span><span id="iWornN">—</span><span>Очередь</span><span id="iQ">—</span></div>' +
@@ -2540,6 +2935,7 @@
         '<span>Мест</span><span><b>' + w.staff + '</b></span>' +
         '<span>Из горожан</span><span>' + (filled === undefined ? '…считаем' : filled + ' чел.' + (filled < w.staff ? ' — свободно ' + (w.staff - filled) : ' — все места заняты')) + '</span>' +
         '<span>' + esc(cap(c.visitors[b.size])) + '</span><span>' + w.visits + '</span>' +
+        (servingText(b.cat) ? '<span>Машины в городе</span><span>' + esc(servingText(b.cat)) + '</span>' : '') +
         '<span>Дорога рядом</span><span>' + roadNear(b) + '</span></div>';
       if (w.team.length) {
         h += '<div class="fam"><b>Сотрудники</b>' + w.team.map(function (t) { return '<div>' + esc(t.name) + ', ' + ageWord(t.age) + ' — ' + esc(t.role) + '</div>'; }).join('') + '</div>';
@@ -2599,7 +2995,7 @@
     $('stBuild').textContent = built;
     $('stOff').textContent = off; $('stOffWrap').hidden = !off;
     $('stOffWrap').title = 'Без дороги: ' + off + ' ' + plural(off, 'здание', 'здания', 'зданий') + ' не работают. Подведите к ним дорогу.';
-    rebuildTraffic(); syncRollers();
+    rebuildTraffic(); syncRollers(); syncCars();
     if (infoId) { var ib = getB(infoId); if (ib) renderInfo(ib, true); }
     simRequest();
   }
@@ -2638,7 +3034,9 @@
         '<span>Средний износ / почти изношен</span><span>' + f(R.mid) + ' / ' + (R.worn ? '<span class="bad">' + f(R.worn) + '</span>' : '0') + '</span>' +
         '<span>Простая дорога</span><span>' + f(R.dirt) + ' кл.</span>' +
         '<span>Автоматический ремонт</span><span>' + (state.autoRepair ? 'включён' : 'выключен') + '</span>' +
-        '<span>Заказано грузовиков</span><span>' + state.fq + '</span>'; })() + '</div>' +
+        '<span>Очередь завода</span><span>' + state.fql.length + '</span>' +
+        '<span>Машины завода</span><span>' + f(state.vehicles.length) + '</span>' +
+        '<span>Легковые машины жителей</span><span>' + f(Object.keys(carAgents).length) + '</span>'; })() + '</div>' +
       '<p style="font-size:13px;color:#a9b6c8">Расчёт жителей: ' + (window.SIM.threaded() ? 'в фоновом потоке' : 'на странице') + ', ' + sim.ms + ' мс. ' +
       'Отрисовка: Babylon.js ' + B.Engine.Version + ', ' + nb + ' ' + plural(nb, 'пачка', 'пачки', 'пачек') + ' одинаковых моделей.</p>';
   }
@@ -2707,7 +3105,8 @@
   function carryUnits(s) {
     s.brigades = state.brigades.map(function (br, i) { var p = parkSpot(i, s.size); return { id: br.id, x: p.x, z: p.z, yaw: Math.PI, park: p, site: 0 }; });
     s.nextBr = state.nextBr; s.spent = state.spent;
-    s.fq = state.fq; s.fprog = state.fprog; s.autoRepair = state.autoRepair; // заказы на заводе и настройка депо тоже переезжают
+    s.fql = state.fql.slice(); s.fprog = state.fprog; s.autoRepair = state.autoRepair; // заказы на заводе и настройка депо тоже переезжают
+    s.vehicles = state.vehicles.map(function (v) { return { id: v.id, kind: v.kind }; }); s.nextVeh = state.nextVeh; // и машины завода
     return s;
   }
   function applyState(s, keepCam) {
@@ -2776,7 +3175,7 @@
     var t = performance.now(), dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
     keyPan(dt); tickCam(dt);
     var active = tickBrigades(dt, t);
-    tickFactory(dt); tickWear(dt);
+    tickFactory(dt); tickWear(dt); tickTraffic(dt);
     var fixingNow = tickRepair(dt, t);
     if ((active || fixingNow) && t - lastSave > 2000) { saveNow(); lastSave = t; }
     if (t - lastUi > 400) {
@@ -2818,7 +3217,7 @@
     batches: function () { return Object.keys(batches).map(function (k) { return k + ':' + batches[k].ids.length; }); },
     wearAll: function (w) { for (var k in state.roads) if (state.roads[k] === 'asphalt') { state.wear[k] = typeof w === 'function' ? w(k) : w; markRoadKey(k); } dirty(); },
     finishAll: function () { state.buildings.forEach(function (b) { if (isSite(b)) { b.prog = 1; finishSite(b); } }); },
-    canPlace: canPlace, rollers: function () { return rollers; }, roadInfo: openRoadInfo, startPlace: startPlace, order: orderTruck, repairAll: repairAllAct, toggleAuto: toggleAuto,
+    canPlace: canPlace, agents: function () { return { veh: agents, cars: carAgents, driving: carsDriving }; }, orderKind: orderKind, rollers: function () { return rollers; }, roadInfo: openRoadInfo, startPlace: startPlace, order: orderTruck, repairAll: repairAllAct, toggleAuto: toggleAuto,
     place: function (cat, size, x, z) { buildCat = cat; buildSize = size; buildRot = 0; placeBuilding({ px: x + G.sizes[size].w / 2, pz: z + G.sizes[size].d / 2 }); },
     bulk: function (n) { // тест: мгновенно застроить карту n зданиями
       var cats = Object.keys(G.cats), sz = ['1x1', '2x1', '2x2'], made = 0;
