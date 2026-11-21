@@ -21,7 +21,7 @@
     <span class="stock" id="stStockWrap" hidden>🪵 <b id="stBoards">0</b> 🟫 <b id="stDsp">0</b></span>
     <span class="off" id="stOffWrap" hidden>🚫 <b id="stOff">0</b></span>
   </div>
-  <button class="icon-btn" id="btnMenu" aria-label="Меню">☰</button>
+  <button class="icon-btn" id="btnMenu" aria-label="Меню" aria-expanded="false" aria-controls="sidebar">☰</button>
 </header>
 
 <div class="cam-btns">
@@ -78,6 +78,17 @@
     <div class="page-body" id="mechBody"></div>
   </div>
 </section>
+
+<!-- Меню настроек (☰): боковая панель слева (с 0.14.0) -->
+<div class="sb-scrim" id="sbScrim"></div>
+<aside class="sidebar" id="sidebar" aria-label="Меню" aria-hidden="true">
+  <div class="sb-head">
+    <button class="icon-btn sb-prev" id="sbPrev" aria-label="Назад" hidden>←</button>
+    <span class="sb-sp"></span>
+    <button class="icon-btn" id="sbClose" aria-label="Закрыть меню">✕</button>
+  </div>
+  <div class="sb-body" id="sbBody"></div>
+</aside>
 
 <div class="modal" id="modal" hidden>
   <div class="card">

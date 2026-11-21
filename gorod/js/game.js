@@ -2667,7 +2667,7 @@
     if (k === 'q' || k === 'й') rotateCam(1);
     else if (k === 'e' || k === 'у') rotateCam(-1);
     else if (k === 'r' || k === 'к') rotateCurrent();
-    else if (k === 'escape') { if (!$('modal').hidden) closeModal(); else if (!$('mech').hidden) closeMech(); else { closeInfo(); setTool('view'); } }
+    else if (k === 'escape') { if (sideOpen) closeSide(); else if (!$('modal').hidden) closeModal(); else if (!$('mech').hidden) closeMech(); else { closeInfo(); setTool('view'); } }
     else if (k === '6') openMech();
     else if ('12345'.indexOf(k) >= 0 && k) setTool(['view', 'build', 'road', 'move', 'delete'][+k - 1]);
     else if (k === '+' || k === '=') { cam.dist /= 1.2; updateCam(); }
@@ -3117,8 +3117,11 @@
   function changelogHtml() {
     return G.changelog.map(function (c) { return '<p><b>' + c.v + '</b> · ' + c.date + '</p><ul>' + c.items.map(function (i) { return '<li>' + esc(i) + '</li>'; }).join('') + '</ul>'; }).join('');
   }
-  function openMenu() {
-    openModal('<h2>Мое_город ' + G.version + '</h2>' +
+  // Меню настроек (☰) — боковая панель слева (с 0.14.0). Гайд, «Что нового», «Город» и «Размер карты»
+  // открываются внутри неё (кнопка «←» — назад в меню); при первом запуске новой версии окно «Что нового» остаётся всплывающим.
+  var sideOpen = false;
+  function menuRootHtml() {
+    return '<h2>Мое_город ' + G.version + '</h2>' +
       '<button class="menu-btn" data-m="help">📖 Гайд по игре</button>' +
       '<button class="menu-btn" data-m="news">📝 Что нового</button>' +
       '<button class="menu-btn" data-m="city">📊 Город</button>' +
@@ -3126,8 +3129,27 @@
       '<button class="menu-btn" data-m="size">🗺️ Размер карты <span style="float:right;color:#a9b6c8">' + N + '×' + N + '</span></button>' +
       '<button class="menu-btn" data-m="demo">🏘️ Загрузить город-пример</button>' +
       '<button class="menu-btn danger" data-m="clear">🧹 Новая пустая карта</button>' +
-      '<p style="font-size:13px;color:#a9b6c8">Город сохраняется сам в этом браузере. Бригады переезжают на новую карту вместе с вами.</p>');
+      '<p style="font-size:13px;color:#a9b6c8">Город сохраняется сам в этом браузере. Бригады переезжают на новую карту вместе с вами.</p>';
   }
+  function sideShow(html, sub) { $('sbBody').innerHTML = html; $('sbBody').scrollTop = 0; $('sbPrev').hidden = !sub; }
+  function menuView(html, sub) { if (sideOpen) sideShow(html, sub); else openModal(html); }
+  function openSide() {
+    if (sideOpen) return;
+    sideOpen = true; confirmArm = ''; pickSize = 0;
+    sideShow(menuRootHtml(), false);
+    $('sidebar').classList.add('open'); $('sidebar').setAttribute('aria-hidden', 'false'); $('sbScrim').classList.add('open');
+    $('btnMenu').setAttribute('aria-expanded', 'true');
+  }
+  function closeSide() {
+    if (!sideOpen) return;
+    sideOpen = false;
+    $('sidebar').classList.remove('open'); $('sidebar').setAttribute('aria-hidden', 'true'); $('sbScrim').classList.remove('open');
+    $('btnMenu').setAttribute('aria-expanded', 'false');
+  }
+  function openMenu() { if (sideOpen) closeSide(); else openSide(); }
+  $('sbClose').addEventListener('click', closeSide);
+  $('sbScrim').addEventListener('click', closeSide);
+  $('sbPrev').addEventListener('click', function () { confirmArm = ''; pickSize = 0; sideShow(menuRootHtml(), false); });
   var pickSize = 0;
   function sizeLabel(n) { for (var i = 0; i < G.mapSizes.length; i++) if (G.mapSizes[i].n === n) return G.mapSizes[i].label; return 'Своя'; }
   function lostCount(n) { // сколько зданий и дорог не поместится при смене размера
@@ -3150,7 +3172,7 @@
         '<button class="menu-btn danger" data-m="newempty">🧹 Новая пустая карта ' + pickSize + '×' + pickSize + '</button>';
     } else h += '<p style="font-size:13px;color:#a9b6c8">Выберите другой размер, чтобы расширить или уменьшить карту.</p>';
     h += '<p style="font-size:13px;color:#a9b6c8">Огромные карты на слабых телефонах могут работать медленнее.</p>';
-    openModal(h);
+    menuView(h, true);
   }
   function resizeMap(n) {
     var o = Math.floor((n - N) / 2), nb = [], nr = {};
@@ -3185,20 +3207,20 @@
   function applyState(s, keepCam) {
     closeInfo(); cancelMove(); state = s; rebuildAll(); save();
     if (keepCam) updateCam(); else camHome();
-    pickSize = 0; closeModal();
+    pickSize = 0; closeModal(); closeSide();
     hint('Карта ' + N + '×' + N + ' готова');
   }
   $('btnMenu').addEventListener('click', openMenu);
   var confirmArm = '';
-  $('modalBody').addEventListener('click', function (e) {
+  function menuClick(e) {
     var b = e.target.closest('[data-m],[data-n]'); if (!b) return;
     var m = b.dataset.m;
     var sb = e.target.closest('[data-n]');
     if (sb) { pickSize = +sb.dataset.n; confirmArm = ''; openSize(); return; }
-    if (m === 'help') openModal(guideHtml());
+    if (m === 'help') menuView(guideHtml(), true);
     else if (m === 'gsec') { var d = document.getElementById('g-' + b.dataset.s); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); } }
-    else if (m === 'city') openModal(cityHtml());
-    else if (m === 'mech') { closeModal(); openMech(); }
+    else if (m === 'city') menuView(cityHtml(), true);
+    else if (m === 'mech') { closeModal(); closeSide(); openMech(); }
     else if (m === 'size') { pickSize = N; confirmArm = ''; openSize(); }
     else if (m === 'resize') {
       var L = lostCount(pickSize);
@@ -3209,12 +3231,14 @@
       if (confirmArm !== m) { confirmArm = m; b.textContent = 'Точно? Текущий город пропадёт — нажмите ещё раз'; return; }
       confirmArm = ''; applyState(carryUnits(m === 'newdemo' ? demoState(pickSize) : emptyState(pickSize)), false);
     }
-    else if (m === 'news') openModal('<h2>Что нового</h2>' + changelogHtml());
+    else if (m === 'news') menuView('<h2>Что нового</h2>' + changelogHtml(), true);
     else if (m === 'demo' || m === 'clear') {
       if (confirmArm !== m) { confirmArm = m; b.textContent = 'Точно? Текущий город пропадёт — нажмите ещё раз'; return; }
       confirmArm = ''; applyState(carryUnits(m === 'demo' ? demoState(N) : emptyState(N)), true);
     }
-  });
+  }
+  $('modalBody').addEventListener('click', menuClick);
+  $('sbBody').addEventListener('click', menuClick);
 
   // ---------- Цикл отрисовки ----------
   // Кадр рисуется только когда что-то изменилось — телефон не греется на пустом месте.

@@ -322,3 +322,36 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .stats { gap: 10px; font-size: 13px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .stats::-webkit-scrollbar { display: none; }
 }
+
+/* ---------- 0.14.0: меню настроек (☰) — боковая панель слева ----------
+   Выезжает слева поверх игры; за пределами панели — затемнение, нажатие на него закрывает меню.
+   Гайд, «Что нового», «Город» и «Размер карты» открываются внутри этой же панели, кнопка «←» возвращает в меню. */
+.sb-scrim { position: fixed; inset: 0; z-index: 11; background: rgba(0,0,0,.4); opacity: 0; visibility: hidden;
+  transition: opacity .22s, visibility 0s .22s; }
+.sb-scrim.open { opacity: 1; visibility: visible; transition: opacity .22s; }
+.sidebar { position: fixed; z-index: 12; left: 0; top: 0; bottom: 0; width: min(88vw, 380px);
+  display: flex; flex-direction: column; background: var(--bg2); border-right: 1px solid var(--line); box-shadow: 8px 0 30px rgba(0,0,0,.4);
+  padding-top: var(--safet); padding-bottom: var(--safeb); padding-left: env(safe-area-inset-left, 0px);
+  transform: translateX(-104%); visibility: hidden; transition: transform .22s ease, visibility 0s .22s; }
+.sidebar.open { transform: none; visibility: visible; transition: transform .22s ease; }
+.sb-head { display: flex; align-items: center; gap: 8px; padding: 10px 10px 0; flex: none; }
+.sb-sp { flex: 1; }
+.sb-head .icon-btn { width: 36px; height: 36px; font-size: 17px; background: rgba(255,255,255,.08); }
+.sb-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 18px 22px; user-select: text; -webkit-user-select: text; }
+.sb-body h2 { margin: 0 0 12px; font-size: 19px; }
+.sb-body .menu-btn { display: block; width: 100%; text-align: left; border: 0; background: rgba(255,255,255,.07); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+.sb-body .menu-btn:hover { background: rgba(255,255,255,.12); }
+.sb-body .menu-btn.danger { color: #ffb4a8; }
+.sb-body ul { padding-left: 18px; margin: 6px 0 12px; }
+.sb-body li { margin-bottom: 4px; }
+.sb-body details { background: rgba(255,255,255,.05); border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
+.sb-body summary { cursor: pointer; font-weight: 600; }
+.sb-body p { margin: 6px 0; color: #d5deea; }
+.sb-body .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; margin: 6px 0 12px; }
+.sb-body .kv span:nth-child(odd) { color: var(--mut); }
+.sb-body .kv b { color: var(--acc); }
+.sb-body p.warn { color: #ffb4a8; font-size: 13px; margin: -2px 0 10px; }
+.sb-body details.guide { scroll-margin-top: 8px; }
+.sb-body details.guide li { margin: 4px 0; line-height: 1.45; }
+.sb-body .noroad { background: rgba(232,53,43,.16); border: 1px solid rgba(232,53,43,.55); border-radius: 12px; padding: 8px 12px; margin: 8px 0 10px; font-size: 14px; line-height: 1.4; }
+.sb-body .size-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
