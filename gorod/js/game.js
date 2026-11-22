@@ -4252,7 +4252,7 @@
   function renderMech() {
     if ($('panelMech').hidden) return;
     if (mechTab === 'trucks') {
-      var tn = $('tkNote'); if (tn) { var tt = 'Парковок: ' + working('truckpark').length + ' · занято мест ' + parkUsed() + ' из ' + parkTotal() + (working('truckpark').length ? '' : ' — постройте Грузовую парковку 4×6 (вкладка «Здания»)'); if (tn.textContent !== tt) tn.textContent = tt; }
+      var tn = $('tkNote'); if (tn) { var bp = builtParks(), noRd = bp.filter(function (q) { return !hasRoad(q); }).length, tt = 'Парковок: ' + bp.length + ' · занято мест ' + parkUsed() + ' из ' + parkTotal() + (bp.length ? (noRd ? ' — к парковке не подведена дорога, машины не поедут' : '') : (state.buildings.some(function (b) { return b.cat === 'truckpark'; }) ? ' — парковка ещё строится' : ' — постройте Грузовую парковку 4×6 (вкладка «Здания»)')); if (tn.textContent !== tt) tn.textContent = tt; }
       Object.keys(G.trucks).forEach(function (k) { var n = fleetN(k), e1 = $('tkN_' + k), e2 = $('tkS_' + k); if (e1 && e1.textContent !== String(n)) e1.textContent = n; if (e2) e2.disabled = !n; });
       return;
     }
@@ -4798,21 +4798,27 @@
   // --- грузовики (покупаются во вкладке «Механизмы») ---
   function fleetN(k) { var n = 0, kk = 'f_' + k; state.vehicles.forEach(function (v) { if (v.kind === kk) n++; }); return n; }
   function fleetTotal() { var n = 0; state.vehicles.forEach(function (v) { if (/^f_/.test(v.kind)) n++; }); return n; }
-  function parkTotal() { return working('truckpark').length * G.fleetPerPark; }
+  // парковка считается построенной, как только достроена (дорога нужна, чтобы машины ездили, но не чтобы их покупать)
+  function builtParks() { return state.buildings.filter(function (b) { return b.cat === 'truckpark' && !isSite(b); }); }
+  function parkTotal() { return builtParks().length * G.fleetPerPark; }
   function parkUsed() { return state.brigades.length + fleetTotal(); }
   function truckBonus(k) { return 1 + Math.min(0.5, 0.1 * (fleetN(k) + 0.5 * fleetN('all'))); }
   function buyTruck(k) {
-    var T = G.trucks[k], pk = working('truckpark');
+    var T = G.trucks[k], pk = builtParks();
     if (!T) return;
-    if (!pk.length) { hint('🅿️ Сначала постройте Грузовую парковку 4×6: без неё грузовики не купить', true); return; }
+    if (!pk.length) {
+      var anyP = state.buildings.some(function (b) { return b.cat === 'truckpark'; });
+      hint(anyP ? '🅿️ Грузовая парковка ещё строится — дождитесь конца стройки' : '🅿️ Сначала постройте Грузовую парковку 4×6: без неё грузовики не купить', true); return;
+    }
     if (parkUsed() >= parkTotal()) { hint('🅿️ Парковки заполнены (' + parkTotal() + ' мест) — постройте ещё одну', true); return; }
     if (!canPay(T.price)) { hint('Не хватает долларов: нужно ' + usd(T.price), true); return; }
     pay(T.price); snd('buy');
+    var okRoad = pk.filter(function (q) { return hasRoad(q); }); if (okRoad.length) pk = okRoad;
     var b = pk[fleetTotal() % pk.length], sp = spotAt(b, fleetTotal() + 3, 0.08), v = { id: state.nextVeh++, kind: 'f_' + k };
     state.vehicles.push(v);
     var c = siteCenter(b), a = makeAgent(v, sp ? sp.x : c.x, sp ? sp.z : c.z + 3, sp ? sp.yaw : 0); if (sp) a.cell = sp.k; a.t = 0.5;
     save(); dirty(); stockDirty = true; renderMech();
-    hint('🚛 ' + T.name + ' куплен и выехал с парковки');
+    hint(hasRoad(b) ? '🚛 ' + T.name + ' куплен и выехал с парковки' : '🚛 ' + T.name + ' куплен, но к парковке не подведена дорога — проложите её, и грузовик поедет', !hasRoad(b));
   }
   function sellTruck(k) {
     var kk = 'f_' + k, j = -1; for (var i = state.vehicles.length - 1; i >= 0; i--) if (state.vehicles[i].kind === kk) { j = i; break; }
