@@ -5198,11 +5198,11 @@ window.__gorodMain = function () {
     var tags = [w.size + '×' + w.size, '🏢 ' + w.b.toLocaleString('ru-RU'), '👥 ' + w.p.toLocaleString('ru-RU')];
     if (w.cloudOnly) tags.push('☁️ только в облаке'); else if (w.cloud) tags.push('☁️ в облаке'); else if (WORLD.cloud.on()) tags.push('⏳ ждёт отправки');
     var btns = '';
-    if (!cur) btns += '<button class="mini" data-m="wopen" data-id="' + w.id + '">Открыть</button>';
-    else if (stale) btns += '<button class="mini" data-m="wopen" data-id="' + w.id + '">↻ Загрузить новую версию</button>';
+    if (!cur) btns += '<button class="wbtn" data-m="wopen" data-id="' + w.id + '">Открыть</button>';
+    else if (stale) btns += '<button class="wbtn" data-m="wopen" data-id="' + w.id + '">↻ Загрузить новую версию</button>';
     var canNat = cur ? !!(state && !state.env && !stale) : (w.nat === false && !w.cloudOnly && !w.needPull);   // мир без природы — можно засеять (с 0.22.0)
-    if (canNat) btns += '<button class="mini nat" data-m="wnat" data-id="' + w.id + '">🌲 Обновить</button>';
-    btns += '<button class="mini" data-m="wren" data-id="' + w.id + '" aria-label="Переименовать">✏️</button><button class="mini danger" data-m="wdel" data-id="' + w.id + '" aria-label="Удалить">🗑️</button>';
+    if (canNat) btns += '<button class="wbtn nat" data-m="wnat" data-id="' + w.id + '">🌲 Обновить</button>';
+    btns += '<button class="wbtn" data-m="wren" data-id="' + w.id + '" aria-label="Переименовать">✏️</button><button class="wbtn danger" data-m="wdel" data-id="' + w.id + '" aria-label="Удалить">🗑️</button>';
     return '<div class="wcard' + (cur ? ' cur' : '') + '"><div class="wc-top"><b>' + esc(w.name) + '</b>' + (cur ? '<em>▶ открыт</em>' : '') + '</div>' +
       '<div class="wc-sub">' + tags.join(' · ') + ' · ' + nc * nc + ' ' + plural(nc * nc, 'кусок', 'куска', 'кусков') + '</div>' +
       (canNat ? '<div class="wc-note">🌲 В этом мире нет природы. «Обновить» засеет всю свободную площадь деревьями и горами; построенное останется на месте.</div>' : '') +
