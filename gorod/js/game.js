@@ -16,10 +16,10 @@
   var el = document.getElementById('loading');
   if (el) el.innerHTML = '<div style="text-align:center;max-width:320px;padding:16px">Страница игры устарела в кэше браузера.<br><small style="opacity:.75">Нажмите Ctrl+F5 (на телефоне — обновите страницу и, если не помогло, очистите кэш браузера).</small></div>';
 })();
-(function () {
+window.__gorodMain = function () {
   'use strict';
   if (window.__gorodStale) return;
-  var G = window.GAME, N = G.mapSize, B = window.BABYLON, WORLD = window.WORLD, WC = 100; // WC — сторона куска карты (с 0.20.0)
+  var G = window.GAME, PH = window.PHOTO || { img: {} }, N = G.mapSize, B = window.BABYLON, WORLD = window.WORLD, WC = 100; // WC — сторона куска карты (с 0.20.0)
   var SAVE_KEY = 'moe_gorod_save_v1', SEEN_KEY = 'moe_gorod_seen';
   var $ = function (id) { return document.getElementById(id); };
   var TOUCH = window.matchMedia && matchMedia('(pointer: coarse)').matches;
@@ -361,7 +361,7 @@
     function f(v) { return Math.round(k > 0 ? v + (255 - v) * k : v * (1 + k)); }
     return 'rgb(' + f(r) + ',' + f(g) + ',' + f(b) + ')';
   }
-  function paintWall(style, wall, S) {
+  function paintWall(style, wall, S, ph) {
     var T = TILE[style] || TILE.euro, tw = T[0], th = T[1], kx = S / tw, ky = S / th, hi = S >= 128;
     var c = document.createElement('canvas'); c.width = c.height = S;
     var g = c.getContext('2d'), r = rng(style.length * 131 + parseInt(wall.slice(1), 16));
@@ -399,8 +399,18 @@
       if (o.lintel) R(cx - w / 2 - t - 0.02, y - t - 0.026, w + 2 * t + 0.04, 0.026, o.lintel);
       if (o.sill !== false) { R(cx - w / 2 - t - 0.014, y + h, w + 2 * t + 0.028, 0.014, o.sillCol || trim); R(cx - w / 2 - t, y + h + 0.014, w + 2 * t, 0.006, 'rgba(0,0,0,.22)'); }
     }
+    // Фотография Poly Haven поверх цвета стены (только эпоха «Бель-эпок», с 1.2.0): режим «наложение» (overlay) — цвет здания остаётся,
+    // добавляются швы, камни и пятна. Период узора — 0.1 клетки (≈ 1 м): в плитку 0.5×0.3 он ложится ровно 5×3 раза, стыки плиток незаметны.
+    function photo(kind, a) {
+      var im = ph && PH.img[kind]; if (!im) return false;
+      var sx = S * 0.1 / tw / im.width, sy = S * 0.1 / th / im.height;
+      g.save(); g.globalCompositeOperation = 'overlay'; g.globalAlpha = a; g.imageSmoothingQuality = 'high';
+      g.scale(sx, sy); g.fillStyle = g.createPattern(im, 'repeat'); g.fillRect(0, 0, S / sx, S / sy); g.restore();
+      return true;
+    }
     function bricks(col) {
       R(0, 0, tw, th, col);
+      if (photo('brick', 0.95)) { R(0, 0, tw, 0.003, 'rgba(0,0,0,.12)'); return; }
       var rows = 15, rh = th / rows, bl = 0.05, nb = Math.round(tw / bl), i, j;
       if (hi) for (i = 0; i < rows; i++) for (j = 0; j < nb; j++) { var k = r(); R(j * tw / nb + (i % 2 ? tw / nb / 2 : 0), i * rh, tw / nb, rh, k > 0.6 ? 'rgba(255,255,255,.07)' : k < 0.25 ? 'rgba(0,0,0,.1)' : 'rgba(0,0,0,0)'); }
       g.fillStyle = 'rgba(224,210,182,.5)';
@@ -410,7 +420,9 @@
       }
     }
     function ashlar(col) {
-      R(0, 0, tw, th, col); grain(900, 0.05);
+      R(0, 0, tw, th, col);
+      if (photo('stone', 0.9)) return;
+      grain(900, 0.05);
       var rows = Math.round(th / 0.05), i, j;
       for (i = 1; i < rows; i++) {
         R(0, i * th / rows, tw, 0.003, 'rgba(0,0,0,.16)');
@@ -420,7 +432,7 @@
     function band(col) { R(0, 0, tw, 0.018, shade(col, 0.2)); R(0, 0.018, tw, 0.008, 'rgba(0,0,0,.14)'); }
     var wl = wall, GL0 = '#bcd6ea', GL1 = '#4f7497', cx = tw / 2, i;
     if (style === 'euro') { // оштукатуренный дом: высокое окно, каменное обрамление, чугунная решётка балкона
-      R(0, 0, tw, th, wl); grain(1500, 0.05); band(wl);
+      R(0, 0, tw, th, wl); photo('plaster', 0.8) || grain(1500, 0.05); band(wl);
       var wy = 0.055, wh = 0.2, ww = 0.19;
       R(cx - ww / 2 - 0.024, wy - 0.034, ww + 0.048, wh + 0.04, shade(wl, 0.3));
       R(cx - ww / 2 - 0.036, wy - 0.05, ww + 0.072, 0.018, shade(wl, 0.34));
@@ -446,7 +458,7 @@
       archWin(cx, 0.3, 0.22, 0.26, shade(wl, 0.18), '#3a424a', '#161a1f', '#25282d', null);
       if (hi) for (i = 1; i < 5; i++) line(cx - 0.11 + i * 0.044, 0.18, cx - 0.11 + i * 0.044, 0.3, '#25282d', 0.004);
     } else if (style === 'shop') { // витрина: деревянная рама (цвет стены), вывеска сверху, глухая панель снизу
-      R(0, 0, tw, th, wl); grain(600, 0.05);
+      R(0, 0, tw, th, wl); photo('plaster', 0.8) || grain(600, 0.05);
       R(0, 0, tw, 0.075, '#eadfbd'); R(0, 0.075, tw, 0.008, 'rgba(0,0,0,.3)');
       if (hi) for (i = 0; i < 7; i++) R(0.07 + r() * 0.5, 0.02 + r() * 0.035, 0.04 + r() * 0.05, 0.008, 'rgba(60,40,20,.65)');
       glassRect(0.05, 0.1, tw - 0.1, 0.14, '#f7e3a6', '#9d7640');
@@ -454,7 +466,7 @@
       R(0.05, 0.1, tw - 0.1, 0.03, 'rgba(0,0,0,.2)'); line(0.05, 0.13, tw - 0.05, 0.13, wl, 0.008);
       R(0.05, 0.24, tw - 0.1, 0.06, shade(wl, -0.2)); R(0, 0, 0.03, th, shade(wl, 0.15)); R(tw - 0.03, 0, 0.03, th, shade(wl, 0.15));
     } else if (style === 'iron') { // каменные пилоны и широкое окно в чугунном переплёте
-      R(0, 0, tw, th, wl); grain(900, 0.05); band(wl);
+      R(0, 0, tw, th, wl); photo('plaster', 0.8) || grain(900, 0.05); band(wl);
       var iw = 0.34, ix = cx - iw / 2;
       R(ix - 0.016, 0.034, iw + 0.032, 0.236, '#2f393d');
       glassRect(ix, 0.05, iw, 0.2, '#b2d0e4', '#46698a');
@@ -462,10 +474,10 @@
       line(ix, 0.12, ix + iw, 0.12, '#2f393d', 0.01);
       R(ix - 0.016, 0.25, iw + 0.032, 0.03, '#3b4448'); if (hi) for (i = 0; i < 6; i++) R(ix + 0.01 + i * iw / 6, 0.256, 0.02, 0.018, 'rgba(200,170,90,.55)');
     } else if (style === 'dorm') { // слуховое окно на цинковой мансарде
-      R(0, 0, tw, th, wl); grain(500, 0.05);
+      R(0, 0, tw, th, wl); photo('plaster', 0.8) || grain(500, 0.05);
       archWin(cx, 0.27, 0.12, 0.19, shade(wl, 0.3), GL0, GL1, '#f6f2e6', shade(wl, 0.3));
     } else if (style === 'clock') { // часы на башне
-      R(0, 0, tw, th, wl); grain(900, 0.05);
+      R(0, 0, tw, th, wl); photo('plaster', 0.8) || grain(900, 0.05);
       R(cx - 0.26, 0.04, 0.52, 0.52, shade(wl, 0.2));
       g.fillStyle = '#c9a24a'; g.beginPath(); g.ellipse(cx * kx, 0.3 * ky, 0.23 * kx, 0.23 * ky, 0, 0, 7); g.fill();
       g.fillStyle = '#f7f3e6'; g.beginPath(); g.ellipse(cx * kx, 0.3 * ky, 0.2 * kx, 0.2 * ky, 0, 0, 7); g.fill();
@@ -557,17 +569,19 @@
     { euro: 'bauh', brick: 'bauh', archb: 'bauh', gov: 'bauh', arcade: 'bauhbase', iron: 'bauh' }];
   function hashStr(t) { var h = 7; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0; return h; }
   function themeWall(style, col, th) {
-    if (!th || !TH_WALL[th]) return [style, col];
+    if (!th || !TH_WALL[th]) return th ? [style, col] : [style, col, 1];   // третье значение — эпоха «Бель-эпок»: стена с фотографической текстурой (с 1.2.0)
     var st = TH_STYLE[th][style] || style;
     if (style === 'shop' || style === 'dorm' || style === 'clock') return [st, style === 'shop' ? col : TH_WALL[th][hashStr(col) % TH_WALL[th].length]];
     return [st, TH_WALL[th][hashStr(col) % TH_WALL[th].length]];
   }
+  function isRedRoof(col) { var n = parseInt(col.slice(1), 16), r = n >> 16, g2 = (n >> 8) & 255, b = n & 255; return r > b * 1.25 && r > g2 * 1.2; }
   function themeRoof(col, th) { return !th || !TH_ROOF[th] ? col : TH_ROOF[th][hashStr(col) % TH_ROOF[th].length]; }
   // Текстура крыши: светлая, чтобы цвет материала красил её; одна плитка = 1/3 клетки.
-  function paintRoof(th) {
-    var S = 128, c = document.createElement('canvas'); c.width = c.height = S; var g = c.getContext('2d'), r = rng(500 + th), i, j;
+  function paintRoof(th, kind) {
+    var S = th === 0 && PH.img[kind] ? 256 : 128, c = document.createElement('canvas'); c.width = c.height = S; var g = c.getContext('2d'), r = rng(500 + th), i, j;
     function tone(v) { var k = Math.round(255 * v); return 'rgb(' + k + ',' + k + ',' + k + ')'; }
     g.fillStyle = tone(0.9); g.fillRect(0, 0, S, S);
+    if (th === 0 && PH.img[kind]) { g.imageSmoothingQuality = 'high'; g.drawImage(PH.img[kind], 0, 0, S, S); return c; }   // с 1.2.0: настоящий шифер / черепица (Poly Haven, CC0); цвет крыши красит серую текстуру
     if (th === 0) { // черепица / шифер: ряды с разбежкой швов
       var rows = 6, rh = S / rows, nc = 3, cw = S / nc;
       for (i = 0; i < rows; i++) for (j = 0; j < nc; j++) {
@@ -593,8 +607,8 @@
     for (i = 0; i < 500; i++) { g.fillStyle = r() > 0.5 ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)'; g.fillRect(r() * S, r() * S, 2, 2); }
     return c;
   }
-  function windowCanvas(style, wall) { return paintWall(style, wall, 64); }
-  function windowCanvasHD(style, wall) { return paintWall(style, wall, 256); }
+  function windowCanvas(style, wall, ph) { return paintWall(style, wall, 64, ph); }
+  function windowCanvasHD(style, wall, ph) { return paintWall(style, wall, ph && /^(brick|archb|gov|arcade)$/.test(style) ? 512 : 256, ph); }   // кирпич и камень с фото — 512 px: видны швы
   function makeKit(sc) {
     var mats = {}, wallM = {}, wallInfo = [], kitHD = false, roofM = {}, roofT = {};
     function base(name) { var m = new B.StandardMaterial(name, sc); m.specularColor = B.Color3.Black(); return m; }
@@ -604,9 +618,9 @@
         if (mats[color]) return mats[color];
         var m = base('m' + color); m.diffuseColor = hex(color); return (mats[color] = m);
       },
-      wall: function (style, wall) {
-        var k = style + wall; if (wallM[k]) return wallM[k];
-        var m = base('w' + k), info = { m: m, style: style, wall: wall, lo: null, hi: null };
+      wall: function (style, wall, photo) {
+        var k = style + wall + (photo ? '~p' : ''); if (wallM[k]) return wallM[k];
+        var m = base('w' + k), info = { m: m, style: style, wall: wall, ph: !!photo, lo: null, hi: null };
         m.diffuseColor = B.Color3.White(); wallInfo.push(info);
         wallTex(info, kitHD);
         return (wallM[k] = m);
@@ -617,8 +631,9 @@
       roof: function (color, th) {
         th = th | 0; var k = 'r' + th + color; if (roofM[k]) return roofM[k];
         var m = base('rf' + k); m.diffuseColor = hex(themeRoof(color, th));
-        if (!roofT[th]) { roofT[th] = new B.DynamicTexture('rt' + th, paintRoof(th), sc, true); roofT[th].update(); roofT[th].wrapU = roofT[th].wrapV = B.Texture.WRAP_ADDRESSMODE; roofT[th].anisotropicFilteringLevel = 4; }
-        m.diffuseTexture = roofT[th]; return (roofM[k] = m);
+        var kind = th === 0 && PH.img.tile && PH.img.slate ? (isRedRoof(color) ? 'tile' : 'slate') : '', tk = th + kind;   // красные крыши — черепица, серые и тёмные — шифер
+        if (!roofT[tk]) { roofT[tk] = new B.DynamicTexture('rt' + tk, paintRoof(th, kind), sc, true); roofT[tk].update(); roofT[tk].wrapU = roofT[tk].wrapV = B.Texture.WRAP_ADDRESSMODE; roofT[tk].anisotropicFilteringLevel = 4; }
+        m.diffuseTexture = roofT[tk]; return (roofM[k] = m);
       },
       // переключить окна всех домов между обычными (64 px) и HD (256 px)
       setHD: function (hd) { kitHD = hd; wallInfo.forEach(function (i) { wallTex(i, hd); }); }
@@ -626,7 +641,7 @@
     function wallTex(info, hd) {
       var slot = hd ? 'hi' : 'lo';
       if (!info[slot]) {
-        var t = new B.DynamicTexture('t' + slot + info.style + info.wall, (hd ? windowCanvasHD : windowCanvas)(info.style, info.wall), sc, true);
+        var t = new B.DynamicTexture('t' + slot + info.style + info.wall, (hd ? windowCanvasHD : windowCanvas)(info.style, info.wall, info.ph), sc, true);
         t.update(); t.wrapU = t.wrapV = B.Texture.WRAP_ADDRESSMODE; t.anisotropicFilteringLevel = hd ? 8 : 4;
         info[slot] = t;
       }
@@ -804,18 +819,18 @@
     th = th | 0;
     var s = G.sizes[size], W = s.w, D = s.d, m = 0.08;
     var r = rng(seed), S = Shapes(K, W / 2, D / 2, th), cube = S.cube;
-    function kwall(style, col) { var q = K.wm(style, col, th); return K.wall(q[0], q[1]); } // стена в выбранном оформлении
+    function kwall(style, col) { var q = K.wm(style, col, th); return K.wall(q[0], q[1], q[2]); } // стена в выбранном оформлении
     var F = [m, m, W - m, D - m], bw = { a: 0, top: 0 };
     function V4(a, b, c, d) { return new B.Vector4(a, b, c, d); }
     var CAP = V4(0.02, 0.02, 0.03, 0.03);
     // ---- общие детали ----
     // стены с окнами: этажи по fl штук, высота этажа fh; возвращает высоту верха
     function wallBox(x0, z0, x1, z1, y0, fl, style, col, fh) {
-      fh = fh || FH; var q = K.wm(style, col, th); style = q[0]; col = q[1];
+      fh = fh || FH; var q = K.wm(style, col, th), pf = q[2]; style = q[0]; col = q[1];
       var h = fl * fh, w = x1 - x0, d = z1 - z0, tw = TILE[style][0];
       if (w * d >= bw.a) bw = { a: w * d, x0: x0, z0: z0, x1: x1, z1: z1, top: y0 + h };   // самый большой корпус — для угловой башенки модерна
       var uw = Math.max(1, Math.round(w / tw)), ud = Math.max(1, Math.round(d / tw));
-      S.box(w, h, d, K.wall(style, col), (x0 + x1) / 2, y0 + h / 2, (z0 + z1) / 2, [V4(0, 0, uw, fl), V4(0, 0, uw, fl), V4(0, 0, ud, fl), V4(0, 0, ud, fl), CAP, CAP]);
+      S.box(w, h, d, K.wall(style, col, pf), (x0 + x1) / 2, y0 + h / 2, (z0 + z1) / 2, [V4(0, 0, uw, fl), V4(0, 0, uw, fl), V4(0, 0, ud, fl), V4(0, 0, ud, fl), CAP, CAP]);
       return y0 + h;
     }
     function chim(x, z, y0, h) {
@@ -1753,7 +1768,12 @@
   });
   // Булыжник (с 0.18.0): мощёная мостовая — камни рядами с разбежкой швов
   (function () {
-    var S2 = 128, c = document.createElement('canvas'); c.width = c.height = S2; var g = c.getContext('2d'), r = rng(77);
+    var S2 = PH.img.cobble ? 256 : 128, c = document.createElement('canvas'); c.width = c.height = S2; var g = c.getContext('2d'), r = rng(77);
+    if (PH.img.cobble) {   // с 1.2.0: настоящая брусчатка (Poly Haven, Cobblestone Floor 08, CC0); одна клетка дороги — одно изображение
+      g.imageSmoothingQuality = 'high'; g.drawImage(PH.img.cobble, 0, 0, S2, S2);
+      var m0 = flatMat('#ffffff'), tx0 = new B.DynamicTexture('roadcobble', c, scene, true); tx0.update();
+      m0.diffuseTexture = tx0; roadMat.cobble = m0; return;
+    }
     g.fillStyle = '#4a4741'; g.fillRect(0, 0, S2, S2);
     var rows = 8, rh = S2 / rows, nc = 7, cw = S2 / nc;
     for (var i = 0; i < rows; i++) for (var j = -1; j < nc; j++) {
@@ -5669,4 +5689,6 @@
       updateStats(); save(); return made;
     }
   };
-})();
+};
+// Игра стартует, когда фотографические текстуры (js/textures.js) разобраны браузером — не дольше 6 секунд; без них рисуется по-старому.
+(window.PHOTO && window.PHOTO.ready ? window.PHOTO.ready : Promise.resolve()).then(function () { window.__gorodMain(); });
