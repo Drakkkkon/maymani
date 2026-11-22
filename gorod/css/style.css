@@ -273,6 +273,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* склад досок и ДСП (0.11.0) */
 .stats .stock { color: #e2c48c; }
 .stats .stock b { color: #e2c48c; }
+.stats .stock.stone, .stats .stock.stone b { color: #c4ccd6; }
+#roadChips .chip em { font-style: normal; opacity: .75; margin-left: 4px; font-size: 11px; }
 
 /* ---------- 0.12.0 / 0.13.0: компьютер и планшет — панель сбоку (с 0.13.0 — справа) ----------
    Справа одна панель: сверху главные кнопки, под ними меню категорий (список открывается по нажатию),

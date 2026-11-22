@@ -1,4 +1,4 @@
-// «Мое_город» — градостроитель на Babylon.js.
+// «Мое_город» — градостроитель на Babylon.js. С 0.21.0: природа (деревья, каменистые площадки, горы — js/terrain.js) и камень.
 // Один вид — качественная изометрия («ИЗО HD», с 0.12.0): полное разрешение экрана, сглаживание
 // и подробные текстуры. Свободный 3D-вид и пиксельная изометрия убраны.
 // Одинаковые здания рисуются пачками (thin instances): тысячи домов — это десятки вызовов отрисовки.
@@ -28,6 +28,9 @@
   // ---------- Состояние ----------
   // b.prog (0…1) есть только у зданий, которые ещё строятся.
   var state, occ = new Int32Array(N * N);
+  // Природа (с 0.21.0): terr — вид клетки (0 трава, 1 каменистая площадка, 2 склон горы, 3 подножие), treeA — дерево (0 нет, 1 дуб, 2 сосна, 3 ясень).
+  // Заполняются при загрузке куска карты из «зерна» мира (state.env.seed), см. envLoad.
+  var terr = new Uint8Array(N * N), treeA = new Uint8Array(N * N);
   function sizeOk(n) { return typeof n === 'number' && n >= 16 && n <= 1000 && (n | 0) === n; }
   function idx(x, z) { return z * N + x; }
   function inMap(x, z) { return x >= 0 && z >= 0 && x < N && z < N; }
@@ -63,7 +66,7 @@
     return s;
   }
   // wear — износ асфальта по клеткам (0…1), rq — очередь ремонта, fql / fprog — очередь заказов завода, vehicles — машины завода
-  function emptyState(n) { return { v: 1, thv: 2, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fql: [], fprog: 0, vehicles: [], nextVeh: 1, stock: { boards: 0, dsp: 0 } }; }
+  function emptyState(n) { return { v: 1, thv: 2, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fql: [], fprog: 0, vehicles: [], nextVeh: 1, stock: { boards: 0, dsp: 0, stone: 0, gravel: 0 } }; }
   function fixState(s) {
     if (!sizeOk(s.size)) s.size = 48;
     if (!Array.isArray(s.brigades)) s.brigades = [];
@@ -83,6 +86,8 @@
     s.buildings.forEach(function (b) { b.th = G.themes[b.th | 0] ? b.th | 0 : 0; }); // эпоха здания (с 0.18.0 — оформление); у старых сохранений — бель-эпок
     if (!s.stock || typeof s.stock !== 'object') s.stock = {};
     s.stock.boards = +s.stock.boards || 0; s.stock.dsp = +s.stock.dsp || 0; // склад досок и ДСП (с 0.11.0)
+    s.stock.stone = +s.stock.stone || 0; s.stock.gravel = +s.stock.gravel || 0; // камень и щебень (с 0.21.0)
+    if (s.env && (typeof s.env.seed !== 'number' || !isFinite(s.env.seed))) delete s.env; // природа: есть только у миров, созданных с 0.21.0
     return s;
   }
   function catSizes(ck) { return G.cats[ck].sizes || ['1x1', '2x1', '2x2', '4x4']; }
@@ -125,7 +130,7 @@
     state.buildings.forEach(function (b) { bChunks(b).forEach(function (ck) { if (set[ck]) (bl[ck] = bl[ck] || []).push(b); }); });
     Object.keys(set).forEach(function (ck) {
       var p = ck.split(','), cx = +p[0], cz = +p[1];
-      var doc = WORLD.codec.encode(cx, cz, N, bl[ck] || [], function (x, z) { return state.roads[key(x, z)]; }, function (x, z) { return state.wear[key(x, z)] || 0; });
+      var doc = WORLD.codec.encode(cx, cz, N, bl[ck] || [], function (x, z) { return state.roads[key(x, z)]; }, function (x, z) { return state.wear[key(x, z)] || 0; }, clearedList(ck));
       WORLD.putChunk(worldId, cx, cz, doc, set[ck] === 2);
     });
   }
@@ -154,6 +159,7 @@
     });
     d.roads.forEach(function (r) { if (inMap(r[0], r[1])) state.roads[key(r[0], r[1])] = r[2]; });
     d.wear.forEach(function (w) { state.wear[key(w[0], w[1])] = w[2]; });
+    if (state.env) envLoad(cx, cz, d.t);
     var r = WC / CH; // куски дорог 20×20 вокруг и внутри (края зависят от соседей)
     for (mz = cz * r - 1; mz <= cz * r + r; mz++) for (mx = cx * r - 1; mx <= cx * r + r; mx++) if (mx >= 0 && mz >= 0 && mx * CH < N && mz * CH < N) dirtyChunks[mx + ',' + mz] = 1;
     resCache = {}; workCache = {};
@@ -188,6 +194,7 @@
     state.buildings = keep;
     var x0 = L.x * WC, z0 = L.z * WC, x1 = Math.min(N, x0 + WC), z1 = Math.min(N, z0 + WC), x, z;
     for (z = z0; z < z1; z++) for (x = x0; x < x1; x++) { var k = key(x, z); if (state.roads[k]) { delete state.roads[k]; delete state.wear[k]; } }
+    envUnload(ck, L);
     var r = WC / CH, mx, mz;
     for (mz = L.z * r; mz < L.z * r + r; mz++) for (mx = L.x * r; mx < L.x * r + r; mx++) { var mk = mx + ',' + mz; (chunks[mk] || []).forEach(function (m) { m.dispose(); }); delete chunks[mk]; delete dirtyChunks[mk]; }
     for (mz = L.z * r - 1; mz <= L.z * r + r; mz++) for (mx = L.x * r - 1; mx <= L.x * r + r; mx++) if (mx >= 0 && mz >= 0 && chunks[mx + ',' + mz]) dirtyChunks[mx + ',' + mz] = 1;
@@ -231,7 +238,7 @@
   }
   var byId = {};
   function getB(id) { return byId[id] || null; }
-  function canPlace(sz, rot, x, z, ignoreId) {
+  function canPlace(sz, rot, x, z, ignoreId, cat) {
     var f = foot(sz, rot);
     if (!ready4(x, z, f.w, f.d)) return false; // эта часть карты ещё не подгружена
     for (var zz = z; zz < z + f.d; zz++) for (var xx = x; xx < x + f.w; xx++) {
@@ -240,7 +247,32 @@
       if (o && o !== ignoreId) return false;
       if (state.roads[key(xx, zz)]) return false;
     }
-    return true;
+    return !terrainProblem(cat, sz, rot, x, z);
+  }
+  // Что мешает поставить здание из-за природы (с 0.21.0): '' — ничего. Деревья не мешают — их убирают при стройке.
+  // На склоне горы строить нельзя; на каменистой земле — только добычу камня (каменоломня: каменистая площадка, карьер: подножие горы).
+  function terrainProblem(cat, sz, rot, x, z) {
+    if (!state || !state.env || !cat) return '';
+    var f = foot(sz, rot), rock = 0, mount = 0, foot3 = 0, area = f.w * f.d;
+    for (var zz = z; zz < z + f.d; zz++) for (var xx = x; xx < x + f.w; xx++) {
+      if (!inMap(xx, zz)) continue;
+      var t = terr[idx(xx, zz)];
+      if (t === 2) mount++; else if (t === 1) rock++; else if (t === 3) { rock++; foot3++; }
+    }
+    if (mount) return 'mount';
+    if (cat === 'quarry') {
+      var q = G.quarry[sz];
+      if (q.rule === 'mount') return foot3 >= q.need ? '' : 'needMount';
+      return rock >= q.need ? '' : 'needRock';
+    }
+    return rock ? 'rock' : '';
+  }
+  function terrainMsg(p, cat, sz) {
+    var q = cat === 'quarry' ? G.quarry[sz] : null;
+    return p === 'mount' ? '⛰️ Здесь склон горы — строить нельзя' :
+      p === 'rock' ? '🪨 Это каменистая земля — она нужна для добычи камня. Обычные здания ставьте на траву' :
+      p === 'needRock' ? '🪨 Каменоломню ставят на каменистую площадку: нужно хотя бы ' + q.need + ' клеток из ' + G.sizes[sz].w * G.sizes[sz].d + ' с камнем' :
+      p === 'needMount' ? '⛰️ Горный карьер ставят вплотную к склону горы: нужно хотя бы ' + q.need + ' клеток подножия из ' + G.sizes[sz].w * G.sizes[sz].d : '';
   }
 
   // ---------- Доллары ----------
@@ -1134,6 +1166,71 @@
         cube(2.2, 3.35, 2.55, 3.7, 0.04, 0.12, '#a8844f'); cube(2.32, 3.55, 2.36, 3.7, 0.16, 0.16, '#3b3f45'); // телега с грузом
         [[2.23, 3.4], [2.52, 3.4], [2.23, 3.65], [2.52, 3.65]].forEach(function (w) { S.bake(S.cyl(0.05, 0.05, 0.02, 10, '#1c1c1c', w[0], 0.05, w[1]), 0, 0, Math.PI / 2); });
       }
+    } else if (cat === 'quarry' || cat === 'stonework') {
+      // Камень (с 0.21.0): каменоломня и горный карьер — скальные уступы, рельсы с вагонетками, копёр; камнеобработка — навес с пилой и дробилка, завод с бункерами
+      var SG = '#a39d92', SG2 = '#b8b2a5', SG3 = '#8c867b', SBL = '#d8d0bd', SBL2 = '#cdc5b1', RAILC = '#6b7077', TIE = '#5a4630';
+      function qground(col) { cube(m, m, W - m, D - m, 0, 0.012, col); }
+      function rails(x, z0, z1) { // рельсы вдоль z со шпалами
+        for (var zz = z0; zz < z1 - 0.03; zz += 0.16) cube(x - 0.17, zz, x + 0.17, zz + 0.035, 0.012, 0.012, TIE);
+        cube(x - 0.11, z0, x - 0.09, z1, 0.024, 0.02, RAILC); cube(x + 0.09, z0, x + 0.11, z1, 0.024, 0.02, RAILC);
+      }
+      function wagon(x, z, load) { // вагонетка; load — с камнями
+        cube(x - 0.14, z - 0.2, x + 0.14, z + 0.2, 0.05, 0.04, '#3b3f45'); cube(x - 0.17, z - 0.22, x + 0.17, z + 0.22, 0.09, 0.1, '#7a5a3a'); cube(x - 0.15, z - 0.2, x + 0.15, z + 0.2, 0.19, 0.012, '#4a3a28');
+        [[-0.11, -0.14], [0.11, -0.14], [-0.11, 0.14], [0.11, 0.14]].forEach(function (w) { S.bake(S.cyl(0.032, 0.032, 0.02, 8, '#1c1c1c', x + w[0], 0.045, z + w[1]), 0, 0, Math.PI / 2); });
+        if (load) { S.sph(0.08, '#cfc8b8', x - 0.05, 0.22, z - 0.07, 0.8); S.sph(0.07, '#b9b2a2', x + 0.07, 0.22, z + 0.03, 0.8); S.sph(0.06, '#d8d0bd', x - 0.02, 0.24, z + 0.12, 0.8); }
+      }
+      function sblocks(x0, z0, x1, z1, n, hh) { hh = hh || 0.085; for (var q = 0; q < n; q++) cube(x0 + q * 0.012, z0 + q * 0.012, x1 - q * 0.012, z1 - q * 0.012, q * hh, hh - 0.005, q % 2 ? SBL2 : SBL); }
+      function gpile(x, z, rr, col) { S.cyl(0, rr, rr * 0.85, 9, col, x, rr * 0.425, z); }
+      function bould(x, z, rr, col) { S.sph(rr, col || '#8a857c', x, rr * 0.7, z, 0.75); }
+      if (cat === 'quarry' && size === '3x3') {
+        qground('#8f897d');
+        cube(0.12, 0.12, 2.88, 0.95, 0, 0.16, SG3); cube(0.3, 0.12, 2.7, 0.72, 0.16, 0.16, SG); cube(0.6, 0.12, 2.4, 0.5, 0.32, 0.16, SG2);   // скальный уступ с террасами
+        S.cyl(0, 0.34, 0.26, 7, SG2, 0.9, 0.61, 0.28); S.cyl(0, 0.26, 0.2, 7, '#bdb7aa', 2.0, 0.58, 0.3);
+        bould(0.45, 1.08, 0.11); bould(2.6, 1.05, 0.12); bould(0.25, 1.32, 0.09, '#7a766e'); bould(2.8, 1.3, 0.08);
+        rails(1.5, 0.95, 2.9); wagon(1.5, 1.45, true); wagon(1.5, 1.95, false);
+        S.cyl(0.018, 0.028, 0.95, 6, WOODC, 0.5, 0.47, 1.55); cube(0.5, 1.5, 1.15, 1.54, 0.9, 0.03, WOODC);   // деревянный кран-деррик
+        S.cyl(0.005, 0.005, 0.4, 4, '#222', 1.1, 0.7, 1.52); cube(1.04, 1.46, 1.16, 1.58, 0.36, 0.13, SBL);
+        var yq = wallBox(2.0, 1.6, 2.75, 2.4, 0, 1, 'brick', '#a9553b', 0.4);                                    // бытовка
+        S.gable(2.0, 1.6, 2.75, 2.4, yq + 0.035, 0.2, '#5b4a44', 'z', 0.04, '#a9553b'); door(2.25, 2.4, 2.403, 0.22); chim(2.15, 1.8, yq + 0.1, 0.2);
+        sblocks(2.05, 2.55, 2.5, 2.88, 3); sblocks(0.2, 2.3, 0.75, 2.75, 2); gpile(0.6, 1.95, 0.22, '#9b9384');
+        lamp(0.2, 2.85, 0.34);
+      } else if (cat === 'quarry') {
+        qground('#85807a');
+        cube(0.1, 0.1, 3.9, 1.0, 0, 0.14, SG3); cube(0.25, 0.1, 3.75, 0.8, 0.14, 0.14, SG); cube(0.5, 0.1, 3.5, 0.62, 0.28, 0.14, SG2); cube(0.9, 0.1, 3.1, 0.45, 0.42, 0.14, '#c4beb1');   // четыре уступа
+        S.cyl(0, 0.42, 0.34, 7, SG2, 0.8, 0.77, 0.3); S.cyl(0, 0.3, 0.26, 7, '#c4beb1', 3.2, 0.7, 0.3);
+        cube(1.5, 0.98, 2.5, 1.06, 0, 0.44, '#d2cbb9'); cube(1.62, 0.98, 2.38, 1.08, 0, 0.36, '#201e1c');          // портал штольни
+        cube(1.5, 0.98, 2.5, 1.06, 0.44, 0.05, '#d2cbb9'); cube(1.6, 1.05, 1.66, 1.1, 0, 0.38, WOODC); cube(2.34, 1.05, 2.4, 1.1, 0, 0.38, WOODC); cube(1.6, 1.05, 2.4, 1.1, 0.36, 0.04, WOODC);
+        rails(2.0, 1.1, 3.9); wagon(2.0, 1.6, true); wagon(2.0, 2.15, true); wagon(2.0, 2.7, false);
+        [[3.0, 1.5], [3.4, 1.5], [3.0, 1.9], [3.4, 1.9]].forEach(function (p) { S.cyl(0.02, 0.03, 1.3, 6, '#4a4e55', p[0], 0.65, p[1]); });   // копёр
+        cube(2.95, 1.45, 3.45, 1.95, 1.3, 0.04, '#3b3f45'); S.bake(S.cyl(0.14, 0.14, 0.04, 14, '#2b2f35', 3.2, 1.46, 1.7), 0, 0, Math.PI / 2); cube(3.14, 1.62, 3.26, 1.78, 1.34, 0.12, '#c8342c');
+        var yc = wallBox(0.2, 1.7, 1.4, 2.8, 0, 2, 'gov', '#c0b4a0', 0.35); cornice(0.2, 1.7, 1.4, 2.8, yc - 0.005, STONE2); S.hip(0.2, 1.7, 1.4, 2.8, yc + 0.035, 0.3, SLATE, 0.05);   // дробилка
+        door(0.6, 0.85, 2.803, 0.25); S.cyl(0.07, 0.1, 1.3, 10, '#9a4a36', 1.2, 0.65, 1.85); S.cyl(0.1, 0.09, 0.05, 10, STONE2, 1.2, 1.32, 1.85);
+        S.bake(S.box(0.16, 0.04, 1.1, K.mat('#3b3f45'), 1.0, 0.42, 3.35), -0.3, 0, 0);                              // конвейер
+        gpile(2.9, 3.35, 0.36, '#9b9384'); gpile(3.45, 3.1, 0.28, '#b4ac9a'); sblocks(0.25, 3.2, 0.95, 3.75, 3);
+        bould(3.7, 2.4, 0.13); bould(0.2, 1.2, 0.1, '#7a766e'); lamp(0.15, 3.85, 0.4); lamp(3.85, 3.85, 0.4);
+      } else if (size === '2x2') {
+        qground('#a8a094');
+        [[0.15, 0.2], [1.2, 0.2], [0.15, 1.15], [1.2, 1.15]].forEach(function (pp) { cube(pp[0], pp[1], pp[0] + 0.05, pp[1] + 0.05, 0, 0.5, '#6b4a2e'); });  // навес на столбах
+        S.gable(0.15, 0.2, 1.25, 1.2, 0.5, 0.2, '#6a5a52', 'x', 0.04, '#7a5a3a');
+        cube(0.3, 0.45, 1.05, 0.9, 0, 0.2, '#6d6a63'); cube(0.4, 0.52, 0.9, 0.82, 0.2, 0.14, SBL);                 // верстак с каменным блоком
+        S.bake(S.cyl(0.16, 0.16, 0.012, 18, '#cfd3d8', 0.65, 0.4, 0.67), 0, 0, Math.PI / 2); S.bake(S.cyl(0.04, 0.04, 0.02, 10, '#4a4e55', 0.65, 0.4, 0.67), 0, 0, Math.PI / 2);
+        S.cyl(0.24, 0.08, 0.3, 10, '#7d838c', 1.6, 0.55, 0.45); [[1.45, 0.3], [1.75, 0.3], [1.45, 0.6], [1.75, 0.6]].forEach(function (pp) { S.cyl(0.015, 0.015, 0.4, 5, '#4a4e55', pp[0], 0.2, pp[1]); });   // дробилка-бункер
+        gpile(1.55, 1.45, 0.3, '#b9b1a0'); gpile(1.3, 1.7, 0.2, '#9b9384'); sblocks(0.2, 1.4, 0.85, 1.85, 3, 0.06);
+        S.cyl(0.035, 0.05, 0.9, 8, '#9a4a36', 0.2, 0.45, 0.3); bould(0.2, 1.1, 0.07);
+      } else {
+        qground('#a39d92');
+        var yw = wallBox(0.15, 0.15, 2.4, 1.9, 0, 3, 'gov', '#c9bfa9'); cornice(0.15, 0.15, 2.4, 1.9, yw - 0.005, STONE2); S.gable(0.15, 0.15, 2.4, 1.9, yw + 0.035, 0.3, '#6f6a64', 'x', 0.05, '#c9bfa9');   // цех дробления
+        cube(0.7, 1.89, 1.5, 1.92, 0, 0.55, '#4f5660'); cube(0.65, 1.89, 1.55, 1.93, 0.55, 0.05, STONE2);          // ворота
+        var yt = wallBox(2.5, 0.15, 3.2, 1.0, 0, 4, 'gov', '#b9ae98', 0.3); cornice(2.5, 0.15, 3.2, 1.0, yt - 0.005, STONE2); S.hip(2.5, 0.15, 3.2, 1.0, yt + 0.035, 0.28, SLATE, 0.05);    // башня грохота
+        S.bake(S.box(0.16, 0.04, 1.5, K.mat('#3b3f45'), 2.85, 0.95, 1.65), -0.5, 0, 0);                              // конвейер вниз к бункерам
+        [[3.4, 1.9], [3.4, 2.5], [3.4, 3.1]].forEach(function (pp, q) { S.cyl(0.2, 0.2, 0.6, 12, q % 2 ? '#9aa3ad' : '#8f9aa6', pp[0], 0.7, pp[1]); S.cyl(0.2, 0.05, 0.25, 12, '#6d7782', pp[0], 0.275, pp[1]); S.cyl(0, 0.21, 0.1, 12, '#6d7782', pp[0], 1.05, pp[1]); });   // бункеры
+        gpile(0.5, 2.5, 0.42, '#9b9384'); gpile(1.15, 2.85, 0.34, '#b9b1a0'); gpile(1.75, 2.45, 0.3, '#aaa393'); gpile(0.7, 3.4, 0.28, '#c4bcab');
+        sblocks(2.2, 2.4, 2.9, 3.0, 3, 0.06); sblocks(2.2, 3.15, 2.9, 3.75, 2, 0.06);
+        cube(1.2, 3.35, 1.55, 3.85, 0.06, 0.1, '#a8844f'); cube(1.2, 3.35, 1.55, 3.55, 0.16, 0.14, '#8a7a5a'); cube(1.2, 3.55, 1.55, 3.7, 0.06, 0.2, '#4f8f3e'); // самосвал
+        [[1.17, 3.45], [1.58, 3.45], [1.17, 3.75], [1.58, 3.75]].forEach(function (w) { cube(w[0] - 0.03, w[1] - 0.05, w[0] + 0.03, w[1] + 0.05, 0, 0.1, '#1c1c1c'); });
+        S.cyl(0.07, 0.11, 1.9, 10, '#9a4a36', 2.3, 0.95, 1.25); S.cyl(0.11, 0.1, 0.06, 10, STONE2, 2.3, 1.9, 1.25);
+        lamp(0.2, 3.8, 0.4); lamp(3.8, 3.8, 0.4);
+      }
     } else if (cat === 'park' || cat === 'upark') {
       // Парковки: мощёные дворы с газовыми фонарями и старинными автомобилями; подземные — чугунные входы в стиле ар-нуво (как в Парижском метро)
       var under = cat === 'upark', CARC = ['#2e3a2f', '#6b2a2a', '#e8dcc0', '#2e2e33', '#3a4a6a', '#7a5a2a'];
@@ -1575,6 +1672,181 @@
   }
   function flushRoads() { for (var ck in dirtyChunks) buildChunk(ck); dirtyChunks = {}; }
   function refreshRoadAround(x, z) { markRoad(x, z); DIRS.forEach(function (d) { markRoad(x + d[0], z + d[1]); }); }
+
+  // ---------- Природа (с 0.21.0): деревья, каменистые площадки, горы ----------
+  // Что где стоит, считает js/terrain.js по «зерну» мира (state.env.seed); здесь — только картинка и правила.
+  // Деревья рисуются пачками (thin instances), каменистая земля — плоскими плитками под дорогами, горы — по одной сетке на гору.
+  // Срубленные деревья запоминаются в куске карты (cleared[кусок] = {номер клетки в куске: 1}); сами деревья не растут и не возвращаются.
+  var envC = {}, mtMesh = {}, cleared = {};
+  var TREE_NAME = ['', 'Дуб', 'Сосна', 'Ясень'];
+  function treeModel(kind) {
+    var S = Shapes(kit, 0, 0);
+    if (kind === 1) { // дуб: толстый ствол и круглая раскидистая крона из нескольких шаров
+      S.cyl(0.035, 0.055, 0.34, 6, '#6b4a2e', 0, 0.17, 0);
+      S.sph(0.3, '#4c8a3b', 0, 0.56, 0, 0.82); S.sph(0.22, '#5b9a45', 0.17, 0.5, 0.08, 0.85); S.sph(0.22, '#43802f', -0.15, 0.52, -0.1, 0.85); S.sph(0.2, '#63a34c', 0.02, 0.8, 0.03, 0.9);
+    } else if (kind === 2) { // сосна: ярусы тёмных «лап»-конусов на тонком стволе
+      S.cyl(0.02, 0.04, 0.3, 6, '#5a3d28', 0, 0.15, 0);
+      S.cyl(0, 0.3, 0.36, 7, '#2c6a3e', 0, 0.3, 0); S.cyl(0, 0.24, 0.32, 7, '#33764a', 0, 0.54, 0); S.cyl(0, 0.17, 0.3, 7, '#2c6a3e', 0, 0.76, 0); S.cyl(0, 0.1, 0.26, 7, '#33764a', 0, 0.96, 0);
+    } else { // ясень: высокий светлый ствол и узкая яйцевидная светлая крона
+      S.cyl(0.03, 0.045, 0.5, 6, '#8b7d6a', 0, 0.25, 0);
+      S.sph(0.22, '#86bd5a', 0, 0.78, 0, 1.55); S.sph(0.16, '#93c764', 0.07, 1.02, 0.03, 1.3); S.sph(0.14, '#7bb050', -0.07, 0.62, -0.05, 1.2);
+    }
+    return S.merge();
+  }
+  function treeBatch(k) { return getBatch('tree' + k, function () { return treeModel(k); }); }
+  function boulderModel(v) { // валун: приплюснутый многогранник
+    var S = Shapes(kit, 0, 0);
+    var m = B.MeshBuilder.CreatePolyhedron('bl', { type: v ? 3 : 2, size: v ? 0.1 : 0.09 }, kit.scene);
+    m.scaling.set(1.15, 0.62, 0.9); m.position.y = 0.045; m.material = kit.mat(v ? '#938f88' : '#807c75');
+    S.parts.push(m);
+    return S.merge();
+  }
+  function boulderBatch(v) { return getBatch('boulder' + v, function () { return boulderModel(v); }); }
+  var rockMats = {};
+  function rockMat(foot) { // каменистая земля: щебень и мелкая галька; у подножия горы темнее
+    var k = foot ? 'f' : 'r'; if (rockMats[k]) return rockMats[k];
+    var c = document.createElement('canvas'); c.width = c.height = 128; var g = c.getContext('2d'), r = rng(foot ? 91 : 61);
+    g.fillStyle = foot ? '#8b877e' : '#a8a194'; g.fillRect(0, 0, 128, 128);
+    for (var i = 0; i < 26; i++) { var x = r() * 128, y = r() * 128, rad = 8 + r() * 18, gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, r() > 0.5 ? 'rgba(70,64,56,.22)' : 'rgba(225,218,200,.2)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
+    for (i = 0; i < 230; i++) {
+      var v = r(), px = r() * 128, py = r() * 128, w = 2 + r() * 5;
+      g.fillStyle = v > 0.66 ? 'rgba(236,230,214,.75)' : v > 0.33 ? 'rgba(96,90,82,.75)' : 'rgba(150,142,128,.8)';
+      g.beginPath(); g.ellipse(px, py, w, w * (0.55 + r() * 0.3), r() * 3, 0, 7); g.fill();
+      g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.ellipse(px + 1, py + 1.5, w * 0.9, w * 0.45, 0, 0, 7); g.fill();
+    }
+    for (i = 0; i < 34; i++) { g.fillStyle = 'rgba(96,136,70,.55)'; g.fillRect(r() * 128, r() * 128, 2, 3 + r() * 3); } // редкая трава между камнями
+    var m = flatMat('#ffffff'), tx = new B.DynamicTexture('rock' + k, c, scene, true); tx.update();
+    m.diffuseTexture = tx; return (rockMats[k] = m);
+  }
+  var mtMat = null;
+  function mountainMat() {
+    if (!mtMat) { mtMat = new B.StandardMaterial('mtMat', scene); mtMat.diffuseColor = B.Color3.White(); mtMat.specularColor = B.Color3.Black(); mtMat.backFaceCulling = false; }
+    return mtMat;
+  }
+  function mountainNode(d) { // грани — «низкополигональные», цвет в вершинах: серая скала, внизу земля, на вершинах снег
+    var md = TERRAIN.mountainMesh(d), m = new B.Mesh('mt', scene), vd = new B.VertexData();
+    vd.positions = md.pos; vd.normals = md.nor; vd.colors = md.col; vd.indices = md.ind; vd.applyToMesh(m);
+    m.position.set(-N / 2, 0, -N / 2);   // сетка посчитана в клетках карты, сцена — от центра
+    m.material = mountainMat(); m.isPickable = false; m.receiveShadows = true;
+    shadowGen.addShadowCaster(m, false);
+    return m;
+  }
+  function disposeMt(id) {
+    var r = mtMesh[id]; if (!r) return;
+    shadowGen.removeShadowCaster(r.mesh); r.mesh.dispose(); delete mtMesh[id];
+  }
+  function putTree(i, x, z, kind) {
+    var L = TERRAIN.treeLook(state.env.seed, x, z, kind), c = cellCenter(x, z);
+    batchSet(treeBatch(kind), i, c.x + L.dx, 0, c.z + L.dz, L.yaw, L.s, L.s, L.s);
+  }
+  function putBoulders(i, x, z, t) {
+    var c = cellCenter(x, z);
+    TERRAIN.boulders(state.env.seed, x, z, t).forEach(function (b, n) { batchSet(boulderBatch(b[4]), i * 4 + n, c.x + b[0], 0, c.z + b[1], b[3], b[2], b[2], b[2]); });
+  }
+  function dropBoulders(i, x, z, t) {
+    TERRAIN.boulders(state.env.seed, x, z, t).forEach(function (b, n) { batchRemove(boulderBatch(b[4]), i * 4 + n); });
+  }
+  function envReset() {
+    if (terr.length !== N * N) { terr = new Uint8Array(N * N); treeA = new Uint8Array(N * N); } else { terr.fill(0); treeA.fill(0); }
+    Object.keys(envC).forEach(function (ck) { [envC[ck].rock, envC[ck].foot].forEach(function (m) { if (m) m.dispose(); }); });
+    Object.keys(mtMesh).forEach(disposeMt);
+    ['tree1', 'tree2', 'tree3', 'boulder0', 'boulder1'].forEach(function (k) { var bt = batches[k]; if (bt) { bt.ids = []; bt.at = {}; dirtyBatches[k] = bt; } });
+    envC = {}; mtMesh = {}; cleared = {};
+  }
+  // Кусок карты загрузился: расставить деревья, камни и горы (кроме клеток под зданиями и дорогами)
+  function envLoad(cx, cz, tlist) {
+    var ck = ckey(cx, cz), x0 = cx * WC, z0 = cz * WC, x1 = Math.min(N, x0 + WC), z1 = Math.min(N, z0 + WC), w = x1 - x0;
+    var cl = cleared[ck] = {}, rockQ = [], footQ = [], x, z;
+    (tlist || []).forEach(function (n) { cl[n] = 1; });
+    var g = TERRAIN.cells(state.env, N, x0, z0, x1, z1);
+    for (z = z0; z < z1; z++) for (x = x0; x < x1; x++) {
+      var li = (z - z0) * w + (x - x0), i = idx(x, z), t = g.terr[li], tr = g.tree[li], free = !occ[i] && !state.roads[key(x, z)];
+      terr[i] = t;
+      if (tr && free && !cl[(z - z0) * WC + (x - x0)]) { treeA[i] = tr; putTree(i, x, z, tr); }
+      if (t === 1 || t === 3) {
+        var c = cellCenter(x, z); (t === 3 ? footQ : rockQ).push([c.x, c.z, 1, 1, 0.008, (x * 7 + z * 13) & 3]);
+        if (free) putBoulders(i, x, z, t);
+      }
+    }
+    var e = envC[ck] = { mts: [] };
+    if (rockQ.length) { e.rock = quadsMesh('rockfield', rockQ, rockMat(false)); e.rock.receiveShadows = true; }
+    if (footQ.length) { e.foot = quadsMesh('rockfoot', footQ, rockMat(true)); e.foot.receiveShadows = true; }
+    TERRAIN.mountains(state.env, N, x0, z0, x1, z1).forEach(function (d) {
+      var r = mtMesh[d.id]; if (!r) r = mtMesh[d.id] = { mesh: mountainNode(d), n: 0, chunks: {}, d: d };
+      if (!r.chunks[ck]) { r.chunks[ck] = 1; r.n++; e.mts.push(d.id); }
+    });
+    dirty();
+  }
+  function envUnload(ck, L) {
+    if (!state.env) return;
+    var x0 = L.x * WC, z0 = L.z * WC, x1 = Math.min(N, x0 + WC), z1 = Math.min(N, z0 + WC), x, z;
+    for (z = z0; z < z1; z++) for (x = x0; x < x1; x++) {
+      var i = idx(x, z);
+      if (treeA[i]) { batchRemove(treeBatch(treeA[i]), i); treeA[i] = 0; }
+      if (terr[i] === 1 || terr[i] === 3) dropBoulders(i, x, z, terr[i]);
+      terr[i] = 0;
+    }
+    var e = envC[ck];
+    if (e) {
+      [e.rock, e.foot].forEach(function (m) { if (m) m.dispose(); });
+      e.mts.forEach(function (id) { var r = mtMesh[id]; if (!r) return; delete r.chunks[ck]; if (--r.n <= 0) disposeMt(id); });
+      delete envC[ck];
+    }
+    delete cleared[ck];
+    dirty();
+  }
+  function clearedList(ck) { var c = cleared[ck]; return c ? Object.keys(c).map(Number) : []; }
+  function localCell(x, z) { return (z - Math.floor(z / WC) * WC) * WC + (x - Math.floor(x / WC) * WC); }
+  // Убрать дерево в клетке (стройка, дорога или «Удалить»). Возвращает true, если дерево было.
+  function clearTree(x, z) {
+    if (!state.env || !inMap(x, z)) return false;
+    var i = idx(x, z), k = treeA[i]; if (!k) return false;
+    var c = cleared[ckOf(x, z)]; if (!c) return false; // кусок не загружен
+    treeA[i] = 0; batchRemove(treeBatch(k), i);
+    c[localCell(x, z)] = 1; touchCell(x, z, true);
+    if (undoLog) undoLog.push(['t', x, z, k]);
+    dirty(); return true;
+  }
+  function restoreTree(x, z, k) { // отмена случайного жеста: дерево возвращается на место
+    if (!state.env || !inMap(x, z)) return;
+    var i = idx(x, z), c = cleared[ckOf(x, z)]; if (!c || treeA[i] || occ[i] || state.roads[key(x, z)]) return;
+    treeA[i] = k; putTree(i, x, z, k); delete c[localCell(x, z)]; touchCell(x, z, true); dirty();
+  }
+  // Площадка под здание: деревья убираются, валуны на каменистой земле — тоже
+  function clearArea(x0, z0, w, d) {
+    if (!state.env) return 0;
+    var n = 0;
+    for (var z = z0; z < z0 + d; z++) for (var x = x0; x < x0 + w; x++) {
+      if (!inMap(x, z)) continue;
+      if (clearTree(x, z)) n++;
+      var t = terr[idx(x, z)]; if (t === 1 || t === 3) dropBoulders(idx(x, z), x, z, t);
+    }
+    return n;
+  }
+  // Справка о природе по нажатию в режиме «Смотреть»
+  function terrainText(x, z) {
+    if (!state.env || !inMap(x, z) || !loaded[ckOf(x, z)]) return '';
+    var i = idx(x, z), tr = treeA[i], t = terr[i];
+    if (tr) return '🌳 ' + TREE_NAME[tr] + '. Деревья не растут и не размножаются. Уберутся сами, если здесь построить здание или проложить дорогу, или инструментом «Удалить»';
+    if (t === 1) return '🪨 Каменистая площадка. Здесь добывают камень: ⛏️ «Камень» → Каменоломня (нужно 5 клеток из 9 с камнем). Обычные здания тут не ставят, дорогу проложить можно';
+    if (t === 3) return '⛰️ Подножие горы — каменистая земля. Здесь добывают камень: Горный карьер ставят вплотную к склону (6 клеток подножия из 16) и Каменоломню — на любой каменистой земле';
+    if (t === 2) return '🏔️ Склон горы. Строить и прокладывать дороги нельзя. Камень добывают у подножия — Горный карьер';
+    return '';
+  }
+  function pickMountain(sx, sy) { // луч в гору: земля за горой не считается
+    var ids = Object.keys(mtMesh); if (!state.env || !ids.length) return null;
+    var r = rayAt(sx, sy), o = r.origin, d = r.direction; if (d.y > -1e-6) return null;
+    var t0 = Math.max(0, (o.y - 6.5) / -d.y), t1 = o.y / -d.y;
+    for (var t = t0; t < t1; t += 0.08) {
+      var px = o.x + d.x * t + N / 2, py = o.y + d.y * t, pz = o.z + d.z * t + N / 2;
+      for (var k = 0; k < ids.length; k++) {
+        var md = mtMesh[ids[k]].d;
+        if (px < md.x0 || px > md.x1 || pz < md.z0 || pz > md.z1) continue;
+        if (TERRAIN.heightAt(md, px, pz) >= py - 0.02) return md;
+      }
+    }
+    return null;
+  }
 
   // ---------- Здания и стройплощадки на сцене ----------
   var placed = {}, sites = {}; // id -> batch; id -> стройплощадка
@@ -2140,7 +2412,22 @@
     working('saw').forEach(function (b) { var p = G.sawmill[b.size]; o.boards += p.boards; o.dsp += p.dsp; });
     return o;
   }
-  var stockDirty = true, sawCache = null, sawT = 0;
+  var stockDirty = true, sawCache = null, sawT = 0, stoneCache = null, stoneT = 0;
+  // Камень (с 0.21.0): каменоломни добывают, камнеобработка превращает камень в щебень
+  function stoneRate() {
+    var o = { stone: 0, gravel: 0, use: 0 };
+    working('quarry').forEach(function (b) { o.stone += G.quarry[b.size].stone; });
+    working('stonework').forEach(function (b) { var p = G.stonework[b.size]; o.use += p.use; o.gravel += p.gravel; });
+    return o;
+  }
+  function tickStone(dt) {
+    if (!state.env) return;
+    stoneT -= dt; if (!stoneCache || stoneT <= 0) { stoneCache = stoneRate(); stoneT = 1; }
+    var R = stoneCache, st = state.stock; if (!R.stone && !R.use) return;
+    st.stone += R.stone * dt / 60;
+    if (R.use) { var k = Math.min(1, st.stone / (R.use * dt / 60)); if (k > 0) { st.stone -= R.use * dt / 60 * k; st.gravel += R.gravel * dt / 60 * k; } }
+    stockDirty = true;
+  }
   function tickSawmills(dt) {
     sawT -= dt; if (!sawCache || sawT <= 0) { sawCache = sawRate(); sawT = 1; }
     if (!sawCache.boards && !sawCache.dsp) return;
@@ -2148,12 +2435,19 @@
   }
   function stockText(n) { return Math.floor(n).toLocaleString('ru-RU'); }
   function updateStock() {
-    if (!stockDirty) return; stockDirty = false;
+    if (!stockDirty) return; stockDirty = false; updateStone();
     var st = state.stock, R = sawCache || sawRate(), show = st.boards >= 1 || st.dsp >= 1 || R.boards > 0 || state.buildings.some(function (b) { return b.cat === 'saw'; });
     $('stStockWrap').hidden = !show; if (!show) return;
     $('stBoards').textContent = stockText(st.boards); $('stDsp').textContent = stockText(st.dsp);
     $('stStockWrap').title = 'Склад: доски ' + stockText(st.boards) + ', ДСП ' + stockText(st.dsp) + '. Лесопилки дают ' + R.boards + ' досок и ' + R.dsp + ' ДСП в минуту. Стройка с досками на 25% быстрее, с досками и ДСП — на 50%.';
     var e = $('iStock'); if (e) e.innerHTML = '🪵 ' + stockText(st.boards) + ' · 🟫 ' + stockText(st.dsp);
+  }
+  function updateStone() {
+    var w = $('stStoneWrap'); if (!w) return;
+    if (!state.env) { w.hidden = true; return; }
+    var st = state.stock, R = stoneCache || stoneRate(); w.hidden = false;
+    $('stStone').textContent = stockText(st.stone); $('stGravel').textContent = stockText(st.gravel);
+    w.title = 'Склад: камень ' + stockText(st.stone) + ', щебень ' + stockText(st.gravel) + '. Добыча ' + Math.round(R.stone) + ' камня в минуту, переработка ' + Math.round(R.use) + ' камня в ' + Math.round(R.gravel) + ' щебня. Булыжная дорога — камень, асфальт — щебень.';
   }
   // Парковки: сколько машин жителей стоит рядом (дома в радиусе 8 клеток)
   function parkUse(b) {
@@ -2674,6 +2968,7 @@
 
   function rebuildAll() {
     if (!mapNodes.length || state.size !== N) { N = state.size; occ = new Int32Array(N * N); buildMapScene(); }
+    envReset();
     Object.keys(placed).forEach(function (id) { removeBuildingMesh(+id); });
     byId = {};
     Object.keys(chunks).forEach(function (ck) { chunks[ck].forEach(function (m) { m.dispose(); }); }); chunks = {};
@@ -2911,7 +3206,7 @@
     build: TOUCH ? 'Ведите пальцем, отпустите — начнётся стройка.' : 'Наведите на карту и нажмите — начнётся стройка. R — повернуть.',
     road: 'Ведите по клеткам, чтобы проложить дорогу.',
     move: TOUCH ? 'Возьмите здание пальцем и перетащите на новое место.' : 'Зажмите здание и перетащите на новое место. R — повернуть.',
-    delete: 'Нажмите на здание или ведите по дороге, чтобы удалить.'
+    delete: 'Нажмите на здание, дерево или ведите по дороге, чтобы удалить.'
   };
   var NO_BRIGADE = 'Сначала купите бригаду — кнопка «Купить» вверху меню «Строить»';
   var hintTimer = 0;
@@ -3033,6 +3328,8 @@
     var c = G.cats[cat];
     if (cat === 'res') { var f = c.families[size]; return '👥 ' + f + ' ' + plural(f, 'семья', 'семьи', 'семей'); }
     if (cat === 'saw') { var sp = G.sawmill[size]; return sp.dsp ? '🪵 ' + sp.boards + ' + 🟫 ' + sp.dsp + ' ДСП/мин' : '🪵 ' + sp.boards + ' досок/мин'; }
+    if (cat === 'quarry') return '⛏️ ' + G.quarry[size].stone + ' 🪨 камня/мин';
+    if (cat === 'stonework') { var sw = G.stonework[size]; return '🪨 ' + sw.use + ' → ⚪ ' + sw.gravel + ' щебня/мин'; }
     if (cat === 'park' || cat === 'upark') { var ps = G.parkSpots[cat][size]; return '🅿️ ' + ps + ' ' + plural(ps, 'место', 'места', 'мест') + (cat === 'upark' ? '<span class="wl"> под землёй</span>' : ''); }
     var n = c.staff[size]; return '👷 ~' + n.toLocaleString('ru-RU') + '<span class="wl"> работают</span><span class="ws"> чел.</span>';
   }
@@ -3063,7 +3360,7 @@
       G.buildGroups.map(function (g) { return catItem(g.id); }).join('');
     var cl = catLabel(buildFilter); $('catCur').textContent = cl.t; $('catSw').style.background = cl.c;
     $('roadChips').innerHTML = Object.keys(G.roads).map(function (k) {
-      return '<button class="chip' + (k === roadType ? ' on' : '') + '" data-road="' + k + '"><span class="sw" style="background:' + G.roads[k].color + '"></span>' + G.roads[k].label + '</button>';
+      return '<button class="chip' + (k === roadType ? ' on' : '') + '" data-road="' + k + '"><span class="sw" style="background:' + G.roads[k].color + '"></span>' + G.roads[k].label + (state.env && G.roadCost[k] ? ' <em>' + G.roadCost[k].n + (G.roadCost[k].res === 'stone' ? '🪨' : '⚪') + '</em>' : '') + '</button>';
     }).join('');
     renderStyleRow();
     renderCards();
@@ -3094,7 +3391,7 @@
   function filterCats(f) {
     var all = Object.keys(G.cats);
     return f === 'all' ? all : f === 'mech' ? all.filter(function (k) { return G.cats[k].mech; }) :
-      f === 'resrc' ? all.filter(function (k) { return G.cats[k].group === 'resrc'; }) : [f];
+      f === 'resrc' || f === 'stone' ? all.filter(function (k) { return G.cats[k].group === f; }) : [f];
   }
   // Меню категорий: кнопка «Категория» под главными кнопками, по нажатию открывается список (с 0.13.0)
   function catsOpen(on) {
@@ -3151,7 +3448,7 @@
   var lastHover = null;
   function buildGhostTo(c) {
     var o = originFor(buildSize, buildRot, c);
-    showGhostAt(buildSize, buildRot, o.x, o.z, canPlace(buildSize, buildRot, o.x, o.z, 0) && state.brigades.length > 0);
+    showGhostAt(buildSize, buildRot, o.x, o.z, canPlace(buildSize, buildRot, o.x, o.z, 0, buildCat) && state.brigades.length > 0);
     return o;
   }
   function placeBuilding(c) {
@@ -3159,9 +3456,12 @@
     var o = originFor(buildSize, buildRot, c), cost = costOf(buildCat, buildSize);
     var f0 = foot(buildSize, buildRot);
     if (inMap(o.x, o.z) && !ready4(o.x, o.z, f0.w, f0.d)) { hint('Эта часть карты ещё подгружается — подождите секунду', true); return; }
-    if (!canPlace(buildSize, buildRot, o.x, o.z, 0)) { hint('Здесь занято или край карты', true); return; }
+    if (!canPlace(buildSize, buildRot, o.x, o.z, 0, buildCat)) {
+      var tp = inMap(o.x, o.z) ? terrainProblem(buildCat, buildSize, buildRot, o.x, o.z) : '';
+      hint(tp ? terrainMsg(tp, buildCat, buildSize) : 'Здесь занято или край карты', true); return;
+    }
     if (!canPay(cost)) { hint('Не хватает долларов: нужно ' + usd(cost), true); return; }
-    pay(cost);
+    pay(cost); clearArea(o.x, o.z, f0.w, f0.d);
     var b = { id: state.nextId++, cat: buildCat, size: buildSize, x: o.x, z: o.z, rot: buildRot, seed: buildSeed, th: buildTheme, prog: 0 };
     state.buildings.push(b); markOcc(b, b.id); touchB(b, true); addBuildingMesh(b);
     assignBrigades();
@@ -3189,12 +3489,27 @@
     if (isSite(b)) { assignBrigades(); renderMech(); }
     save(); updateStats(); dirty();
   }
+  // Дорога делается из камня (с 0.21.0, в мирах с природой): булыжник — камень, асфальт — щебень, простая — бесплатно
+  function roadCostOf(t) { var c = state.env && t && G.roadCost[t]; return c ? { res: c.res, n: c.n } : null; }
   function setRoad(x, z, t) {
     if (!inMap(x, z) || !loaded[ckOf(x, z)]) return;
-    var k = key(x, z), pt = state.roads[k], pw = state.wear[k];
-    if (t) { if (occ[idx(x, z)] || pt === t) return; state.roads[k] = t; delete state.wear[k]; }
+    var k = key(x, z), pt = state.roads[k], pw = state.wear[k], paid = null;
+    if (t) {
+      if (occ[idx(x, z)] || pt === t) return;
+      if (terr[idx(x, z)] === 2) { hint('⛰️ Через склон горы дорогу не проложить', true); return; }
+      paid = roadCostOf(t);
+      if (paid && state.stock[paid.res] < paid.n) {
+        var rs = G.stock[paid.res];
+        hint('Не хватает материала: ' + G.roadCost[t].n + ' ' + rs.icon + ' ' + rs.name.toLowerCase() + ' на клетку (' + G.roads[t].label.toLowerCase() + '). ' + (paid.res === 'stone' ? 'Добывайте камень: ⛏️ «Камень» → Каменоломня' : 'Щебень делают из камня: ⛏️ «Камень» → Камнеобработка') + '. Простая дорога бесплатна', true);
+        return;
+      }
+      clearTree(x, z);
+      if (paid) { state.stock[paid.res] -= paid.n; stockDirty = true; }
+      state.roads[k] = t; delete state.wear[k];
+      var tt = terr[idx(x, z)]; if (tt === 1 || tt === 3) dropBoulders(idx(x, z), x, z, tt);
+    }
     else { if (!pt) return; delete state.roads[k]; delete state.wear[k]; }
-    if (undoLog) undoLog.push(['r', k, pt, pw]);
+    if (undoLog) undoLog.push(['r', k, pt, pw, paid]);
     touchCell(x, z, true); refreshRoadAround(x, z); save(); statsSoon(); dirty();
   }
   function lineCells(a, b, fn) { // Брезенхэм
@@ -3213,7 +3528,8 @@
   }
   function deleteAt(sx, sy, c) {
     if (c && inMap(c.x, c.z) && state.roads[key(c.x, c.z)]) { setRoad(c.x, c.z, null); return; }
-    var b = pickBuilding(sx, sy); if (b) deleteBuilding(b);
+    var b = pickBuilding(sx, sy); if (b) { deleteBuilding(b); return; }
+    if (c && clearTree(c.x, c.z)) save();
   }
 
   function startMove(b, c) {
@@ -3228,11 +3544,12 @@
     // центр захвата сохраняется при повороте
     var cx = c.px - moving.offX + fo.w / 2, cz = c.pz - moving.offZ + fo.d / 2;
     moving.x = clamp(Math.round(cx - f.w / 2), 0, N - f.w); moving.z = clamp(Math.round(cz - f.d / 2), 0, N - f.d);
-    showGhostAt(moving.b.size, moving.rot, moving.x, moving.z, canPlace(moving.b.size, moving.rot, moving.x, moving.z, moving.b.id));
+    showGhostAt(moving.b.size, moving.rot, moving.x, moving.z, canPlace(moving.b.size, moving.rot, moving.x, moving.z, moving.b.id, moving.b.cat));
   }
   function finishMove() {
     var mv = moving, b = mv.b; moving = null;
-    if (canPlace(b.size, mv.rot, mv.x, mv.z, b.id)) {
+    if (canPlace(b.size, mv.rot, mv.x, mv.z, b.id, b.cat)) {
+      var fm = foot(b.size, mv.rot); clearArea(mv.x, mv.z, fm.w, fm.d);
       touchB(b, true); markOcc(b, 0); b.x = mv.x; b.z = mv.z; b.rot = mv.rot; markOcc(b, b.id); touchB(b, true);
       save(); updateStats();
       if (!isSite(b) && !hasRoad(b)) hint('🛣️ Здесь нет дороги — здание не работает, пока её не подведёте', true);
@@ -3313,7 +3630,7 @@
       else if (tool === 'move' && moving) moveGhostTo(cl);
       else if (tool === 'road') { lineCells(gest.last, cl, function (x, z) { setRoad(x, z, roadType); }); showCursor(cl.x, cl.z, '#ffffff'); }
       else if (tool === 'delete') {
-        lineCells(gest.last, cl, function (x, z) { if (inMap(x, z) && state.roads[key(x, z)]) setRoad(x, z, null); });
+        lineCells(gest.last, cl, function (x, z) { if (inMap(x, z) && state.roads[key(x, z)]) setRoad(x, z, null); else if (inMap(x, z) && treeA[idx(x, z)] && !occ[idx(x, z)] && clearTree(x, z)) save(); });
         if (cl.x !== gest.last.x || cl.z !== gest.last.z) { var bb = pickBuilding(e.clientX, e.clientY); if (bb) deleteBuilding(bb); }
         showCursor(cl.x, cl.z, '#ff3b30');
       }
@@ -3331,7 +3648,11 @@
     if (g.type === 'pan' && g.tap && !g.moved) {
       var b = pickBuilding(e.clientX, e.clientY);
       if (b) openInfo(b);
-      else { var rc = cellAt(e.clientX, e.clientY); if (rc && inMap(rc.x, rc.z) && state.roads[key(rc.x, rc.z)]) openRoadInfo(rc.x, rc.z); else closeInfo(); }
+      else {
+        var rc = cellAt(e.clientX, e.clientY), mt = pickMountain(e.clientX, e.clientY);
+        if (!mt && rc && inMap(rc.x, rc.z) && state.roads[key(rc.x, rc.z)]) openRoadInfo(rc.x, rc.z);
+        else { closeInfo(); var tt = mt ? terrainText(Math.floor(mt.cx), Math.floor(mt.cz)) : rc ? terrainText(rc.x, rc.z) : ''; if (mt) tt = '🏔️ Гора со снежной вершиной. Склон не застроить и не пересечь дорогой. Камень добывают у подножия — Горный карьер: ⛏️ «Камень»'; if (tt) hint(tt); }
+      }
       return;
     }
     if (g.type === 'action') {
@@ -3353,7 +3674,10 @@
         var k = o[1], p = k.split(',');
         if (o[2]) state.roads[k] = o[2]; else delete state.roads[k];
         if (o[3]) state.wear[k] = o[3]; else delete state.wear[k];
+        if (o[4]) { state.stock[o[4].res] += o[4].n; stockDirty = true; } // камень, потраченный на случайную дорогу, возвращается
         touchCk(ckOfKey(k), true); refreshRoadAround(+p[0], +p[1]);
+      } else if (o[0] === 't') {
+        restoreTree(o[1], o[2], o[3]);
       } else if (!byId[o[1].id]) {
         var b = o[1]; state.buildings.push(b); markOcc(b, b.id); touchB(b, true); addBuildingMesh(b);
       }
@@ -3856,7 +4180,7 @@
     $('stBuild').textContent = built;
     $('stOff').textContent = off; $('stOffWrap').hidden = !off;
     $('stOffWrap').title = 'Без дороги: ' + off + ' ' + plural(off, 'здание', 'здания', 'зданий') + ' не работают. Подведите к ним дорогу.';
-    rebuildTraffic(); syncRollers(); syncCars(); sawCache = null; stockDirty = true; updateStock();
+    rebuildTraffic(); syncRollers(); syncCars(); sawCache = null; stoneCache = null; stockDirty = true; updateStock();
     if (infoId) { var ib = getB(infoId); if (ib) renderInfo(ib, true); }
     simRequest();
   }
@@ -3942,7 +4266,7 @@
   $('sbScrim').addEventListener('click', closeSide);
   $('sbPrev').addEventListener('click', function () { confirmArm = ''; menuMode = ''; sideShow(menuRootHtml(), false); });
   // ---------- Миры (с 0.20.0) ----------
-  var menuMode = '', confirmArm = '', newSize = G.mapSize, newDemo = false, newName = '';
+  var menuMode = '', confirmArm = '', newSize = G.mapSize, newDemo = false, newNature = true, newName = '';
   function sizeLabel(n) { for (var i = 0; i < G.mapSizes.length; i++) if (G.mapSizes[i].n === n) return G.mapSizes[i].label; return 'Своя'; }
   function worldCard(w) {
     var cur = w.id === worldId, nc = Math.ceil(w.size / WC);
@@ -3976,7 +4300,8 @@
         return '<button class="size-opt' + (m.n === newSize ? ' on' : '') + '" data-n="' + m.n + '"><i style="width:' + Math.round(12 + Math.sqrt(m.n / 1000) * 30) + 'px;height:' + Math.round(12 + Math.sqrt(m.n / 1000) * 30) + 'px"></i><b>' + m.n + '×' + m.n + '</b><span>' + (c * c > 1 ? c * c + ' ' + plural(c * c, 'кусок', 'куска', 'кусков') : '1 кусок') + '</span></button>';
       }).join('') + '</div>';
     });
-    h += '<label class="chk"><input type="checkbox" id="wDemo"' + (newDemo ? ' checked' : '') + '> Положить в центр город-пример</label>' +
+    h += '<label class="chk"><input type="checkbox" id="wNature"' + (newNature ? ' checked' : '') + '> 🌲 Природа: леса, каменистые площадки, горы со снежными пиками, камень для дорог</label>' +
+      '<label class="chk"><input type="checkbox" id="wDemo"' + (newDemo ? ' checked' : '') + '> Положить в центр город-пример</label>' +
       '<button class="menu-btn acc" data-m="wmake" id="wMake">✅ Создать мир ' + newSize + '×' + newSize + '</button>';
     menuView(h, true);
   }
@@ -4039,8 +4364,12 @@
       return createWorld('Мой город', G.mapSize, false).then(openWorld);
     });
   }
-  function createWorld(name, size, demo) {
+  function createWorld(name, size, demo, nature) {
     var s0 = emptyState(size);
+    if (nature) {
+      s0.env = { seed: newSeed() }; s0.stock.stone = G.startStock.stone; s0.stock.gravel = G.startStock.gravel;
+      if (demo) { var o0 = Math.floor((size - 48) / 2); s0.env.hole = [o0 - 1, o0 - 1, o0 + 49, o0 + 49]; }
+    }
     return WORLD.create({ name: name, size: size, g: metaOf(s0), cs: {} }).then(function (w) {
       if (!demo) return w.id;
       var d = demoState(size), docs = WORLD.codec.chunkify(size, d.buildings, d.roads, {}, function (b) { return foot(b.size, b.rot); });
@@ -4110,10 +4439,10 @@
       confirmArm = ''; deleteWorld(did);
     }
     else if (m === 'wmake') {
-      var nmv = (($('wName') || {}).value || '').trim() || 'Новый мир', demo = !!($('wDemo') || {}).checked;
+      var nmv = (($('wName') || {}).value || '').trim() || 'Новый мир', demo = !!($('wDemo') || {}).checked; newNature = !!($('wNature') || {}).checked;
       newDemo = demo; b.disabled = true; b.textContent = 'Создаём…';
       if (worldId) saveNow(false);
-      createWorld(nmv, newSize, demo).then(function (id) { closeModal(); closeSide(); return openWorld(id); });
+      createWorld(nmv, newSize, demo, newNature).then(function (id) { closeModal(); closeSide(); return openWorld(id); });
     }
   }
   $('modalBody').addEventListener('click', menuClick);
@@ -4150,7 +4479,7 @@
     var t = performance.now(), dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
     keyPan(dt); tickCam(dt);
     var active = tickBrigades(dt, t);
-    tickFactory(dt); tickWear(dt); tickTraffic(dt); tickSawmills(dt);
+    tickFactory(dt); tickWear(dt); tickTraffic(dt); tickSawmills(dt); tickStone(dt);
     var fixingNow = tickRepair(dt, t);
     if ((active || fixingNow) && t - lastSave > 2000) { saveNow(true); lastSave = t; }
     if (t - lastView > 220) { lastView = t; ensureView(); var sg = Math.round(cam.tx) + ',' + Math.round(cam.tz) + ',' + Math.round(cam.dist); if (sg !== camSig) { camSig = sg; camT = t; } else if (camT && t - camT > 2500) { camT = 0; saveSoft(); } }
@@ -4198,7 +4527,7 @@
     batches: function () { return Object.keys(batches).map(function (k) { return k + ':' + batches[k].ids.length; }); },
     wearAll: function (w) { for (var k in state.roads) if (state.roads[k] === 'asphalt') { state.wear[k] = typeof w === 'function' ? w(k) : w; markRoadKey(k); } dirty(); },
     finishAll: function () { state.buildings.forEach(function (b) { if (isSite(b)) { b.prog = 1; finishSite(b); } }); },
-    canPlace: canPlace, agents: function () { return { veh: agents, cars: carAgents, driving: carsDriving }; }, orderKind: orderKind, rollers: function () { return rollers; }, roadInfo: openRoadInfo, startPlace: startPlace, order: orderTruck, repairAll: repairAllAct, toggleAuto: toggleAuto,
+    env: function () { return { terr: terr, treeA: treeA, mt: Object.keys(mtMesh).length, cleared: cleared }; }, clearArea: clearArea, canPlace: canPlace, agents: function () { return { veh: agents, cars: carAgents, driving: carsDriving }; }, orderKind: orderKind, rollers: function () { return rollers; }, roadInfo: openRoadInfo, startPlace: startPlace, order: orderTruck, repairAll: repairAllAct, toggleAuto: toggleAuto,
     place: function (cat, size, x, z) { buildCat = cat; buildSize = size; buildRot = 0; placeBuilding({ px: x + G.sizes[size].w / 2, pz: z + G.sizes[size].d / 2 }); },
     bulk: function (n) { // тест: мгновенно застроить карту n зданиями
       var cats = Object.keys(G.cats), sz = ['1x1', '2x1', '2x2'], made = 0;

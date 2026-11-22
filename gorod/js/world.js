@@ -1,4 +1,4 @@
-// «Мое_город» — хранилище миров (с 0.20.0).
+// «Мое_город» — хранилище миров (с 0.20.0; в куске карты с 0.21.0 ещё и срубленные деревья).
 // Мир = мета (имя, размер, камера, бригады, машины, склад, счёт) + куски карты по 100×100 клеток.
 // Локально всё лежит в IndexedDB «moe_gorod_worlds» (куски — отдельными записями: большая карта не грузится целиком).
 // Если вы вошли в аккаунт (js/mm-account.js, Firebase-проект money99774, как на других моих сайтах), то мир ещё и лежит в облаке:
@@ -87,11 +87,12 @@
   });
 
   // ---------- кодек куска карты ----------
-  // Кусок: { v:1, b:[здания], r:[строки дорог 'a'/'d'/'c'/'.' по клеткам], w:[x, z, износ×10000, …] }; пустой кусок — null.
+  // Кусок: { v:1, b:[здания], r:[строки дорог 'a'/'d'/'c'/'.' по клеткам], w:[x, z, износ×10000, …], t:[номера срубленных деревьев] }; пустой кусок — null.
+  // t (с 0.21.0): сами деревья не хранятся — их даёт «зерно» мира (js/terrain.js); в куске записаны только убранные (номер клетки внутри куска: z×100 + x).
   var RCH = { asphalt: 'a', dirt: 'd', cobble: 'c' }, RREV = { a: 'asphalt', d: 'dirt', c: 'cobble' };
   function rect(cx, cz, size) { var x0 = cx * WC, z0 = cz * WC; return { x0: x0, z0: z0, x1: Math.min(size, x0 + WC), z1: Math.min(size, z0 + WC) }; }
   function chunks1(size) { return Math.ceil(size / WC); }
-  function encode(cx, cz, size, blds, roadAt, wearAt) {
+  function encode(cx, cz, size, blds, roadAt, wearAt, cleared) {
     var q = rect(cx, cz, size), rows = [], any = false, wear = [], x, z;
     for (z = q.z0; z < q.z1; z++) {
       var row = '';
@@ -102,19 +103,21 @@
       }
       rows.push(row.replace(/\.+$/, ''));
     }
-    if (!blds.length && !any) return null;
+    if (!blds.length && !any && !(cleared && cleared.length)) return null;
     var doc = { v: 1 };
     if (blds.length) doc.b = blds.map(function (b) { return Object.assign({}, b); });
     if (any) doc.r = rows;
     if (wear.length) doc.w = wear;
+    if (cleared && cleared.length) doc.t = cleared.slice();
     return doc;
   }
   function decode(doc, cx, cz) {
-    var out = { b: [], roads: [], wear: [] };
+    var out = { b: [], roads: [], wear: [], t: [] };
     if (!doc) return out;
     var x0 = cx * WC, z0 = cz * WC;
     if (doc.b) out.b = doc.b.map(function (b) { return Object.assign({}, b); });
     if (doc.r) doc.r.forEach(function (row, dz) { for (var dx = 0; dx < row.length; dx++) { var c = row.charAt(dx); if (c !== '.') out.roads.push([x0 + dx, z0 + dz, RREV[c] || 'dirt']); } });
+    if (Array.isArray(doc.t)) out.t = doc.t.filter(function (n) { return typeof n === 'number'; });
     if (doc.w) for (var i = 0; i + 2 < doc.w.length; i += 3) out.wear.push([x0 + doc.w[i], z0 + doc.w[i + 1], doc.w[i + 2] / 10000]);
     return out;
   }
