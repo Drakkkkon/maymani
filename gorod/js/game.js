@@ -43,12 +43,12 @@
     var s = emptyState(n);
     var x, z, o = Math.floor((n - 48) / 2); // пример нарисован для 48×48 — ставим его в центр
     function rd(x, z, t) { x += o; z += o; if (x >= 0 && z >= 0 && x < n && z < n) s.roads[key(x, z)] = t; }
-    for (x = 12; x <= 36; x++) rd(x, 24, 'asphalt');
-    for (z = 12; z <= 36; z++) rd(24, z, 'asphalt');
+    for (x = 12; x <= 36; x++) rd(x, 24, 'cobble');
+    for (z = 12; z <= 36; z++) rd(24, z, 'cobble');
     for (x = 8; x <= 23; x++) rd(x, 31, 'dirt');
-    for (z = 14; z <= 23; z++) rd(30, z, 'asphalt');
+    for (z = 14; z <= 23; z++) rd(30, z, 'cobble');
     for (z = 25; z <= 30; z++) rd(12, z, 'dirt');
-    for (x = 25; x <= 31; x++) rd(x, 31, 'asphalt'); // подъезд к небоскрёбу (с 0.8.0 без дороги здания не работают)
+    for (x = 25; x <= 31; x++) rd(x, 31, 'cobble'); // подъезд к небоскрёбу (с 0.8.0 без дороги здания не работают)
     rd(13, 26, 'dirt'); rd(13, 27, 'dirt');            // подъезд к казарме
     var list = [
       ['res', '1x1', 19, 23, 0], ['res', '1x1', 21, 23, 0], ['res', '2x1', 16, 23, 0], ['res', '1x1', 14, 30, 2],
@@ -66,7 +66,14 @@
     return s;
   }
   // wear — износ асфальта по клеткам (0…1), rq — очередь ремонта, fql / fprog — очередь заказов завода, vehicles — машины завода
-  function emptyState(n) { return { v: 1, thv: 2, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fql: [], fprog: 0, vehicles: [], nextVeh: 1, stock: { logs: 0, boards: 0, dsp: 0, stone: 0, gravel: 0 } }; }
+  function emptyState(n) { return { v: 1, thv: 2, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fql: [], fprog: 0, vehicles: [], nextVeh: 1, stock: { logs: 0, boards: 0, dsp: 0, stone: 0, gravel: 0, fabric: 0, clothes: 0, tobacco: 0, coal: 0, food: 0 }, cap: 0, income: 0, gt: 0, stops: {}, eco: null, hall: 0 }; }
+  function fixEco(e) {
+    var D = G.eco, f = {}, q = {};
+    e = e && typeof e === 'object' ? e : {};
+    Object.keys(D.services).forEach(function (k) { f[k] = e.fund && isFinite(e.fund[k]) ? clamp(+e.fund[k], 0, 100) : D.fundDefault; q[k] = e.q && isFinite(e.q[k]) ? clamp(+e.q[k], 0, 1) : 0.7; });
+    return { tax: isFinite(e.tax) ? clamp(+e.tax, 0, D.taxMax) : D.taxDefault, fund: f, q: q, unrest: +e.unrest || 0, riot: !!e.riot, ban: +e.ban || 0, log: Array.isArray(e.log) ? e.log.slice(-12) : [],
+      inc: +e.inc || 0, exp: +e.exp || 0, notified: e.notified && typeof e.notified === 'object' ? e.notified : {} };
+  }
   function fixState(s) {
     if (!sizeOk(s.size)) s.size = 48;
     if (!Array.isArray(s.brigades)) s.brigades = [];
@@ -81,7 +88,7 @@
     var OLD_PRICE = { garbage: 18000, ambulance: 16000, police: 14000, army: 24000, van: 12000, semi: 30000, dump: 20000 };
     s.fql = s.fql.filter(function (k) { if (k === 'brigade') return true; if (OLD_PRICE[k]) s.spent = (s.spent || 0) - OLD_PRICE[k]; return false; });
     if (!Array.isArray(s.vehicles)) s.vehicles = [];
-    s.vehicles = s.vehicles.filter(function (v) { return v && G.vehicles[v.kind]; });
+    s.vehicles = s.vehicles.filter(function (v) { return v && (G.vehicles[v.kind] || (/^f_/.test(v.kind) && G.trucks[v.kind.slice(2)])); });
     s.nextVeh = s.nextVeh || s.vehicles.reduce(function (m, v) { return Math.max(m, v.id); }, 0) + 1;
     s.buildings = s.buildings.filter(function (b) { return G.cats[b.cat] && G.sizes[b.size]; });
     if (s.thv !== 2) { var TMAP = [0, 3, 2, 1]; s.buildings.forEach(function (b) { b.th = TMAP[b.th | 0] || 0; }); s.thv = 2; } // 0.19.0: стили A–D 0.18.0 → ближайшие эпохи
@@ -90,6 +97,10 @@
     s.stock.boards = +s.stock.boards || 0; s.stock.dsp = +s.stock.dsp || 0; // склад досок и ДСП (с 0.11.0)
     s.stock.logs = +s.stock.logs || 0; // бревна (с 0.23.0): их рубит Общество лесорубов, лесопилки распиливают на доски
     s.stock.stone = +s.stock.stone || 0; s.stock.gravel = +s.stock.gravel || 0; // камень и щебень (с 0.21.0)
+    ['fabric', 'clothes', 'tobacco', 'coal', 'food'].forEach(function (k) { s.stock[k] = +s.stock[k] || 0; });   // с 0.25.0
+    s.cap = +s.cap > 0 ? +s.cap : 0; s.income = +s.income || 0; s.gt = +s.gt || 0; s.hall = s.hall ? 1 : 0;
+    if (!s.stops || typeof s.stops !== 'object') s.stops = {};
+    s.eco = fixEco(s.eco);
     if (s.env && (typeof s.env.seed !== 'number' || !isFinite(s.env.seed))) delete s.env; // природа: есть у миров, созданных с 0.21.0 или обновлённых кнопкой 🌲 (с 0.22.0)
     if (s.env && s.env.keep) s.env.keep = Array.isArray(s.env.keep) ? s.env.keep.filter(function (k) { return Array.isArray(k) && k.length === 4 && k.every(isFinite); }) : []; // зоны построенного (с 0.22.0)
     return s;
@@ -161,7 +172,9 @@
       if (b.id >= state.nextId) state.nextId = b.id + 1;
       state.buildings.push(b); markOcc(b, b.id); addBuildingMesh(b); if (isSite(b)) sites++;
     });
-    d.roads.forEach(function (r) { if (inMap(r[0], r[1])) state.roads[key(r[0], r[1])] = r[2]; });
+    var conv = 0;
+    d.roads.forEach(function (r) { if (inMap(r[0], r[1])) { if (r[2] === 'asphalt') { r[2] = 'cobble'; conv++; } state.roads[key(r[0], r[1])] = r[2]; } });   // с 0.25.0 асфальта нет
+    if (conv) touchCk(ck, true);
     d.wear.forEach(function (w) { state.wear[key(w[0], w[1])] = w[2]; });
     if (state.env) envLoad(cx, cz, d.t);
     var r = WC / CH; // куски дорог 20×20 вокруг и внутри (края зависят от соседей)
@@ -280,7 +293,8 @@
   }
 
   // ---------- Доллары ----------
-  function money() { return isFinite(G.money) ? G.money - state.spent : Infinity; }
+  function money() { return state.cap > 0 ? state.cap + (state.income || 0) - state.spent : Infinity; }   // с 0.25.0: бесконечные деньги или стартовый капитал + налоги
+  function earn(x) { if (x > 0) state.income = (state.income || 0) + x; }
   function canPay(x) { return money() >= x; }
   function pay(x) { state.spent += x; updateMoney(); }
   function usd(n) { return isFinite(n) ? '$' + Math.round(n).toLocaleString('ru-RU') : '∞'; }
@@ -1317,6 +1331,119 @@
         }
         if (W >= 3) { tree(1.2, 1.5, 0.8); tree(2.2, 2.3, 0.75); tree(0.6, 2.6, 0.7); S.cyl(0.25, 0.28, 0.06, 16, '#c9c2b3', 1.5, 0.08, 2.9); S.cyl(0.18, 0.18, 0.02, 16, '#6fb6e0', 1.5, 0.11, 2.9); }
       }
+    } else if (cat === 'hall') {
+      // Городская Администрация 5×5: ратуша с часовой башней, мансардной крышей и площадью с фонтаном
+      var HC2 = '#ece4d0', yb2 = 0.05;
+      cube(0.05, 0.05, 4.95, 4.95, 0, 0.04, '#bfb8a6');                                          // мощёная площадь
+      cube(0.12, 3.5, 4.88, 4.88, 0.04, 0.012, '#d9cfb7');
+      [[0.12, 0.12, 4.88, 0.6, '#7fb25e'], [0.12, 0.6, 0.9, 3.5, '#7fb25e'], [4.1, 0.6, 4.88, 3.5, '#7fb25e']].forEach(function (g) { cube(g[0], g[1], g[2], g[3], 0.04, 0.014, g[4]); });
+      var ym1 = wallBox(1.1, 0.7, 3.9, 3.5, yb2, 4, 'gov', HC2);
+      cornice(1.1, 0.7, 3.9, 3.5, ym1 - 0.005, STONE); sband(1.1, 0.7, 3.9, 3.5, yb2 + 0.3, STONE2); sband(1.1, 0.7, 3.9, 3.5, yb2 + 0.6, STONE2);
+      mans(1.1, 0.7, 3.9, 3.5, ym1, 0.26, 0.08, 0.26, 0.36, SLATE, '#5a636d', '#cfc6b2', 'fbrl');
+      [[0.25, 1.1], [3.9, 4.75]].forEach(function (w) {
+        var yw = wallBox(w[0], 0.9, w[1], 3.3, yb2, 3, 'gov', HC2); cornice(w[0], 0.9, w[1], 3.3, yw - 0.005, STONE);
+        mans(w[0], 0.9, w[1], 3.3, yw, 0.2, 0.06, 0.18, 0.24, SLATE, '#5a636d', '#cfc6b2', 'f');
+      });
+      var yt2 = wallBox(1.95, 3.2, 3.05, 4.1, yb2, 6, 'gov', HC2); cornice(1.95, 3.2, 3.05, 4.1, yt2 - 0.005, STONE);
+      var CF = [V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), V4(0, 0, 1, 1), CAP, CAP];
+      S.box(0.5, 0.5, 1.0, kwall('clock', HC2), 2.5, yt2 + 0.28, 3.65, CF);                         // часовой ярус с циферблатами
+      S.bake(S.cyl(0, 0.68, 1.0, 4, SLATE, 2.5, yt2 + 0.54 + 0.5, 3.65), 0, Math.PI / 4, 0);                                // шпиль
+      S.sph(0.045, GOLD, 2.5, yt2 + 0.54 + 1.02, 3.65, 1); S.cyl(0.008, 0.008, 0.3, 6, GOLD, 2.5, yt2 + 0.54 + 1.18, 3.65);
+      flag(1.15, ym1 + 0.1, 0.75, '#2a4f8f'); flag(3.85, ym1 + 0.1, 0.75, '#c8342c');
+      door(2.3, 2.7, 4.101, 0.38, '#3a2a1c'); steps(2.15, 2.85, 4.1, 3, 0.07);
+      for (var hc = 0; hc < 4; hc++) { var hx = 2.0 + hc * 0.33; S.cyl(0.03, 0.034, 0.5, 8, TRIM, hx, 0.3, 4.08); }   // колонны портика
+      cube(1.9, 4.04, 3.1, 4.16, 0.55, 0.05, STONE);
+      S.cyl(0.42, 0.46, 0.1, 18, '#cfc9bb', 2.5, 0.09, 4.55); S.cyl(0.36, 0.36, 0.02, 18, '#7fc1e0', 2.5, 0.145, 4.55); S.cyl(0.04, 0.05, 0.3, 8, '#cfc9bb', 2.5, 0.25, 4.55);   // фонтан
+      [[0.45, 4.4], [4.55, 4.4], [0.45, 2.2], [4.55, 2.2]].forEach(function (t) { tree(t[0], t[1], 1.1); });
+      [[1.3, 4.7], [3.7, 4.7], [1.3, 3.9], [3.7, 3.9]].forEach(function (l) { lamp(l[0], l[1], 0.42); });
+    } else if (cat === 'market') {
+      var STALL = ['#c8342c', '#2f6fb3', '#d9b04a', '#5a9a4a'], CR = '#a8844f';
+      function crate(x, z, c) { cube(x - 0.07, z - 0.05, x + 0.07, z + 0.05, 0.015, 0.07, c || CR); cube(x - 0.06, z - 0.04, x + 0.06, z + 0.04, 0.085, 0.01, '#c9a36a'); }
+      function stall(x0, z0, x1, z1, ca, cb) {   // прилавок с навесом на столбах
+        cube(x0, z0, x1, z1, 0.015, 0.1, '#7a5a3a'); cube(x0 + 0.01, z0 + 0.01, x1 - 0.01, z1 - 0.01, 0.115, 0.012, '#d8c8a0');
+        [[x0, z0], [x1 - 0.025, z0], [x0, z1 - 0.025], [x1 - 0.025, z1 - 0.025]].forEach(function (p) { cube(p[0], p[1], p[0] + 0.025, p[1] + 0.025, 0.015, 0.34, '#5a3d28'); });
+        awning(x0 - 0.02, x1 + 0.02, z1 - 0.01, 0.38, 0.22, ca, cb);
+        [0.2, 0.5, 0.8].forEach(function (t) { crate(x0 + (x1 - x0) * t, (z0 + z1) / 2, r() < 0.5 ? '#c26a3a' : '#7a9a4a'); });
+      }
+      if (size === '2x2') {
+        cube(m, m, W - m, D - m, 0, 0.014, '#bfb398');
+        stall(0.18, 0.2, 0.92, 0.62, STALL[0], '#f1ece0'); stall(1.08, 0.2, 1.82, 0.62, STALL[1], '#f1ece0');
+        stall(0.18, 1.3, 0.92, 1.72, STALL[2], '#f1ece0'); stall(1.08, 1.3, 1.82, 1.72, STALL[3], '#f1ece0');
+        S.cyl(0.14, 0.16, 0.07, 12, '#cfc9bb', 1.0, 0.05, 1.0); S.cyl(0.1, 0.1, 0.01, 12, '#7fc1e0', 1.0, 0.09, 1.0);   // колодец-поилка
+        tree(0.2, 1.0, 0.7); tree(1.8, 1.0, 0.7); lamp(1.0, 0.12, 0.34);
+      } else {
+        cube(m, m, W - m, D - m, 0, 0.014, '#bfb398');
+        var yh2 = wallBox(0.3, 0.3, 4.7, 1.9, 0, 3, 'archb', '#c0a07a', 0.3); cornice(0.3, 0.3, 4.7, 1.9, yh2 - 0.005, STONE2);
+        S.gable(0.3, 0.3, 4.7, 1.9, yh2 + 0.035, 0.45, '#8f3f2f', 'x', 0.06, '#c0a07a');
+        for (var mi = 0; mi < 6; mi++) { var mx = 0.8 + mi * 0.7; cube(mx - 0.2, 1.88, mx + 0.2, 1.92, 0, 0.5, '#5a4a3a'); S.bake(S.cyl(0.2, 0.2, 0.04, 12, '#5a4a3a', mx, 0.5, 1.9), Math.PI / 2, 0, 0); }
+        S.cyl(0.07, 0.07, 0.5, 8, '#8f3f2f', 4.3, yh2 + 0.3, 0.7); cube(2.3, 1.93, 2.7, 1.96, yh2 - 0.15, 0.2, '#f0c040');
+        for (var si = 0; si < 5; si++) { stall(0.3 + si * 0.95, 2.4, 1.1 + si * 0.95, 2.85, STALL[si % 4], '#f1ece0'); }
+        for (var sj = 0; sj < 4; sj++) { stall(0.45 + sj * 1.15, 3.5, 1.3 + sj * 1.15, 3.95, STALL[(sj + 1) % 4], '#f1ece0'); }
+        S.cyl(0.3, 0.34, 0.09, 16, '#cfc9bb', 2.5, 0.06, 4.55); S.cyl(0.24, 0.24, 0.01, 16, '#7fc1e0', 2.5, 0.11, 4.55);
+        [0.4, 4.6].forEach(function (x) { tree(x, 4.5, 1.0); lamp(x, 3.2, 0.42); });
+        cube(3.6, 4.3, 4.3, 4.6, 0.04, 0.12, '#a8844f'); [[3.7, 4.65], [4.2, 4.65]].forEach(function (w) { S.bake(S.cyl(0.07, 0.07, 0.02, 10, '#1c1c1c', w[0], 0.07, w[1]), 0, 0, Math.PI / 2); });
+        flag(4.55, yh2 + 0.45, 0.4, '#c8342c');
+      }
+    } else if (cat === 'mill') {
+      // Мельница с полями 9×9: ветряк 3×3 в центре и восемь полей пшеницы 3×3 вокруг
+      var SOIL = '#6e4f32';
+      for (var fy = 0; fy < 3; fy++) for (var fx = 0; fx < 3; fx++) {
+        if (fx === 1 && fy === 1) continue;
+        var f0x = fx * 3 + 0.06, f0z = fy * 3 + 0.06;
+        cube(f0x, f0z, f0x + 2.88, f0z + 2.88, 0, 0.03, SOIL);
+        for (var rw = 0; rw < 9; rw++) {
+          var rc = ['#d9b64a', '#c9a73e', '#e0c25a'][(rw + fx + fy) % 3];
+          if ((fx + fy) % 2) cube(f0x + 0.12 + rw * 0.29, f0z + 0.1, f0x + 0.12 + rw * 0.29 + 0.17, f0z + 2.78, 0.03, 0.15 + (rw % 2) * 0.03, rc);
+          else cube(f0x + 0.1, f0z + 0.12 + rw * 0.29, f0x + 2.78, f0z + 0.12 + rw * 0.29 + 0.17, 0.03, 0.15 + (rw % 2) * 0.03, rc);
+        }
+        // крестьянин на поле: синяя рубаха, соломенная шляпа
+        var px2 = f0x + 0.4 + ((fx * 7 + fy * 3) % 5) * 0.4, pz2 = f0z + 1.4;
+        cube(px2 - 0.03, pz2 - 0.02, px2 + 0.03, pz2 + 0.02, 0.03, 0.1, '#3a5a8a'); S.sph(0.03, '#e8b890', px2, 0.17, pz2, 1); S.cyl(0.05, 0.05, 0.008, 8, '#d8c27a', px2, 0.2, pz2);
+        if ((fx + fy) % 3 === 0) { S.cyl(0.008, 0.008, 0.3, 6, '#5a3d28', f0x + 0.15, 0.18, f0z + 0.15); cube(f0x + 0.04, f0z + 0.14, f0x + 0.26, f0z + 0.16, 0.26, 0.012, '#5a3d28'); }   // пугало
+      }
+      cube(3.0, 3.0, 6.0, 6.0, 0, 0.04, '#b9ad8f');
+      S.cyl(0.62, 0.86, 1.25, 14, '#e2d6b8', 4.5, 0.04 + 0.625, 4.5);                           // каменная башня
+      S.cyl(0, 0.7, 0.5, 14, '#6a4a3d', 4.5, 1.29 + 0.25, 4.5); S.sph(0.04, GOLD, 4.5, 1.84, 4.5, 1);
+      cube(4.35, 5.28, 4.65, 5.4, 0.04, 0.4, '#5a3d28'); cube(4.38, 5.4, 4.62, 5.46, 0.4, 0.04, '#3a2a1c');   // дверь
+      S.box(0.05, 0.2, 0.05, K.mat('#8fb8d8'), 4.5, 0.9, 5.34);
+      S.bake(S.box(0.1, 2.3, 0.03, K.mat('#8a6a42'), 4.5, 1.45, 5.45), 0, 0, Math.PI / 4); S.bake(S.box(0.1, 2.3, 0.03, K.mat('#8a6a42'), 4.5, 1.45, 5.45), 0, 0, -Math.PI / 4);
+      S.bake(S.box(0.5, 0.34, 0.012, K.mat('#efe6cf'), 4.5 + 0.45, 1.45 + 0.45, 5.47), 0, 0, Math.PI / 4); S.bake(S.box(0.5, 0.34, 0.012, K.mat('#efe6cf'), 4.5 - 0.45, 1.45 - 0.45, 5.47), 0, 0, Math.PI / 4);
+      S.bake(S.box(0.5, 0.34, 0.012, K.mat('#efe6cf'), 4.5 - 0.45, 1.45 + 0.45, 5.47), 0, 0, -Math.PI / 4); S.bake(S.box(0.5, 0.34, 0.012, K.mat('#efe6cf'), 4.5 + 0.45, 1.45 - 0.45, 5.47), 0, 0, -Math.PI / 4);
+      S.cyl(0.07, 0.07, 0.06, 8, '#3a2a1c', 4.5, 1.45, 5.47);
+      for (var sk = 0; sk < 4; sk++) { cube(3.2 + sk * 0.22, 5.6, 3.38 + sk * 0.22, 5.85, 0.04, 0.16, '#e8dcc0'); }                 // мешки с мукой
+      cube(5.1, 5.55, 5.7, 5.85, 0.07, 0.1, '#a8844f'); [[5.2, 5.9], [5.6, 5.9]].forEach(function (w) { S.bake(S.cyl(0.07, 0.07, 0.02, 10, '#1c1c1c', w[0], 0.07, w[1]), 0, 0, Math.PI / 2); });
+    } else if (cat === 'busdepot') {
+      // Автобусное депо 3×3: каретный двор — кирпичная конюшня с арочными воротами, дилижанс и сено
+      cube(m, m, W - m, D - m, 0, 0.014, '#8e8676');
+      var ybd = wallBox(0.2, 0.15, 2.8, 1.35, 0, 2, 'brick', '#a85a3c', 0.35); cornice(0.2, 0.15, 2.8, 1.35, ybd - 0.005, STONE2);
+      S.gable(0.2, 0.15, 2.8, 1.35, ybd + 0.035, 0.34, '#6a4a3d', 'x', 0.05, '#a85a3c');
+      [0.8, 1.5, 2.2].forEach(function (x) { cube(x - 0.28, 1.34, x + 0.28, 1.37, 0, 0.42, '#4a3322'); S.bake(S.cyl(0.28, 0.28, 0.035, 12, '#4a3322', x, 0.42, 1.355), Math.PI / 2, 0, 0); cube(x - 0.28, 1.37, x + 0.28, 1.38, 0.2, 0.012, '#7a6650'); });
+      cube(1.0, 1.34, 2.0, 1.52, 0.5, 0.14, '#f0c040'); chim(0.5, 0.5, ybd + 0.08, 0.26);
+      var cx3 = 1.5, cz3 = 2.25;   // дилижанс во дворе
+      cube(cx3 - 0.3, cz3 - 0.17, cx3 + 0.3, cz3 + 0.17, 0.14, 0.2, '#7a2a24'); cube(cx3 - 0.31, cz3 - 0.18, cx3 + 0.31, cz3 + 0.18, 0.33, 0.02, '#2a2a2a');
+      cube(cx3 - 0.2, cz3 + 0.17, cx3 - 0.05, cz3 + 0.175, 0.2, 0.1, '#9cc3dd'); cube(cx3 + 0.05, cz3 + 0.17, cx3 + 0.2, cz3 + 0.175, 0.2, 0.1, '#9cc3dd');
+      [[-0.2, 0.2], [0.2, 0.2], [-0.2, -0.2], [0.2, -0.2]].forEach(function (w) { S.bake(S.cyl(0.1, 0.1, 0.03, 12, '#2a2420', cx3 + w[0], 0.1, cz3 + w[1] * 0.85), 0, 0, Math.PI / 2); });
+      [[0.4, 2.6], [0.7, 2.7], [2.4, 2.5]].forEach(function (hb) { cube(hb[0] - 0.12, hb[1] - 0.08, hb[0] + 0.12, hb[1] + 0.08, 0.014, 0.12, '#d9c46a'); });
+      cube(2.3, 1.75, 2.75, 1.9, 0.014, 0.08, '#6a4a2a'); cube(2.32, 1.77, 2.73, 1.88, 0.094, 0.012, '#7fc1e0');   // поилка
+      lamp(0.25, 2.7, 0.4); S.cyl(0.012, 0.012, 0.5, 6, '#2b2f35', 2.8, 0.25, 2.8); cube(2.7, 2.78, 2.9, 2.82, 0.45, 0.1, '#e8c13a');   // знак остановки
+    } else if (cat === 'truckpark') {
+      // Грузовая парковка 4×6: гараж с воротами, мощёный двор с разметкой на пять рядов мест, грузовики 1910-х, бензоколонка
+      cube(m, m, W - m, D - m, 0, 0.014, '#7a746a');
+      var ytp = wallBox(0.15, 0.12, 3.85, 1.3, 0, 2, 'brick', '#a4553b', 0.36); cornice(0.15, 0.12, 3.85, 1.3, ytp - 0.005, STONE2);
+      S.gable(0.15, 0.12, 3.85, 1.3, ytp + 0.035, 0.3, '#5a4a40', 'x', 0.05, '#a4553b');
+      [0.6, 1.4, 2.2, 3.0].forEach(function (x) { cube(x - 0.3, 1.29, x + 0.3, 1.32, 0, 0.46, '#5a4a3a'); for (var kq = 1; kq < 5; kq++) cube(x - 0.3, 1.32, x + 0.3, 1.328, kq * 0.09, 0.008, '#7a6650'); });
+      cube(1.2, 1.3, 2.8, 1.4, 0.52, 0.1, '#f0c040');
+      var TC = ['#7d7f84', '#8a5a33', '#8a3b52', '#2d2f33', '#3d6b8f', '#7d7f84', '#3d6b8f', '#8a5a33'];
+      for (var tr = 0; tr < 8; tr++) {
+        var tz = 1.95 + (tr % 4) * 0.98, tx = tr < 4 ? 0.75 : 3.25;
+        cube(tx - 0.2, tz - 0.38, tx + 0.2, tz + 0.38, 0.06, 0.07, '#1d1d1d');
+        cube(tx - 0.19, tz + 0.1, tx + 0.19, tz + 0.38, 0.12, 0.19, TC[tr]); cube(tx - 0.2, tz - 0.38, tx + 0.2, tz + 0.08, 0.13, 0.12, TC[(tr + 3) % 8]);
+        [[-0.2, 0.28], [0.2, 0.28], [-0.2, -0.26], [0.2, -0.26]].forEach(function (w) { S.bake(S.cyl(0.065, 0.065, 0.03, 10, '#1c1c1c', tx + w[0], 0.065, tz + w[1]), 0, 0, Math.PI / 2); });
+      }
+      for (var ln = 0; ln < 6; ln++) { cube(0.12, 1.5 + ln * 0.98 - 0.01, 1.4, 1.5 + ln * 0.98 + 0.01, 0.014, 0.004, '#d9d4c4'); cube(2.6, 1.5 + ln * 0.98 - 0.01, 3.88, 1.5 + ln * 0.98 + 0.01, 0.014, 0.004, '#d9d4c4'); }
+      S.cyl(0.05, 0.06, 0.3, 8, '#c8342c', 2.0, 0.17, 3.2); cube(1.94, 3.14, 2.06, 3.26, 0.3, 0.07, '#e8e4d8');   // бензоколонка
+      [0.15, 3.85].forEach(function (x) { lamp(x, 1.9, 0.42); lamp(x, 4.9, 0.42); });
+      flag(3.82, ytp + 0.05, 0.2, '#c8342c');
     }
     // Модерн (с 0.19.0): круглая угловая башенка с зелёным шатром и золотым шариком (у зданий без собственных башен, кроме 4×4)
     if (th === 1 && size !== '4x4' && bw.a > 0 && !S.nTwr && ['res', 'social', 'gov', 'army', 'corp'].indexOf(cat) >= 0) {
@@ -1349,151 +1476,130 @@
   }
 
   // ---------- Грузовик «Бригада» (зелёный, в стиле 60-х). Смотрит вперёд по +z ----------
-  function truckModel(K) {
-    var S = Shapes(K, 0, 0);
-    var GREEN = '#4f8f3e', DARK = '#3b6e2e', CREAM = '#ece4c8', CHROME = '#d9dcd2', TIRE = '#1c1c1c', WOOD = '#a8844f', GLASS = '#9cc3dd';
-    function box(w, h, d, color, x, y, z) { return S.box(w, h, d, K.mat(color), x, y, z); }
-    box(0.26, 0.05, 0.86, '#2c2c2a', 0, 0.12, -0.02);                                   // рама
-    [[0.15, 0.27], [-0.15, 0.27], [0.15, -0.25], [-0.15, -0.25]].forEach(function (p) {   // колёса с белыми колпаками
-      S.bake(S.cyl(0.075, 0.075, 0.06, 14, TIRE, p[0], 0.075, p[1]), 0, 0, Math.PI / 2);
-      S.bake(S.cyl(0.035, 0.035, 0.064, 10, CHROME, p[0], 0.075, p[1]), 0, 0, Math.PI / 2);
-    });
-    [0.15, -0.15].forEach(function (x) { box(0.08, 0.03, 0.2, DARK, x, 0.17, 0.27); });  // крылья над передними колёсами
-    box(0.22, 0.1, 0.22, GREEN, 0, 0.2, 0.33);                                            // капот
-    var hood = S.bake(S.cyl(0.11, 0.11, 0.22, 14, GREEN, 0, 0.25, 0.33), Math.PI / 2, 0, 0); hood.scaling.set(1, 0.5, 1);
-    box(0.15, 0.08, 0.012, CHROME, 0, 0.2, 0.445);                                        // решётка, бампер, фары
-    for (var i = 0; i < 3; i++) box(0.15, 0.008, 0.016, '#7b7e78', 0, 0.175 + i * 0.025, 0.446);
-    box(0.32, 0.03, 0.035, CHROME, 0, 0.12, 0.46);
-    [0.085, -0.085].forEach(function (x) { S.bake(S.cyl(0.028, 0.028, 0.02, 12, '#fff4c2', x, 0.245, 0.447), Math.PI / 2, 0, 0); });
-    box(0.3, 0.2, 0.2, GREEN, 0, 0.3, 0.12);                                              // кабина
-    box(0.31, 0.035, 0.21, CREAM, 0, 0.418, 0.12);
-    box(0.24, 0.085, 0.012, GLASS, 0, 0.345, 0.222);
-    box(0.304, 0.075, 0.12, GLASS, 0, 0.345, 0.125);
-    box(0.302, 0.02, 0.202, CREAM, 0, 0.27, 0.12);
-    box(0.32, 0.03, 0.42, WOOD, 0, 0.17, -0.21);                                          // кузов
-    box(0.02, 0.1, 0.42, WOOD, 0.15, 0.23, -0.21); box(0.02, 0.1, 0.42, WOOD, -0.15, 0.23, -0.21);
-    box(0.32, 0.1, 0.02, WOOD, 0, 0.23, -0.41); box(0.32, 0.13, 0.02, DARK, 0, 0.245, 0.0);
-    box(0.322, 0.012, 0.422, '#7d6136', 0, 0.255, -0.21);
-    box(0.18, 0.07, 0.14, '#b5563c', -0.04, 0.22, -0.13);                                 // кирпич и доски
-    box(0.08, 0.04, 0.33, '#e0c48a', 0.08, 0.205, -0.22);
-    box(0.04, 0.02, 0.3, '#f0b23c', -0.07, 0.28, -0.26);                                  // стремянка
+  // ---------- Машины 1910–1920-х (с 0.25.0): высокие кузова, длинный капот, латунные фары, тонкие колёса со спицами. Смотрят вперёд по +z ----------
+  var BRASS = '#c8a24a';
+  function spoke(S, x, z, r, w) {
+    S.bake(S.cyl(r, r, w, 16, '#1c1c1c', x, r, z), 0, 0, Math.PI / 2);
+    S.bake(S.cyl(r * 0.84, r * 0.84, w + 0.004, 16, '#b88f58', x, r, z), 0, 0, Math.PI / 2);
+    S.bake(S.cyl(r * 0.6, r * 0.6, w + 0.008, 14, '#2a2420', x, r, z), 0, 0, Math.PI / 2);
+    S.bake(S.cyl(r * 0.2, r * 0.2, w + 0.016, 8, BRASS, x, r, z), 0, 0, Math.PI / 2);
+  }
+  function retro(K, o) {
+    var S = Shapes(K, 0, 0), L = o.len || 0.8, W = o.w || 0.25, r = o.r || 0.08, y0 = r * 1.15, fz = L / 2 - 0.13, bz = -L / 2 + 0.15, hl = o.hood || 0.26, cl = o.cab || 0.26, col = o.col;
+    function box(w, h, d, c, x, y, z) { return S.box(w, h, d, K.mat(c), x, y, z); }
+    box(W * 0.78, 0.035, L, '#1d1d1d', 0, y0, 0);                                         // рама
+    [[1, fz, 0.9], [-1, fz, 0.9], [1, bz, 1], [-1, bz, 1]].forEach(function (p) { spoke(S, p[0] * (W / 2 + 0.005), p[1], r * p[2], 0.028); });
+    [[1, fz], [-1, fz]].forEach(function (p) { box(0.05, 0.012, 0.2, '#161616', p[0] * (W / 2 + 0.01), y0 + r * 1.6, p[1]); });   // крылья
+    [[1, bz], [-1, bz]].forEach(function (p) { box(0.05, 0.012, 0.22, '#161616', p[0] * (W / 2 + 0.01), y0 + r * 1.9, p[1]); });
+    box(W * 0.74, 0.1, hl, col, 0, y0 + 0.09, L / 2 - hl / 2 - 0.02); box(W * 0.62, 0.03, hl - 0.02, shade(col, -0.12), 0, y0 + 0.16, L / 2 - hl / 2 - 0.02);   // капот
+    box(W * 0.56, 0.115, 0.022, BRASS, 0, y0 + 0.09, L / 2 - 0.012);                      // латунный радиатор
+    [1, -1].forEach(function (s) { S.bake(S.cyl(0.03, 0.03, 0.03, 10, BRASS, s * W * 0.4, y0 + 0.2, L / 2 - 0.05), Math.PI / 2, 0, 0); S.sph(0.02, '#fff4c2', s * W * 0.4, y0 + 0.2, L / 2 - 0.028, 1); });   // фары
+    var cz = L / 2 - hl - 0.02 - cl / 2;
+    box(0.045, 0.01, cl, '#2a2a2a', W / 2 + 0.02, y0 + 0.04, cz); box(0.045, 0.01, cl, '#2a2a2a', -W / 2 - 0.02, y0 + 0.04, cz);   // подножки
+    if (o.cabKind === 'closed' || o.cabKind === 'van') {
+      var ch = o.cabKind === 'van' ? 0.24 : 0.18, cl2 = o.cabKind === 'van' ? o.vanLen : cl, cz2 = o.cabKind === 'van' ? cz + cl / 2 - cl2 / 2 : cz;
+      box(W, ch, cl2, col, 0, y0 + 0.07 + ch / 2, cz2); box(W + 0.012, 0.018, cl2 + 0.03, '#242424', 0, y0 + 0.07 + ch + 0.009, cz2);
+      box(W * 0.8, 0.075, 0.008, '#9cc3dd', 0, y0 + 0.07 + ch * 0.62, cz + cl / 2 + 0.002); box(W + 0.006, 0.065, cl * 0.6, '#9cc3dd', 0, y0 + 0.07 + ch * 0.62, cz + cl * 0.12);
+    } else {
+      box(W, 0.09, cl, col, 0, y0 + 0.07, cz);                                             // низкие борта открытого кузова
+      box(W * 0.8, 0.035, cl * 0.4, '#5a3d28', 0, y0 + 0.13, cz - cl * 0.15); box(W * 0.8, 0.07, 0.03, '#5a3d28', 0, y0 + 0.16, cz - cl * 0.34);   // сиденье и спинка
+      box(W * 0.84, 0.095, 0.008, '#9cc3dd', 0, y0 + 0.21, cz + cl / 2 - 0.01);            // лобовое стекло
+      [1, -1].forEach(function (s) { box(0.012, 0.1, 0.012, BRASS, s * W * 0.42, y0 + 0.21, cz + cl / 2 - 0.01); });
+      if (o.top) box(W * 0.9, 0.015, cl * 0.8, '#242424', 0, y0 + 0.33, cz - cl * 0.1), [1, -1].forEach(function (s) { box(0.012, 0.12, 0.012, '#3a3a3a', s * W * 0.43, y0 + 0.26, cz + cl * 0.3); box(0.012, 0.12, 0.012, '#3a3a3a', s * W * 0.43, y0 + 0.26, cz - cl * 0.4); });
+    }
+    if (o.bed) o.bed(o.cabKind === 'van' ? { box: box, S: S, K: K, z1: cz2 + cl2 / 2, z0: cz2 - cl2 / 2, y: y0 + 0.035, W: W } : { box: box, S: S, K: K, z1: cz - cl / 2 - 0.01, z0: -L / 2 + 0.02, y: y0 + 0.035, W: W });
     return S.merge();
   }
-
-  // ---------- Машины завода и легковые (с 0.10.0). Смотрят вперёд по +z ----------
-  function wheelSet(S, pts, r, w, hub) {
-    pts.forEach(function (p) {
-      S.bake(S.cyl(r, r, w, 14, '#1c1c1c', p[0], r, p[1]), 0, 0, Math.PI / 2);
-      S.bake(S.cyl(r * 0.5, r * 0.5, w + 0.004, 10, hub || '#c9ccd0', p[0], r, p[1]), 0, 0, Math.PI / 2);
-    });
+  function bedBox(c, hh, col2) {    // открытый кузов с бортами; c.z1 — передний край, c.z0 — задний
+    var B2 = c.box, len = c.z1 - c.z0, zc = (c.z0 + c.z1) / 2, W = c.W;
+    B2(W, 0.025, len, '#7d6136', 0, c.y + 0.012, zc);
+    B2(0.022, hh, len, col2, W / 2 - 0.011, c.y + hh / 2, zc); B2(0.022, hh, len, col2, -W / 2 + 0.011, c.y + hh / 2, zc);
+    B2(W, hh, 0.022, col2, 0, c.y + hh / 2, c.z0 + 0.011); B2(W, hh, 0.022, col2, 0, c.y + hh / 2, c.z1 - 0.011);
   }
-  // кабина грузовика: cz — центр по длине, col — цвет
-  function cabin(S, K, col, cz, w, h, y0) {
-    function box(bw, bh, bd, c, x, y, z) { return S.box(bw, bh, bd, K.mat(c), x, y, z); }
-    box(w, h, 0.22, col, 0, y0 + h / 2, cz);
-    box(w * 0.82, h * 0.42, 0.012, '#9cc3dd', 0, y0 + h * 0.68, cz + 0.111);          // лобовое
-    box(w + 0.004, h * 0.36, 0.13, '#9cc3dd', 0, y0 + h * 0.68, cz + 0.01);            // боковые окна
-    box(w + 0.01, 0.03, 0.035, '#d9dcd2', 0, y0 + 0.02, cz + 0.12);                    // бампер
-    [w / 2 - 0.05, -w / 2 + 0.05].forEach(function (x) { box(0.045, 0.03, 0.01, '#fff4c2', x, y0 + 0.08, cz + 0.112); }); // фары
+  function truckModel(K) {     // грузовик «Бригада» — зелёная лорри с кирпичом и досками
+    return retro(K, { col: '#4f7a3e', len: 0.9, cab: 0.24, cabKind: 'closed', bed: function (c) {
+      bedBox(c, 0.08, '#8a6a3e'); c.box(0.18, 0.07, 0.16, '#b5563c', -0.04, c.y + 0.07, c.z0 + 0.12); c.box(0.07, 0.04, 0.3, '#e0c48a', 0.07, c.y + 0.045, (c.z0 + c.z1) / 2);
+      c.box(0.04, 0.02, 0.28, '#f0b23c', -0.07, c.y + 0.13, (c.z0 + c.z1) / 2);
+    } });
   }
   function vehicleModel(K, kind) {
+    var T = /^f_/.test(kind) ? kind.slice(2) : '';
+    if (kind === 'cart') return cartModel(K);
+    if (T) return fleetModel(K, T);
+    if (kind === 'garbage') return retro(K, { col: '#4a5e46', len: 0.88, cabKind: 'closed', bed: function (c) { bedBox(c, 0.14, '#3a4a38'); c.box(c.W * 0.96, 0.03, c.z1 - c.z0 - 0.02, '#2f3a2e', 0, c.y + 0.17, (c.z0 + c.z1) / 2); c.box(0.03, 0.06, 0.03, '#c8a24a', 0, c.y + 0.2, c.z1 - 0.06); } });
+    if (kind === 'ambulance') return retro(K, { col: '#ece8da', len: 0.84, cabKind: 'van', vanLen: 0.52, bed: function (c) { c.box(c.W + 0.004, 0.05, 0.3, '#c8342c', 0, c.y + 0.11, (c.z0 + c.z1) / 2); c.box(0.05, 0.1, 0.3, '#c8342c', 0, c.y + 0.11, (c.z0 + c.z1) / 2); } });
+    if (kind === 'police') return retro(K, { col: '#1f2430', len: 0.72, w: 0.23, cabKind: 'open', top: 1, bed: function (c) { c.box(0.12, 0.02, 0.06, '#c8a24a', 0, c.y + 0.31, c.z1 - 0.02); } });
+    if (kind === 'army') return retro(K, { col: '#5f6b3a', len: 0.92, cabKind: 'closed', bed: function (c) { bedBox(c, 0.07, '#4b5530'); c.box(c.W, 0.17, c.z1 - c.z0, '#7b8250', 0, c.y + 0.15, (c.z0 + c.z1) / 2); c.S.bake(c.S.cyl(c.W / 2, c.W / 2, c.z1 - c.z0, 12, '#7b8250', 0, c.y + 0.235, (c.z0 + c.z1) / 2), Math.PI / 2, 0, 0).scaling.set(1, 1, 0.4); } });
+    if (kind === 'van') return retro(K, { col: '#2b4a7a', len: 0.88, cabKind: 'van', vanLen: 0.62, bed: function (c) { c.box(c.W + 0.004, 0.06, 0.4, '#e8c13a', 0, c.y + 0.12, (c.z0 + c.z1) / 2); } });
+    if (kind === 'semi') return retro(K, { col: '#6a4a2a', len: 1.0, cabKind: 'closed', bed: function (c) { bedBox(c, 0.05, '#4a3322'); [-0.06, 0.06].forEach(function (x) { [0.12, 0.3, 0.48].forEach(function (d) { c.S.cyl(0.05, 0.05, 0.11, 10, '#7a5a3a', x, c.y + 0.09, c.z0 + d); }); }); } });
+    if (kind === 'timber') return retro(K, { col: '#7a4a24', len: 1.1, cabKind: 'closed', bed: function (c) { bedBox(c, 0.01, '#4a3322'); [[0.1, 0.07], [0, 0.07], [-0.1, 0.07], [0.05, 0.15], [-0.05, 0.15]].forEach(function (p) { c.S.bake(c.S.cyl(0.05, 0.05, c.z1 - c.z0, 8, '#8a5a33', p[0], c.y + p[1] + 0.02, (c.z0 + c.z1) / 2), Math.PI / 2, 0, 0); }); } });
+    if (kind === 'dump') return retro(K, { col: '#a8742a', len: 0.9, cabKind: 'closed', bed: function (c) { bedBox(c, 0.12, '#8a5a24'); c.box(c.W - 0.05, 0.08, c.z1 - c.z0 - 0.05, '#6e6a64', 0, c.y + 0.11, (c.z0 + c.z1) / 2); } });
+    return retro(K, { col: '#555', len: 0.8, cabKind: 'closed' });
+  }
+  // Грузовики парка (покупаются во вкладке «Механизмы»): разные цвета и формы
+  function fleetModel(K, k) {
+    var T = G.trucks[k], col = T.color;
+    if (k === 'stone') return retro(K, { col: col, len: 0.88, cabKind: 'closed', bed: function (c) { bedBox(c, 0.12, '#6e5a3a'); [[-0.07, 0.1], [0.06, 0.12], [0, 0.2], [0.05, 0.28], [-0.05, 0.3]].forEach(function (p) { c.box(0.08, 0.07, 0.09, '#9a9da3', p[0], c.y + 0.1, c.z0 + p[1] * 1.2 + 0.05); }); } });
+    if (k === 'wood') return retro(K, { col: col, len: 1.12, cabKind: 'closed', bed: function (c) {
+      bedBox(c, 0.02, '#4a3322'); [[0.09, 0.07], [0, 0.07], [-0.09, 0.07], [0.045, 0.145], [-0.045, 0.145], [0, 0.22]].forEach(function (p) { c.S.bake(c.S.cyl(0.048, 0.048, c.z1 - c.z0 + 0.04, 8, '#a06a3a', p[0], c.y + p[1] + 0.025, (c.z0 + c.z1) / 2), Math.PI / 2, 0, 0); });
+      [[0.14, c.z0 + 0.1], [-0.14, c.z0 + 0.1], [0.14, c.z1 - 0.1], [-0.14, c.z1 - 0.1]].forEach(function (p) { c.box(0.012, 0.3, 0.012, '#2a2a28', p[0], c.y + 0.17, p[1]); }); } });
+    if (k === 'fabric') return retro(K, { col: col, len: 0.9, cabKind: 'closed', bed: function (c) { bedBox(c, 0.06, '#6a2a3c'); c.box(c.W * 0.96, 0.18, c.z1 - c.z0 - 0.02, '#e8dcc0', 0, c.y + 0.12, (c.z0 + c.z1) / 2); c.box(c.W * 0.7, 0.04, c.z1 - c.z0 - 0.06, '#d8cdb0', 0, c.y + 0.23, (c.z0 + c.z1) / 2); } });
+    if (k === 'coal') return retro(K, { col: col, len: 0.86, cabKind: 'closed', bed: function (c) { bedBox(c, 0.15, '#1f2124'); c.box(c.W - 0.05, 0.09, c.z1 - c.z0 - 0.04, '#141516', 0, c.y + 0.14, (c.z0 + c.z1) / 2); c.box(0.1, 0.05, 0.14, '#202224', 0.03, c.y + 0.2, (c.z0 + c.z1) / 2); } });
+    return retro(K, { col: col, len: 1.0, cabKind: 'closed', bed: function (c) {   // универсальный: синяя лорри с тентом на дугах
+      bedBox(c, 0.07, '#2c4a66'); c.box(c.W, 0.2, c.z1 - c.z0, '#d8cfb5', 0, c.y + 0.17, (c.z0 + c.z1) / 2); c.box(c.W * 0.7, 0.04, c.z1 - c.z0, '#cfc5a8', 0, c.y + 0.29, (c.z0 + c.z1) / 2); c.box(c.W - 0.05, 0.14, 0.012, '#6a7a8a', 0, c.y + 0.15, c.z0 - 0.002); } });
+  }
+  function horseM(S, K, x, z, col) {
+    function box(w, h, d, c, px, py, pz) { return S.box(w, h, d, K.mat(c), px, py, pz); }
+    box(0.075, 0.08, 0.21, col, x, 0.17, z); box(0.05, 0.11, 0.05, col, x, 0.235, z + 0.12); box(0.042, 0.048, 0.09, col, x, 0.275, z + 0.175);
+    box(0.02, 0.06, 0.03, '#2a2018', x, 0.25, z + 0.095); box(0.02, 0.03, 0.04, '#2a2018', x, 0.18, z - 0.125);
+    [[1, 1], [-1, 1], [1, -1], [-1, -1]].forEach(function (p) { box(0.017, 0.12, 0.017, shade(col, -0.2), x + p[0] * 0.026, 0.06, z + p[1] * 0.08); });
+  }
+  function cartModel(K) {      // телега с лошадью (на ней приезжают люди)
     var S = Shapes(K, 0, 0);
     function box(w, h, d, c, x, y, z) { return S.box(w, h, d, K.mat(c), x, y, z); }
-    var y0 = 0.13;
-    if (kind === 'garbage') {                     // мусоровоз: белая кабина, синий кузов с прессом
-      box(0.26, 0.04, 0.84, '#2c2c2a', 0, 0.11, 0);
-      wheelSet(S, [[0.14, 0.28], [-0.14, 0.28], [0.14, -0.2], [-0.14, -0.2], [0.14, -0.32], [-0.14, -0.32]], 0.07, 0.06);
-      cabin(S, K, '#f1f1ec', 0.3, 0.3, 0.24, y0);
-      box(0.32, 0.3, 0.5, '#2f6fb3', 0, y0 + 0.17, -0.1);
-      for (var i = 0; i < 4; i++) box(0.326, 0.02, 0.5, '#255a93', 0, y0 + 0.06 + i * 0.07, -0.1);
-      box(0.3, 0.26, 0.1, '#7b8691', 0, y0 + 0.15, -0.39);                              // задний пресс
-      box(0.2, 0.06, 0.02, '#ffcf3a', 0, y0 + 0.05, -0.445);
-      box(0.04, 0.03, 0.04, '#ff9a2e', 0, y0 + 0.26, 0.26);
-    } else if (kind === 'ambulance') {           // скорая: белый фургон, красная полоса, маячки
-      box(0.24, 0.04, 0.78, '#2c2c2a', 0, 0.1, 0);
-      wheelSet(S, [[0.13, 0.25], [-0.13, 0.25], [0.13, -0.24], [-0.13, -0.24]], 0.065, 0.055);
-      box(0.3, 0.12, 0.18, '#f6f6f2', 0, y0 + 0.04, 0.3);                               // капот
-      box(0.3, 0.32, 0.6, '#f6f6f2', 0, y0 + 0.16, -0.08);                              // кузов
-      box(0.244, 0.11, 0.012, '#9cc3dd', 0, y0 + 0.21, 0.222);
-      box(0.304, 0.1, 0.12, '#9cc3dd', 0, y0 + 0.21, 0.15);
-      box(0.306, 0.045, 0.6, '#d8262e', 0, y0 + 0.08, -0.08);                           // полоса
-      box(0.308, 0.1, 0.03, '#d8262e', 0, y0 + 0.2, -0.12); box(0.308, 0.03, 0.1, '#d8262e', 0, y0 + 0.2, -0.12); // крест
-      box(0.07, 0.04, 0.05, '#2f7cf0', 0.08, y0 + 0.34, 0.16); box(0.07, 0.04, 0.05, '#ff3030', -0.08, y0 + 0.34, 0.16);
-      box(0.32, 0.03, 0.03, '#d9dcd2', 0, 0.12, 0.39);
-      [0.1, -0.1].forEach(function (x) { box(0.05, 0.03, 0.01, '#fff4c2', x, y0 + 0.06, 0.391); });
-    } else if (kind === 'police') {              // полиция: бело-синий седан с мигалкой
-      box(0.26, 0.1, 0.66, '#f4f4f0', 0, 0.13, 0);
-      wheelSet(S, [[0.12, 0.21], [-0.12, 0.21], [0.12, -0.2], [-0.12, -0.2]], 0.06, 0.05);
-      box(0.262, 0.05, 0.66, '#1f4fa8', 0, 0.15, 0);                                     // синяя полоса
-      box(0.23, 0.1, 0.3, '#f4f4f0', 0, 0.23, -0.04);                                   // салон
-      box(0.234, 0.07, 0.24, '#5d7fa0', 0, 0.23, -0.04);
-      box(0.2, 0.03, 0.08, '#2a2a2a', 0, 0.295, -0.04);
-      box(0.08, 0.035, 0.07, '#2f7cf0', 0.05, 0.3, -0.04); box(0.08, 0.035, 0.07, '#ff3030', -0.05, 0.3, -0.04);
-      [0.09, -0.09].forEach(function (x) { box(0.05, 0.025, 0.01, '#fff4c2', x, 0.15, 0.331); });
-    } else if (kind === 'army') {                // армейский грузовик: хаки, тент
-      var KH = '#5f6b3a', KD = '#4b5530';
-      box(0.26, 0.05, 0.86, '#2a2a26', 0, 0.12, 0);
-      wheelSet(S, [[0.15, 0.3], [-0.15, 0.3], [0.15, -0.16], [-0.15, -0.16], [0.15, -0.31], [-0.15, -0.31]], 0.075, 0.065, '#3b3f2c');
-      box(0.26, 0.11, 0.16, KH, 0, y0 + 0.07, 0.36);                                     // капот
-      cabin(S, K, KH, 0.2, 0.3, 0.24, y0);
-      box(0.34, 0.04, 0.5, KD, 0, y0 + 0.05, -0.2);                                     // кузов
-      box(0.34, 0.24, 0.5, '#6f7a47', 0, y0 + 0.19, -0.2);                              // тент
-      S.bake(S.cyl(0.17, 0.17, 0.5, 14, '#6f7a47', 0, y0 + 0.31, -0.2), Math.PI / 2, 0, 0).scaling.set(1, 0.35, 1);
-      box(0.25, 0.16, 0.012, '#3d4428', 0, y0 + 0.18, -0.451);
-    } else if (kind === 'van') {                 // фургон доставки: синяя будка
-      box(0.24, 0.04, 0.78, '#2c2c2a', 0, 0.1, 0);
-      wheelSet(S, [[0.13, 0.26], [-0.13, 0.26], [0.13, -0.24], [-0.13, -0.24]], 0.065, 0.055);
-      cabin(S, K, '#f2f2ee', 0.27, 0.28, 0.22, y0);
-      box(0.32, 0.34, 0.5, '#2563c9', 0, y0 + 0.19, -0.12);
-      box(0.324, 0.07, 0.36, '#ffcf3a', 0, y0 + 0.22, -0.12);                           // полоса компании
-      box(0.3, 0.3, 0.012, '#1d4c9c', 0, y0 + 0.18, -0.372);
-    } else if (kind === 'semi') {                // тягач с прицепом-контейнером
-      box(0.24, 0.05, 0.36, '#2a2a28', 0, 0.12, 0.3);
-      wheelSet(S, [[0.13, 0.4], [-0.13, 0.4], [0.13, 0.2], [-0.13, 0.2]], 0.07, 0.06);
-      cabin(S, K, '#c8342c', 0.4, 0.3, 0.3, y0);
-      box(0.3, 0.12, 0.08, '#a82a23', 0, y0 + 0.3, 0.38);                               // спальник
-      box(0.24, 0.05, 0.72, '#2a2a28', 0, 0.14, -0.2);
-      wheelSet(S, [[0.14, -0.4], [-0.14, -0.4], [0.14, -0.52], [-0.14, -0.52]], 0.07, 0.06);
-      box(0.34, 0.32, 0.78, '#3c7d7a', 0, y0 + 0.24, -0.22);                            // контейнер
-      for (var j = 0; j < 7; j++) box(0.346, 0.3, 0.015, '#336b68', 0, y0 + 0.24, -0.56 + j * 0.11);
-      box(0.3, 0.28, 0.012, '#2c5e5b', 0, y0 + 0.24, -0.612);
-    } else if (kind === 'timber') {              // лесовоз (с 0.23.0): рыжая кабина с краном-манипулятором, длинный прицеп-роспуск с брёвнами
-      box(0.24, 0.05, 0.36, '#2a2a28', 0, 0.12, 0.3);
-      wheelSet(S, [[0.13, 0.4], [-0.13, 0.4], [0.13, 0.2], [-0.13, 0.2]], 0.07, 0.06);
-      cabin(S, K, '#c9692b', 0.4, 0.3, 0.28, y0);
-      box(0.05, 0.05, 0.9, '#2a2a28', 0, 0.15, -0.2);                                     // дышло прицепа
-      wheelSet(S, [[0.14, -0.5], [-0.14, -0.5], [0.14, -0.62], [-0.14, -0.62]], 0.07, 0.06);
-      box(0.36, 0.035, 0.05, '#2a2a28', 0, 0.2, 0.1); box(0.36, 0.035, 0.05, '#2a2a28', 0, 0.2, -0.55);   // поперечины-кониксы
-      [[0.12, 0.26], [0.0, 0.26], [-0.12, 0.26], [0.06, 0.35], [-0.06, 0.35], [0.0, 0.44]].forEach(function (p) {   // штабель брёвен
-        S.bake(S.cyl(0.055, 0.055, 0.95, 8, '#8a5a33', p[0], p[1], -0.22), Math.PI / 2, 0, 0);
-        S.bake(S.cyl(0.044, 0.044, 0.006, 8, '#d8b07a', p[0], p[1], 0.26), Math.PI / 2, 0, 0);
-      });
-      [[0.19, 0.1], [-0.19, 0.1], [0.19, -0.55], [-0.19, -0.55]].forEach(function (p) { box(0.015, 0.3, 0.015, '#3a3a38', p[0], 0.33, p[1]); });   // стойки
-      box(0.05, 0.05, 0.1, '#3a3a38', 0.12, y0 + 0.3, 0.2);                               // кран-манипулятор у кабины
-    } else if (kind === 'dump') {                // самосвал: жёлтая кабина, оранжевый кузов со щебнем
-      box(0.26, 0.05, 0.84, '#2c2c2a', 0, 0.12, 0);
-      wheelSet(S, [[0.15, 0.28], [-0.15, 0.28], [0.15, -0.18], [-0.15, -0.18], [0.15, -0.31], [-0.15, -0.31]], 0.075, 0.065);
-      cabin(S, K, '#f2c230', 0.3, 0.3, 0.26, y0);
-      box(0.34, 0.04, 0.52, '#e0702a', 0, y0 + 0.06, -0.16);
-      box(0.03, 0.16, 0.52, '#e0702a', 0.155, y0 + 0.14, -0.16); box(0.03, 0.16, 0.52, '#e0702a', -0.155, y0 + 0.14, -0.16);
-      box(0.34, 0.16, 0.03, '#e0702a', 0, y0 + 0.14, -0.41); box(0.34, 0.22, 0.04, '#c45e1f', 0, y0 + 0.17, 0.1);
-      box(0.28, 0.08, 0.44, '#6e6a64', 0, y0 + 0.17, -0.17);                            // щебень
-      box(0.16, 0.05, 0.22, '#58554f', 0.03, y0 + 0.22, -0.2);
-    }
+    horseM(S, K, 0, 0.5, '#7a5230'); box(0.012, 0.012, 0.4, '#5a3d28', 0.045, 0.2, 0.28); box(0.012, 0.012, 0.4, '#5a3d28', -0.045, 0.2, 0.28);
+    box(0.24, 0.025, 0.46, '#7d6136', 0, 0.16, -0.05); box(0.02, 0.08, 0.46, '#8a6a3e', 0.12, 0.2, -0.05); box(0.02, 0.08, 0.46, '#8a6a3e', -0.12, 0.2, -0.05);
+    box(0.24, 0.08, 0.02, '#8a6a3e', 0, 0.2, 0.18); box(0.24, 0.08, 0.02, '#8a6a3e', 0, 0.2, -0.28);
+    [1, -1].forEach(function (s) { spoke(S, s * 0.135, -0.05, 0.085, 0.022); });
+    [[-0.05, -0.1, '#3d5a80'], [0.05, 0.0, '#8a3b3b'], [-0.04, -0.2, '#6b5a7a']].forEach(function (p) { box(0.06, 0.07, 0.05, p[2], p[0], 0.23, p[1]); S.sph(0.03, '#e8b890', p[0], 0.31, p[1], 1); });
+    box(0.08, 0.06, 0.06, '#c9b27a', 0.0, 0.215, -0.22);
     return S.merge();
   }
-  function carModel(K, m) {
-    var S = Shapes(K, 0, 0), info = G.cars.models.filter(function (c) { return c.id === m; })[0] || G.cars.models[0], C = info.color, GL = '#6f8fae';
+  function coachModel(K) {     // дилижанс: красно-коричневый кузов с окнами, багаж на крыше, четвёрка лошадей
+    var S = Shapes(K, 0, 0);
     function box(w, h, d, c, x, y, z) { return S.box(w, h, d, K.mat(c), x, y, z); }
-    var len = m === 'hatch' ? 0.48 : 0.58;
-    box(0.26, 0.09, len, C, 0, 0.11, 0);                                                // кузов
-    wheelSet(S, [[0.12, len / 2 - 0.1], [-0.12, len / 2 - 0.1], [0.12, -len / 2 + 0.1], [-0.12, -len / 2 + 0.1]], 0.055, 0.045, '#bfc3c8');
-    if (m === 'sedan') { box(0.23, 0.09, 0.26, C, 0, 0.2, -0.03); box(0.234, 0.065, 0.2, GL, 0, 0.2, -0.03); box(0.2, 0.06, 0.012, GL, 0, 0.2, 0.1); }
-    else if (m === 'hatch') { box(0.23, 0.1, 0.27, C, 0, 0.2, -0.06); box(0.234, 0.07, 0.22, GL, 0, 0.2, -0.05); box(0.2, 0.07, 0.012, GL, 0, 0.2, 0.076); }
-    else { box(0.23, 0.1, 0.38, C, 0, 0.2, -0.07); box(0.234, 0.07, 0.33, GL, 0, 0.2, -0.06); box(0.2, 0.07, 0.012, GL, 0, 0.2, 0.121); box(0.18, 0.015, 0.3, '#3a3a3a', 0, 0.26, -0.08); }
-    box(0.27, 0.025, 0.025, '#d9dcd2', 0, 0.08, len / 2); box(0.27, 0.025, 0.025, '#d9dcd2', 0, 0.08, -len / 2);
-    [0.09, -0.09].forEach(function (x) { box(0.045, 0.022, 0.008, '#fff4c2', x, 0.13, len / 2 + 0.002); box(0.045, 0.022, 0.008, '#d8262e', x, 0.13, -len / 2 - 0.002); });
+    box(0.36, 0.02, 0.64, '#3a2a1c', 0, 0.18, 0.1);
+    box(0.34, 0.24, 0.5, '#7a2a24', 0, 0.32, 0.0); box(0.37, 0.025, 0.54, '#2a2420', 0, 0.455, 0.0);
+    [[-0.1, 0.25], [0.1, 0.25]].forEach(function (p) { box(0.08, 0.1, 0.008, '#9cc3dd', p[0], 0.35, p[1] + 0.0); });
+    [-0.17, 0.17].forEach(function (s) { [-0.12, 0.08].forEach(function (z) { box(0.008, 0.1, 0.12, '#9cc3dd', s, 0.35, z); }); });
+    box(0.34, 0.06, 0.4, '#5a3d28', 0, 0.485, -0.02); box(0.2, 0.06, 0.18, '#8a6a42', 0.04, 0.54, -0.04);
+    box(0.3, 0.05, 0.1, '#7d6136', 0, 0.28, -0.32);
+    [[1, -0.18, 0.1], [-1, -0.18, 0.1], [1, 0.2, 0.085], [-1, 0.2, 0.085]].forEach(function (p) { spoke(S, p[0] * 0.2, p[1], p[2], 0.03); });
+    box(0.04, 0.04, 0.5, '#3a2a1c', 0, 0.2, 0.5);
+    [[0.07, 0.62], [-0.07, 0.62], [0.07, 0.95], [-0.07, 0.95]].forEach(function (p, i) { horseM(S, K, p[0], p[1], ['#6a4a2a', '#2a2018', '#8a6a42', '#5a3d28'][i]); });
+    box(0.14, 0.06, 0.07, '#2a2018', 0, 0.42, 0.34);
     return S.merge();
+  }
+  function stopModel(K) {      // остановка дилижансов: столбик с жёлтой табличкой и скамейка
+    var S = Shapes(K, 0, 0);
+    S.cyl(0.012, 0.014, 0.36, 6, '#2b2f35', 0, 0.18, 0); S.box(0.13, 0.1, 0.012, K.mat('#e8c13a'), 0, 0.34, 0); S.box(0.09, 0.012, 0.014, K.mat('#2b2b2b'), 0, 0.345, 0.001);
+    S.box(0.16, 0.015, 0.05, K.mat('#7a5a3a'), -0.13, 0.11, 0.02); S.box(0.015, 0.1, 0.045, K.mat('#2b2f35'), -0.2, 0.05, 0.02); S.box(0.015, 0.1, 0.045, K.mat('#2b2f35'), -0.06, 0.05, 0.02);
+    return S.merge();
+  }
+  function pedModel(K, shirt) { // горожанин в картузе и длиннополом сюртуке
+    var S = Shapes(K, 0, 0);
+    function box(w, h, d, c, x, y, z) { return S.box(w, h, d, K.mat(c), x, y, z); }
+    box(0.03, 0.09, 0.035, '#2a2a30', 0.022, 0.045, 0); box(0.03, 0.09, 0.035, '#2a2a30', -0.022, 0.045, 0);
+    box(0.09, 0.1, 0.055, shirt, 0, 0.14, 0); box(0.094, 0.05, 0.058, shade(shirt, -0.15), 0, 0.09, 0);
+    box(0.025, 0.08, 0.03, shirt, 0.06, 0.14, 0); box(0.025, 0.08, 0.03, shirt, -0.06, 0.14, 0);
+    S.sph(0.034, '#e8b890', 0, 0.225, 0.003, 1); S.cyl(0.04, 0.04, 0.018, 8, '#2a2a2a', 0, 0.258, 0.003); box(0.07, 0.008, 0.03, '#2a2a2a', 0, 0.246, 0.035);
+    return S.merge();
+  }
+  function carModel(K, m) {     // легковые 1910–20-х: туринг (открытый), родстер, ландо (закрытый)
+    var info = G.cars.models.filter(function (c) { return c.id === m; })[0] || G.cars.models[0];
+    if (m === 'hatch') return retro(K, { col: info.color, len: 0.62, w: 0.22, cabKind: 'open', cab: 0.2, hood: 0.24, bed: function (c) { c.box(0.15, 0.05, c.z1 - c.z0 - 0.02, info.color, 0, c.y + 0.06, (c.z0 + c.z1) / 2); } });
+    if (m === 'wagon') return retro(K, { col: info.color, len: 0.7, w: 0.23, cabKind: 'closed', cab: 0.3, hood: 0.24 });
+    return retro(K, { col: info.color, len: 0.7, w: 0.23, cabKind: 'open', top: 1, cab: 0.32, hood: 0.26 });
   }
   function vehicleThumb(k, car) {
     return thumbReq((car ? 'car_' : 'veh_') + k, function (K) {
@@ -2313,7 +2419,7 @@
 
   // ---------- Бригады ----------
   function truckBatch() { return getBatch('truck', function () { return truckModel(kit); }); }
-  function writeTruck(br, bob, roll) { batchSet(truckBatch(), br.id, br.x, bob || 0, br.z, br.yaw || 0, 0.78, 0.78, 0.78, roll || 0); }
+  function writeTruck(br, bob, roll) { var q = br.n ? 1.05 : 0.78; batchSet(truckBatch(), br.id, br.x, bob || 0, br.z, br.yaw || 0, q, q, q, roll || 0); }
   function parkSpot(i, cx, cz) { // стоянка бригад — рядом с центром экрана (или с заводом), а не у края карты
     if (cx === undefined) { cx = cam.tx; cz = cam.tz; }
     var h = N / 2 - 1;
@@ -2337,7 +2443,7 @@
   // Бригады делятся между стройками поровну; уже работающие остаются на своём объекте.
   function assignBrigades() {
     var S = state.buildings.filter(isSite), n = state.brigades.length;
-    if (!S.length) { state.brigades.forEach(function (br) { if (br.site) { br.park = { x: br.x, z: br.z }; } br.site = 0; }); return; }
+    if (!S.length) { state.brigades.forEach(function (br, i) { var tp = tpPark(i); if (tp) br.park = tp; else if (br.site) { br.park = { x: br.x, z: br.z }; } br.site = 0; }); return; }
     var want = {}, have = {};
     S.forEach(function (s, i) { want[s.id] = Math.floor(n / S.length) + (i < n % S.length ? 1 : 0); have[s.id] = 0; });
     var free = [];
@@ -2355,9 +2461,10 @@
       br.site = best; if (best) have[best]++;
     });
   }
+  function tpPark(i) { var L = working('truckpark'); if (!L.length) return null; var b = L[i % L.length], s = spotAt(b, Math.floor(i / L.length) + 5, 0.1); return s ? { x: s.x, z: s.z } : null; }
   function siteCrew(id) {
     var all = 0, here = 0;
-    state.brigades.forEach(function (br) { if (br.site === id) { all++; if (br.work) here++; } });
+    state.brigades.forEach(function (br) { if (br.site === id) { all += br.n || 1; if (br.work) here += br.n || 1; } });
     return { all: all, here: here };
   }
   function rebuildTrucks() {
@@ -2371,9 +2478,10 @@
     if (state.brigades.length >= u.importMax) { hint('Привезти можно только ' + u.importMax + ' бригады. Дальше — заказывайте на Механическом заводе (🏭 Здания)', true); return; }
     if (!canPay(u.price)) { hint('Не хватает долларов на бригаду', true); return; }
     pay(u.price); snd('buy');
-    var i = state.brigades.length, p = parkSpot(i);
+    var i = state.brigades.length + 1, p = parkSpot(i);
     var br = { id: state.nextBr++, x: p.x, z: Math.min(N / 2 - 0.2, p.z + 3), yaw: Math.PI, park: p, site: 0 };
     state.brigades.push(br); writeTruck(br); dirty();
+    mergeBrigades();
     assignBrigades(); save(); refreshNeed(); renderMech();
     hint(state.buildings.some(isSite) ? '🚚 Бригада выехала на стройку' : '🚚 Бригада куплена — теперь можно строить');
   }
@@ -2381,9 +2489,10 @@
     if (!state.brigades.length) return;
     var j = state.brigades.length - 1;
     for (var i = state.brigades.length - 1; i >= 0; i--) if (!state.brigades[i].site) { j = i; break; } // сначала свободную
+    for (var i2 = state.brigades.length - 1; i2 >= 0; i2--) if (!state.brigades[i2].site && !state.brigades[i2].n) { j = i2; break; }
     var br = state.brigades.splice(j, 1)[0]; snd('sell');
     batchRemove(truckBatch(), br.id);
-    state.spent -= Math.round(G.units.brigade.price / 2); updateMoney();
+    state.spent -= Math.round(G.units.brigade.price / 2) * (br.n || 1); updateMoney();
     assignBrigades(); save(); refreshNeed(); renderMech(); dirty();
     hint('Бригада продана, вернули ' + usd(G.units.brigade.price / 2));
   }
@@ -2407,7 +2516,7 @@
         } else {
           br.x = tgt.x; br.z = tgt.z;
           if (Math.abs(Math.atan2(Math.sin(tgt.yaw - br.yaw), Math.cos(tgt.yaw - br.yaw))) > 0.01) { br.yaw = angTo(br.yaw, tgt.yaw, Math.min(1, dt * 8)); moved = true; }
-          if (atSite) { br.work = true; arrived[b.id] = (arrived[b.id] || 0) + 1; moved = true; }
+          if (atSite) { br.work = true; arrived[b.id] = (arrived[b.id] || 0) + (br.n || 1); moved = true; }
         }
       }
       if (moved || was) {
@@ -2467,8 +2576,8 @@
     if (!state.env) return;
     stoneT -= dt; if (!stoneCache || stoneT <= 0) { stoneCache = stoneRate(); stoneT = 1; }
     var R = stoneCache, st = state.stock; if (!R.stone && !R.use) return;
-    st.stone += R.stone * dt / 60;
-    if (R.use) { var k = Math.min(1, st.stone / (R.use * dt / 60)); if (k > 0) { st.stone -= R.use * dt / 60 * k; st.gravel += R.gravel * dt / 60 * k; } }
+    st.stone += R.stone * truckBonus('stone') * dt / 60;
+    if (R.use) { var k = Math.min(1, st.stone / (R.use * dt / 60)); if (k > 0) { st.stone -= R.use * dt / 60 * k; st.gravel += R.gravel * truckBonus('stone') * dt / 60 * k; } }
     stockDirty = true;
   }
   // Лесопилка (с 0.23.0) берёт брёвна со склада и делает из них доски и ДСП; брёвен нет — стоит.
@@ -2483,18 +2592,29 @@
       if (k <= 0) return;
       st.logs -= need * k;
     }
-    st.boards += R.boards * dt / 60 * k; st.dsp += R.dsp * dt / 60 * k; stockDirty = true;
+    st.boards += R.boards * truckBonus('wood') * dt / 60 * k; st.dsp += R.dsp * truckBonus('wood') * dt / 60 * k; stockDirty = true;
   }
   function stockText(n) { return Math.floor(n).toLocaleString('ru-RU'); }
   function updateStock() {
     if (!stockDirty) return; stockDirty = false; updateStone();
     var st = state.stock, R = sawCache || sawRate(), hasSaw = state.buildings.some(function (b) { return b.cat === 'saw' || b.cat === 'lumber'; }),
       show = st.boards >= 1 || st.dsp >= 1 || st.logs >= 1 || R.boards > 0 || hasSaw;
+    updateRows();
     $('stStockWrap').hidden = !show; if (!show) return;
     var lj = $('stLogsWrap'); if (lj) lj.hidden = !state.env && st.logs < 1;
     $('stLogs').textContent = stockText(st.logs); $('stBoards').textContent = stockText(st.boards); $('stDsp').textContent = stockText(st.dsp);
     $('stStockWrap').title = 'Склад: бревна ' + stockText(st.logs) + ', доски ' + stockText(st.boards) + ', ДСП ' + stockText(st.dsp) + '. Лесорубы валят деревья и несут брёвна; лесопилки берут ' + Math.round(R.use) + ' брёвен в минуту и дают ' + R.boards + ' досок и ' + R.dsp + ' ДСП. Стройка с досками на 25% быстрее, с досками и ДСП — на 50%.';
     var e = $('iStock'); if (e) e.innerHTML = '🪵 ' + stockText(st.logs) + ' · 🪚 ' + stockText(st.boards) + ' · 🟫 ' + stockText(st.dsp);
+  }
+  function updateRows() {
+    if (!state || !state.eco) return;
+    var st = state.stock, e = state.eco, P0 = totals().p;
+    function set(id, v) { var x = $(id); if (x && x.textContent !== v) x.textContent = v; }
+    set('stFood', stockText(st.food)); set('stFabric', stockText(st.fabric)); set('stClothes', stockText(st.clothes)); set('stTobacco', stockText(st.tobacco)); set('stCoal', stockText(st.coal));
+    set('stWater', P0 < 1 ? '—' : e.water === undefined ? '…' : pctNum(e.water)); set('stUnrest', Math.round(e.unrest) + '%');
+    $('stFoodWrap').classList.toggle('bad', P0 > 20 && e.food !== undefined && e.food < 1); $('stWaterWrap').classList.toggle('bad', P0 > 20 && e.water !== undefined && e.water < 1);
+    $('stUnrestWrap').classList.toggle('bad', e.unrest >= 50); $('stUnrestWrap').hidden = e.unrest < 5 && !e.riot;
+    $('stFoodWrap').title = 'Еда на рынках: ' + stockText(st.food) + '. Нужно ' + (P0 * G.eco.food).toFixed(1).replace('.', ',') + ' в минуту. Её растят мельницы с полями, а на рынок возят универсальные грузовики.';
   }
   function updateStone() {
     var w = $('stStoneWrap'); if (!w) return;
@@ -2625,18 +2745,19 @@
     return null;
   }
   // Клетки → точки на правой полосе (на поворотах — точка пересечения полос)
-  function lanePoints(cells) {
+  function lanePoints(cells, lane) {
+    lane = lane === undefined ? LANE : lane;
     var pts = [], C = cells.map(function (k) { var p = k.split(','); return cellCenter(+p[0], +p[1]); });
     for (var i = 0; i < C.length; i++) {
       var a = C[i - 1], b = C[i], c = C[i + 1];
       var din = a ? { x: b.x - a.x, z: b.z - a.z } : null, dout = c ? { x: c.x - b.x, z: c.z - b.z } : null;
       din = din || dout; dout = dout || din; if (!din) { pts.push({ x: b.x, z: b.z }); continue; }
       var ri = { x: din.z, z: -din.x }, ro = { x: dout.z, z: -dout.x };
-      if (ri.x === ro.x && ri.z === ro.z) pts.push({ x: b.x + ri.x * LANE, z: b.z + ri.z * LANE });
+      if (ri.x === ro.x && ri.z === ro.z) pts.push({ x: b.x + ri.x * lane, z: b.z + ri.z * lane });
       else if (ri.x === -ro.x && ri.z === -ro.z) { // разворот в тупике
-        pts.push({ x: b.x + ri.x * LANE + din.x * 0.3, z: b.z + ri.z * LANE + din.z * 0.3 });
-        pts.push({ x: b.x + ro.x * LANE + din.x * 0.3, z: b.z + ro.z * LANE + din.z * 0.3 });
-      } else pts.push({ x: b.x + (ri.x + ro.x) * LANE, z: b.z + (ri.z + ro.z) * LANE });
+        pts.push({ x: b.x + ri.x * lane + din.x * 0.3, z: b.z + ri.z * lane + din.z * 0.3 });
+        pts.push({ x: b.x + ro.x * lane + din.x * 0.3, z: b.z + ro.z * lane + din.z * 0.3 });
+      } else pts.push({ x: b.x + (ri.x + ro.x) * lane, z: b.z + (ri.z + ro.z) * lane });
     }
     return pts;
   }
@@ -2772,8 +2893,8 @@
       if (ok) carsDriving++;
       a.t = ok ? 0 : 6 + Math.random() * 10;
     } else {
-      var info = G.vehicles[a.kind], L = working(info.serves).filter(function (b) { return b.id !== a.dest; });
-      if (!L.length) L = working(info.serves);
+      var info = G.vehicles[a.kind], L = /^f_/.test(a.kind) ? fleetDests(a.kind).filter(function (b) { return b.id !== a.dest; }) : working(info.serves).filter(function (b) { return b.id !== a.dest; });
+      if (!L.length) L = /^f_/.test(a.kind) ? fleetDests(a.kind) : working(info.serves);
       for (var tries = 0; tries < 3 && L.length && !ok; tries++) { target = randomOf(L); ok = sendTo(a, target, 6 + (a.id % 3)); }
       a.t = ok ? 0 : 4 + Math.random() * 4;
     }
@@ -3152,6 +3273,7 @@
 
   // Живые надписи в справке и в «Механизмах» — обновляются по id, без пересборки кнопок.
   function refreshLive() {
+    hallLive();
     function set(id, v) { var e = $(id); if (e && e.innerHTML !== v) e.innerHTML = v; }
     var need = $('iRs') || $('mRs') || $('irWear') || $('iFq') || $('mFq') || $('mFqAll') || $('mVq_garbage');
     if (!need && !infoRoad) return;
@@ -3197,7 +3319,8 @@
     rebuildOcc();
     state.buildings.forEach(addBuildingMesh);
     Object.keys(state.roads).forEach(function (k) { var p = k.split(','); markRoad(+p[0], +p[1]); });
-    rebuildTrucks(); assignBrigades(); clearRollers(); rebuildAgents();
+    clearPeds(); coaches = {}; try { coachBatch().ids.slice().forEach(function (id) { batchRemove(coachBatch(), id); }); } catch (e) {}
+    rebuildTrucks(); assignBrigades(); clearRollers(); rebuildAgents(); syncStops();
     resCache = {}; workCache = {};
     updateStats(); updateMoney(); refreshNeed(); dirty();
   }
@@ -3358,7 +3481,22 @@
   }
 
   // Полное разрешение экрана (до 2× на «ретина»-экранах).
-  function pixelScale() { return 1 / Math.min(window.devicePixelRatio || 1, 2); }
+  // Качество графики (с 0.25.0): 0 — лёгкое (для слабых телефонов), 1 — среднее, 2 — высокое. Запоминается на устройстве.
+  var GFX = { q: TOUCH ? 1 : 2, fps: false };
+  try { var gs = JSON.parse(localStorage.getItem('moe_gorod_gfx') || 'null'); if (gs) { if (gs.q === 0 || gs.q === 1 || gs.q === 2) GFX.q = gs.q; GFX.fps = !!gs.fps; } } catch (e) {}
+  function saveGfx() { try { localStorage.setItem('moe_gorod_gfx', JSON.stringify(GFX)); } catch (e) {} }
+  function applyGfx() {
+    var q = GFX.q;
+    try {
+      shadowGen.getShadowMap().resize(q === 0 ? 1024 : q === 1 ? 2048 : (TOUCH ? 2048 : 4096));
+      shadowGen.filteringQuality = q === 0 ? B.ShadowGenerator.QUALITY_LOW : q === 1 ? B.ShadowGenerator.QUALITY_MEDIUM : B.ShadowGenerator.QUALITY_HIGH;
+      if (hdState && hdState.pp) { hdState.pp.samples = q === 0 ? 1 : q === 1 ? 2 : 4; hdState.pp.sharpenEnabled = q > 0; }
+    } catch (e) {}
+    engine.setHardwareScalingLevel(pixelScale()); engine.resize();
+    var f = $('stFps'); if (f) f.hidden = !GFX.fps;
+    dirty();
+  }
+  function pixelScale() { return 1 / Math.min(window.devicePixelRatio || 1, GFX.q === 0 ? 1 : GFX.q === 1 ? 1.5 : 2); }
   function rotateCam(dir) { // dir: +1 влево, -1 вправо; карта поворачивается ровно на 90°
     cam.yawGoal = snapYaw((cam.yawGoal === null ? cam.yaw : cam.yawGoal) + dir * Math.PI / 2);
   }
@@ -3423,7 +3561,7 @@
   }
 
   // ---------- Инструменты ----------
-  var tool = 'view', buildCat = 'res', buildSize = '1x1', buildRot = 0, buildSeed = newSeed(), roadType = 'asphalt';
+  var tool = 'view', buildCat = 'res', buildSize = '1x1', buildRot = 0, buildSeed = newSeed(), roadType = 'dirt';
   var THEME_KEY = 'moe_gorod_epoch', buildTheme = 0;
   try { buildTheme = clamp(parseInt(localStorage.getItem(THEME_KEY), 10) || 0, 0, G.themes.length - 1); } catch (e) {}
   var moving = null; // {b, offX, offZ, rot, x, z}
@@ -3450,8 +3588,11 @@
     tool = t;
     document.querySelectorAll('.tool').forEach(function (b) { b.classList.toggle('on', b.dataset.tool === t); });
     $('panelBuild').hidden = t !== 'build';
-    document.body.classList.toggle('sp-open', t === 'build' || t === 'road');
+    document.body.classList.toggle('sp-open', t === 'build' || t === 'road' || t === 'mech');
     $('panelRoad').hidden = t !== 'road';
+    $('panelMech').hidden = t !== 'mech';
+    if (t === 'mech') mechShell();
+    if (t === 'move' || t === 'delete') { if (!paused) setPause(true, true); } else if (autoPaused) setPause(false);   // с 0.25.0: при переносе и удалении игра встаёт на паузу
     hideGhost(); cursor.setEnabled(false);
     if (moving) cancelMove();
     if (t !== 'view') closeInfo();
@@ -3556,7 +3697,7 @@
 
   function workText(cat, size) {
     var c = G.cats[cat];
-    if (cat === 'res') { var f = c.families[size]; return '👥 ' + f + ' ' + plural(f, 'семья', 'семьи', 'семей'); }
+    if (cat === 'res') { var f = c.cap[size]; return '👥 до ' + f + ' чел.'; }
     if (cat === 'saw') { var sp = G.sawmill[size]; return '🪵 ' + sp.use + ' → 🪚 ' + sp.boards + (sp.dsp ? ' + 🟫 ' + sp.dsp : '') + '/мин'; }
     if (cat === 'lumber') return '🪓 ' + G.lumber.jacks + ' ' + plural(G.lumber.jacks, 'лесоруб', 'лесоруба', 'лесорубов') + ' · ' + G.lumber.zone + '×' + G.lumber.zone;
     if (cat === 'quarry') return '⛏️ ' + G.quarry[size].stone + ' 🪨 камня/мин';
@@ -3590,9 +3731,10 @@
     $('catChips').innerHTML = catItem('all') + Object.keys(G.cats).filter(function (k) { return !G.cats[k].mech && !G.cats[k].group; }).map(catItem).join('') +
       G.buildGroups.map(function (g) { return catItem(g.id); }).join('');
     var cl = catLabel(buildFilter); $('catCur').textContent = cl.t; $('catSw').style.background = cl.c;
-    $('roadChips').innerHTML = Object.keys(G.roads).map(function (k) {
+    $('roadChips').innerHTML = Object.keys(G.roads).filter(function (k) { return !G.roads[k].hidden; }).map(function (k) {
       return '<button class="chip' + (k === roadType ? ' on' : '') + '" data-road="' + k + '"><span class="sw" style="background:' + G.roads[k].color + '"></span>' + G.roads[k].label + (state.env && G.roadCost[k] ? ' <em>' + G.roadCost[k].n + (G.roadCost[k].res === 'stone' ? '🪨' : '⚪') + '</em>' : '') + '</button>';
     }).join('');
+    $('roadChips').innerHTML += '<button class="chip' + (roadType === 'stop' ? ' on' : '') + '" data-road="stop"><span class="sw" style="background:#e8c13a"></span>🚏 Остановка</button>';
     renderStyleRow();
     renderCards();
   }
@@ -3620,9 +3762,9 @@
       ' · ⏱ ~' + secText(G.buildTime[buildSize] / n) + ' (' + n + ' ' + plural(n, 'бригада', 'бригады', 'бригад') + ')');
   }
   function filterCats(f) {
-    var all = Object.keys(G.cats);
+    var all = Object.keys(G.cats).filter(function (k) { return !G.cats[k].hidden; });
     return f === 'all' ? all : f === 'mech' ? all.filter(function (k) { return G.cats[k].mech; }) :
-      f === 'resrc' || f === 'stone' ? all.filter(function (k) { return G.cats[k].group === f; }) : [f];
+      f === 'resrc' || f === 'stone' || f === 'econ' ? all.filter(function (k) { return G.cats[k].group === f; }) : [f];
   }
   // Меню категорий: кнопка «Категория» под главными кнопками, по нажатию открывается список (с 0.13.0)
   function catsOpen(on) {
@@ -3672,7 +3814,7 @@
   $('btnRotate').addEventListener('click', rotateCurrent);
   $('toolbar').addEventListener('click', function (e) {
     var b = e.target.closest('.tool'); if (!b) return;
-    if (b.dataset.tool === 'mech') openMech(); else if (b.dataset.tool === 'epochs') openEpochs(); else if (b.dataset.tool === 'home') centerCam(); else setTool(b.dataset.tool);
+    if (b.dataset.tool === 'mech') { if (tool === 'mech') setTool('view'); else openMech(); } else if (b.dataset.tool === 'epochs') openEpochs(); else if (b.dataset.tool === 'home') centerCam(); else setTool(b.dataset.tool);
   });
 
   // --- действия ---
@@ -3692,8 +3834,11 @@
       hint(tp ? terrainMsg(tp, buildCat, buildSize) : 'Здесь занято или край карты', true); return;
     }
     if (!canPay(cost)) { hint('Не хватает долларов: нужно ' + usd(cost), true); return; }
+    if (buildCat === 'hall' && state.hall) { hint('🏛️ Городская Администрация в городе одна — её можно только перенести', true); return; }
     pay(cost); clearArea(o.x, o.z, f0.w, f0.d);
     var b = { id: state.nextId++, cat: buildCat, size: buildSize, x: o.x, z: o.z, rot: buildRot, seed: buildSeed, th: buildTheme, prog: 0 };
+    if (buildCat === 'res') b.pop = 0;
+    if (buildCat === 'hall') state.hall = 1;
     state.buildings.push(b); markOcc(b, b.id); touchB(b, true); addBuildingMesh(b);
     assignBrigades(); snd('place');
     buildSeed = newSeed(); setGhost(buildCat, buildSize, buildSeed);
@@ -3712,6 +3857,7 @@
     if (infoId === b.id) renderInfo(b, true);
   }
   function deleteBuilding(b) {
+    if (b.cat === 'hall') { hint('🏛️ Городскую Администрацию снести нельзя — только перенести', true); return; }
     if (!allLoaded(b)) { hint('Эта часть карты ещё подгружается — подождите секунду', true); return; }
     if (undoLog) undoLog.push(['b', JSON.parse(JSON.stringify(b))]);
     touchB(b, true); markOcc(b, 0); removeBuildingMesh(b.id); delete byId[b.id]; snd('del');
@@ -3724,6 +3870,7 @@
   function roadCostOf(t) { var c = state.env && t && G.roadCost[t]; return c ? { res: c.res, n: c.n } : null; }
   function setRoad(x, z, t) {
     if (!inMap(x, z) || !loaded[ckOf(x, z)]) return;
+    if (t === 'stop') { toggleStop(x, z); return; }
     var k = key(x, z), pt = state.roads[k], pw = state.wear[k], paid = null;
     if (t) {
       if (occ[idx(x, z)] || pt === t) return;
@@ -3739,7 +3886,7 @@
       state.roads[k] = t; delete state.wear[k];
       var tt = terr[idx(x, z)]; if (tt === 1 || tt === 3) dropBoulders(idx(x, z), x, z, tt);
     }
-    else { if (!pt) return; delete state.roads[k]; delete state.wear[k]; }
+    else { if (!pt) return; delete state.roads[k]; delete state.wear[k]; if (state.stops[k]) { delete state.stops[k]; syncStops(); } }
     if (undoLog) undoLog.push(['r', k, pt, pw, paid]);
     snd(t ? 'road' : 'roadx');
     touchCell(x, z, true); refreshRoadAround(x, z); save(); statsSoon(); dirty();
@@ -3860,7 +4007,7 @@
       var cl = cellAt(e.clientX, e.clientY); if (!cl) return; lastHover = cl;
       if (tool === 'build') buildGhostTo(cl);
       else if (tool === 'move' && moving) moveGhostTo(cl);
-      else if (tool === 'road') { lineCells(gest.last, cl, function (x, z) { setRoad(x, z, roadType); }); showCursor(cl.x, cl.z, '#ffffff'); }
+      else if (tool === 'road') { if (roadType !== 'stop') lineCells(gest.last, cl, function (x, z) { setRoad(x, z, roadType); }); showCursor(cl.x, cl.z, '#ffffff'); }
       else if (tool === 'delete') {
         lineCells(gest.last, cl, function (x, z) { if (inMap(x, z) && state.roads[key(x, z)]) setRoad(x, z, null); else if (inMap(x, z) && treeA[idx(x, z)] && !occ[idx(x, z)] && clearTree(x, z)) save(); });
         if (cl.x !== gest.last.x || cl.z !== gest.last.z) { var bb = pickBuilding(e.clientX, e.clientY); if (bb) deleteBuilding(bb); }
@@ -3944,7 +4091,7 @@
     if (k === 'q' || k === 'й') rotateCam(1);
     else if (k === 'e' || k === 'у') rotateCam(-1);
     else if (k === 'r' || k === 'к') rotateCurrent();
-    else if (k === 'escape') { if (sideOpen) closeSide(); else if (!$('modal').hidden) closeModal(); else if (!$('mech').hidden) closeMech(); else if (!$('epochs').hidden) closeEpochs(); else { closeInfo(); setTool('view'); } }
+    else if (k === 'escape') { if (sideOpen) closeSide(); else if (!$('modal').hidden) closeModal(); else if (tool === 'mech') closeMech(); else if (!$('epochs').hidden) closeEpochs(); else { closeInfo(); setTool('view'); } }
     else if (k === '6') openMech();
     else if (k === '7') openEpochs();
     else if (k === '8') centerCam();
@@ -3956,7 +4103,7 @@
   window.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
   window.addEventListener('blur', function () { keys = {}; });
   function keyPan(dt) {
-    if (!$('mech').hidden || !$('epochs').hidden) return;
+    if (!$('epochs').hidden) return;
     var f = 0, s = 0;
     if (keys.w || keys['ц'] || keys.arrowup) f += 1;
     if (keys.s || keys['ы'] || keys.arrowdown) f -= 1;
@@ -4027,13 +4174,10 @@
 
   // ---------- Страница «Механизмы» ----------
   var mechTab = 'build';
-  function openMech(tab) {
-    if (tab) mechTab = tab;
-    closeInfo(); if (moving) cancelMove();
-    $('mech').hidden = false;
-    document.querySelector('.tool.mech').classList.add('open');
+  function openMech(tab) { if (tab) mechTab = tab; if (tool === 'mech') mechShell(); else setTool('mech'); }   // с 0.25.0 «Механизмы» — вкладка в боковой панели
+  function mechShell() {
     $('mechTabs').innerHTML = G.mechTabs.map(function (t) { return '<button class="tab' + (t.id === mechTab ? ' on' : '') + '" data-tab="' + t.id + '">' + t.label + '</button>'; }).join('');
-    $('mechBody').innerHTML = mechTab === 'plants' ? plantsHtml() : mechTab === 'cars' ? carsHtml() : brigadeHtml();
+    $('mechBody').innerHTML = mechTab === 'plants' ? plantsHtml() : mechTab === 'cars' ? carsHtml() : mechTab === 'trucks' ? trucksHtml() : brigadeHtml();
     $('mechBody').scrollTop = 0;
     renderMech();
   }
@@ -4079,15 +4223,8 @@
       '<div class="ubtns wrap"><button class="btn-buy alt" data-act="order">🚚 Заказать «Бригаду»</button><button class="btn-sell" data-act="cancel" id="mCancel">Отменить</button>' +
       '<button class="btn-buy" data-act="cars">🚗 Машины города</button></div>' +
       '<div class="unote">Завод собирает только «Бригады». Скорая, полиция, мусоровоз и другие машины появляются сами вместе со зданиями.</div></div>' +
-      card('depot') +
-      '<div class="pbox"><b>🛠️ Ремонт дорог</b>' +
-      '<div class="ukv"><span>Асфальт</span><span id="mRs">—</span><span>Средний износ</span><span id="mMid">0</span><span>Почти изношен</span><span id="mWorn">0</span>' +
-      '<span>Очередь ремонта</span><span id="mQ">—</span><span>Каток</span><span id="mRoller">—</span></div>' +
-      '<button class="btn-buy wide" data-act="repair" id="mRep">🛠️ Отремонтировать изношенные</button>' +
-      '<button class="btn-tog" data-act="auto" id="mAuto">' + autoLabel() + '</button></div>' +
-      '<p class="note">Асфальт изнашивается со временем — у работающих зданий быстрее: средний износ с ' + pctText(W.mid) + ' (трещины), почти изношен с ' + pctText(W.worn) +
-      ' (ямы и заплатки), при 100% асфальт разбит и становится простой дорогой. Ремонт клетки стоит до ' + usd(R.full) + ' (зависит от износа). ' +
-      'Кнопка «Отремонтировать изношенные» отправляет в ремонт всё с износом от ' + pctText(R.manualAt) + '; автоматический ремонт сам чинит клетки с износом от ' + pctText(R.autoAt) + '. Простая дорога не изнашивается.</p>';
+      card('truckpark') + card('busdepot') +
+      '<p class="note">Грузовая парковка нужна, чтобы покупать грузовики (🚛 вкладка «Грузовики»). Автобусное депо выпускает дилижансы: остановки ставятся на дороге (🛣️ «Дорога» → «🚏 Остановка»).</p>';
   }
   function carsHtml() {
     var h = '<div class="pbox"><b>🚗 Машины города</b>' +
@@ -4111,12 +4248,17 @@
       'Доли машин складываются и округляются вверх: у первого работающего здания вида машина есть всегда.</p>';
     return h;
   }
-  function closeMech() { $('mech').hidden = true; document.querySelector('.tool.mech').classList.remove('open'); }
+  function closeMech() { if (tool === 'mech') setTool('view'); }
   function renderMech() {
-    if ($('mech').hidden) return;
+    if ($('panelMech').hidden) return;
+    if (mechTab === 'trucks') {
+      var tn = $('tkNote'); if (tn) { var tt = 'Парковок: ' + working('truckpark').length + ' · занято мест ' + parkUsed() + ' из ' + parkTotal() + (working('truckpark').length ? '' : ' — постройте Грузовую парковку 4×6 (вкладка «Здания»)'); if (tn.textContent !== tt) tn.textContent = tt; }
+      Object.keys(G.trucks).forEach(function (k) { var n = fleetN(k), e1 = $('tkN_' + k), e2 = $('tkS_' + k); if (e1 && e1.textContent !== String(n)) e1.textContent = n; if (e2) e2.disabled = !n; });
+      return;
+    }
     if (mechTab === 'cars') { refreshLive(); return; }
     if (mechTab === 'plants') {
-      ['factory', 'depot'].forEach(function (ck) {
+      ['factory', 'truckpark', 'busdepot'].forEach(function (ck) {
         var e = $('mCnt_' + ck); if (!e) return;
         var all = state.buildings.filter(function (b) { return b.cat === ck; }), wk = all.filter(isWorking).length, st = all.filter(isSite).length;
         var t = all.length ? all.length + ' шт.' + (wk ? ', работает ' + wk : '') + (st ? ', строится ' + st : '') + (all.length - wk - st ? ', <span class="bad">без дороги ' + (all.length - wk - st) + '</span>' : '') : 'нет';
@@ -4156,12 +4298,11 @@
     else if (a === 'repair') repairAllAct(); else if (a === 'auto') toggleAuto();
     else if (a === 'fixone' && infoRoad) repairOneAct(infoRoad);
     else if (a === 'cars') { openMech('cars'); return; }
+    else if (/^(tax|fund|sell|army|tbuy|tsell|trucks)$/.test(a)) { actEco(a, el); return; }
     else if (a === 'style') { var sb = getB(infoId); if (sb) setBuildingTheme(sb, +el.dataset.th); return; }
     renderMech();
   }
-  $('mechClose').addEventListener('click', closeMech);
-  $('mech').addEventListener('click', function (e) {
-    if (e.target === $('mech')) { closeMech(); return; }
+  $('panelMech').addEventListener('click', function (e) {
     var t = e.target.closest('[data-tab]'); if (t) { openMech(t.dataset.tab); return; }
     var a = e.target.closest('[data-act]'); if (!a) return;
     mechAct(a.dataset.act, a);
@@ -4172,47 +4313,22 @@
   });
 
   // ---------- Жители и сотрудники ----------
-  var P = G.people;
-  function person(r, male, sur, ageMin, ageMax) {
-    var age = rint(r, ageMin, ageMax);
-    var job = age < 7 ? 'дошкольник' : age < 18 ? 'школьник' : age < 22 && r() < 0.6 ? 'студент' : age >= 63 ? 'пенсионер' : pick(r, P.jobs);
-    return { name: (male ? pick(r, P.male) : pick(r, P.female)) + ' ' + (male ? sur[0] : sur[1]), age: age, job: job, m: male };
-  }
   function ageWord(n) { var a = n % 10, b = n % 100; return n + ' ' + (b >= 11 && b <= 14 ? 'лет' : a === 1 ? 'год' : a >= 2 && a <= 4 ? 'года' : 'лет'); }
-  function canWork(m) { return m.age >= 18 && m.age < 63 && m.job !== 'студент'; }
   var resCache = {};
+  // С 0.25.0 семей и имён нет — только люди: pop — сколько человек живёт в доме сейчас (приезжают постепенно), cap — вместимость.
   function residents(b) {
-    var ck = b.id + ':' + b.seed; if (resCache[ck]) return resCache[ck];
-    var r = rng(b.seed ^ 0x5bd1e995), nf = G.cats.res.families[b.size], fams = [], total = 0, adults = 0;
-    for (var i = 0; i < nf; i++) {
-      var sur = pick(r, P.surnames), roll = r(), mem = [], male = r() < 0.5;
-      if (roll < 0.18) mem.push(person(r, male, sur, 20, 80));
-      else if (roll < 0.4) { mem.push(person(r, true, sur, 24, 60)); mem.push(person(r, false, sur, 22, 58)); }
-      else if (roll < 0.88) {
-        var pa = person(r, true, sur, 28, 50); mem.push(pa); mem.push(person(r, false, sur, 26, 48));
-        var kids = rint(r, 1, 3);
-        for (var k = 0; k < kids; k++) mem.push(person(r, r() < 0.5, sur, 1, Math.min(20, pa.age - 20)));
-      } else { mem.push(person(r, true, sur, 63, 85)); mem.push(person(r, false, sur, 61, 83)); }
-      var fam = { surname: sur, members: mem, pet: r() < 0.35 ? pick(r, P.pets) : null, flat: b.size === '2x2' || b.size === '4x4' ? String(i + 1) : null };
-      total += mem.length; mem.forEach(function (m) { if (canWork(m)) adults++; }); fams.push(fam);
-    }
-    return (resCache[ck] = { families: fams, total: total, adults: adults });
+    var cp = G.cats.res.cap[b.size] || 4;
+    if (b.pop === undefined) b.pop = cp;   // дом из старого сохранения — уже заселён
+    var p = Math.max(0, Math.min(cp, b.pop | 0));
+    return { total: p, cap: cp, adults: Math.round(p * G.cats.res.adultShare) };
   }
   var workCache = {};
   function workplace(b) {
     var ck = b.id + ':' + b.seed; if (workCache[ck]) return workCache[ck];
     var c = G.cats[b.cat], r = rng(b.seed ^ 0x27d4eb2f);
     var staff = Math.max(2, Math.round(c.staff[b.size] * (0.85 + r() * 0.3)));
-    var sur = pick(r, P.surnames), male = r() < 0.55;
-    var head = (male ? pick(r, P.male) : pick(r, P.female)) + ' ' + (male ? sur[0] : sur[1]);
-    var team = [];
-    for (var i = 0; i < Math.min(4, staff - 1); i++) {
-      var s2 = pick(r, P.surnames), m2 = r() < 0.5;
-      team.push({ name: (m2 ? pick(r, P.male) : pick(r, P.female)) + ' ' + (m2 ? s2[0] : s2[1]), role: pick(r, c.roles), age: rint(r, 20, 60) });
-    }
-    var vn = c.visitN[b.size];
-    var res = { staff: staff, head: head, team: team, visits: rint(r, vn[0], vn[1]), company: c.company ? pick(r, c.company) : null };
-    return (workCache[ck] = res);
+    var vn = c.visitN ? c.visitN[b.size] : [0, 0];
+    return (workCache[ck] = { staff: staff, visits: rint(r, vn[0], vn[1]) });
   }
   function address(b) { return G.streets[Math.floor(b.z / 4) % G.streets.length] + ', ' + (b.x + 1); }
   // Правило (с 0.8.0): здание работает, только если к нему подведена дорога — любая.
@@ -4226,28 +4342,32 @@
     }
     return seen;
   }
-  function hasRoad(b) { var s = roadsAt(b.size, b.rot, b.x, b.z); return !!(s.asphalt || s.dirt || s.cobble); }
-  function isWorking(b) { return !isSite(b) && hasRoad(b); }
+  function hasRoad(b) { if (G.cats[b.cat].noRoad) return true; var s = roadsAt(b.size, b.rot, b.x, b.z); return !!(s.asphalt || s.dirt || s.cobble); }   // мельнице с полями дорога не нужна
+  function isWorking(b) { return !isSite(b) && hasRoad(b) && !(state.eco && state.eco.riot && b.cat !== 'res' && b.cat !== 'hall'); }   // при восстании конторы и заводы стоят
   function roadNear(b) {
     var seen = roadsAt(b.size, b.rot, b.x, b.z);
     var nm = [];
-    if (seen.asphalt) nm.push('асфальт'); if (seen.cobble) nm.push('булыжник'); if (seen.dirt) nm.push('простая');
+    if (seen.asphalt || seen.cobble) nm.push('брусчатка'); if (seen.dirt) nm.push('простая');
     return nm.length ? nm.join(' и ') : '<span class="bad">нет</span>';
   }
 
   // ---------- Расчёт жителей в фоне (js/sim.js) ----------
   var sim = { people: 0, adults: 0, employed: 0, unemployed: 0, jobs: 0, freeJobs: 0, home: {}, work: {}, ms: 0, ready: false };
-  var simTimer = 0;
+  var simTimer = 0, simFarm = { n: 0, slots: 0, ids: [] };
   function simRequest() {
     clearTimeout(simTimer);
     simTimer = setTimeout(function () {
-      var homes = [], works = [];
+      var homes = [], works = [], farm = { n: 0, slots: 0, ids: [] }, adultsAll = 0;
       state.buildings.forEach(function (b) {
         if (!isWorking(b)) return; // без дороги здание не работает
         var c = siteCenter(b);
-        if (b.cat === 'res') { var R = residents(b); homes.push([b.id, c.x, c.z, R.adults, R.total]); }
+        if (b.cat === 'res') { var R = residents(b); homes.push([b.id, c.x, c.z, R.adults, R.total]); adultsAll += R.adults; }
+        else if (b.cat === 'mill') { farm.slots += workplace(b).staff; farm.ids.push([b.id, workplace(b).staff]); }   // крестьяне мельниц берутся из горожан в первую очередь (до 35% взрослых)
         else works.push([b.id, c.x, c.z, workplace(b).staff]);
       });
+      farm.n = Math.min(farm.slots, Math.round(adultsAll * 0.35));
+      if (farm.n > 0 && adultsAll > 0) { var keep = 1 - farm.n / adultsAll; homes.forEach(function (h) { h[3] = Math.round(h[3] * keep); }); }
+      simFarm = farm;
       window.SIM.run({ homes: homes, works: works });
     }, 200);
   }
@@ -4257,6 +4377,7 @@
     sim.home = {}; sim.work = {};
     r.homes.forEach(function (h) { sim.home[h[0]] = h[1]; });
     r.works.forEach(function (w) { sim.work[w[0]] = w[1]; });
+    if (simFarm.n > 0) { simFarm.ids.forEach(function (m) { sim.work[m[0]] = Math.round(simFarm.n * m[1] / simFarm.slots); }); sim.employed += simFarm.n; sim.adults += simFarm.n; sim.jobs += simFarm.slots; sim.freeJobs += simFarm.slots - simFarm.n; }
     $('stJobsWrap').title = 'Рабочие места: ' + r.jobs.toLocaleString('ru-RU') + ', занято ' + r.employed.toLocaleString('ru-RU') + ', без работы ' + r.unemployed.toLocaleString('ru-RU');
     if (infoId) { var ib = getB(infoId); if (ib) renderInfo(ib, true); }
   });
@@ -4270,7 +4391,7 @@
     var c = G.cats[b.cat], name = c.names[b.size], h = '';
     h += '<h2>' + esc(name) + '</h2>';
     h += '<div class="sub"><span class="tag" style="background:' + c.tag + '">' + esc(c.label) + '</span>' + esc(address(b)) + ' · ' + G.sizes[b.size].label + '</div>';
-    if (!isSite(b)) var bt0 = G.themes[b.th | 0]; h += '<div class="strow info"><span class="stl">Эпоха: <b>' + bt0.letter + ' · ' + esc(bt0.name) + '</b> · ' + esc(bt0.era) + ' — сменить можно бесплатно</span>' + themeChips(b.th | 0, 'data-act="style" data-th') + '</div>';
+    if (!isSite(b)) var bt0 = G.themes[b.th | 0]; h += '<div class="strow inf"><span class="stl">Эпоха: <b>' + bt0.letter + ' · ' + esc(bt0.name) + '</b> · ' + esc(bt0.era) + ' — сменить можно бесплатно</span>' + themeChips(b.th | 0, 'data-act="style" data-th') + '</div>';
     if (isSite(b)) {
       var crew = siteCrew(b.id), pct = Math.floor(b.prog * 100), left = (1 - b.prog) * buildTime(b) / Math.max(1, crew.all);
       var sg = stageOf(b.prog);
@@ -4281,32 +4402,25 @@
       h += '<div class="kv"><span>Бригады</span><span>' + (crew.all ? crew.all + (crew.here < crew.all ? ' (в пути ' + (crew.all - crew.here) + ')' : ' на месте') : state.brigades.length ? 'ждёт свободную' : 'нет — купите в «Механизмы»') + '</span>' +
         (crew.all ? '<span>Осталось</span><span>≈ ' + secText(left) + '</span>' : '') +
         '<span>Цена</span><span>' + usd(costOf(b.cat, b.size)) + '</span>' +
-        '<span>После стройки</span><span>' + (b.cat === 'res' ? 'заедут ' + c.families[b.size] + ' ' + plural(c.families[b.size], 'семья', 'семьи', 'семей') : 'работа для ~' + c.staff[b.size] + ' чел.') + '</span>' +
+        '<span>После стройки</span><span>' + (b.cat === 'res' ? 'вместимость ' + c.cap[b.size] + ' чел., люди приедут сами' : 'работа для ~' + c.staff[b.size] + ' чел.') + '</span>' +
         '<span>Дорога рядом</span><span>' + roadNear(b) + '</span></div>';
       if (!hasRoad(b)) h += '<div class="noroad">🛣️ К стройке нет дороги. Достроить можно, но работать здание начнёт, только когда к нему подведут дорогу.</div>';
     } else if (!hasRoad(b)) {
-      h += '<div class="noroad"><b>⛔ Не работает — нет дороги</b>Подведите к зданию любую дорогу (асфальт, булыжник или простую): она должна касаться его стороны. ' +
-        (b.cat === 'res' ? 'Тогда заедут ' + c.families[b.size] + ' ' + plural(c.families[b.size], 'семья', 'семьи', 'семей') + '.' : 'Тогда откроется ' + workplace(b).staff + ' рабочих мест.') + '</div>';
+      h += '<div class="noroad"><b>⛔ Не работает — нет дороги</b>Подведите к зданию любую дорогу (брусчатку или простую): она должна касаться его стороны. ' +
+        (b.cat === 'res' ? 'Тогда начнут приезжать люди.' : 'Тогда откроется ' + workplace(b).staff + ' рабочих мест.') + '</div>';
       if (b.cat !== 'res') h += '<div class="about">' + esc(c.about[b.size]) + '</div>';
       h += '<div class="kv"><span>Дорога рядом</span><span>' + roadNear(b) + '</span>' +
         (b.cat === 'res' ? '<span>Живут</span><span>никого — дом пустой</span>' : '<span>Работают</span><span>никто — закрыто</span>') + '</div>';
     } else if (b.cat === 'res') {
       var R = residents(b), emp = sim.home[b.id];
-      h += '<div class="kv"><span>Живут</span><span><b>' + R.total + '</b> чел., ' + R.families.length + ' ' + plural(R.families.length, 'семья', 'семьи', 'семей') + '</span>' +
-        '<span>Работают</span><span>' + (emp === undefined ? '…считаем' : emp + ' из ' + R.adults + ' взрослых' + (emp < R.adults ? ' — ' + (R.adults - emp) + ' ищут работу' : '')) + '</span>' +
+      h += barRow('👥 Люди', R.total, R.cap, R.total + ' из ' + R.cap, R.total < R.cap ? 'fill' : 'full');
+      h += '<div class="kv"><span>Работают</span><span>' + (emp === undefined ? '…считаем' : emp + ' из ' + R.adults + ' взрослых' + (emp < R.adults ? ' — ' + (R.adults - emp) + ' ищут работу' : '')) + '</span>' +
+        '<span>Приезд новых</span><span>' + arrivalText(b, R) + '</span>' +
         '<span>Машины жильцов</span><span>🚗 ' + carCount(b.id) + '</span>' +
         '<span>Мусоровозы в городе</span><span>' + vehCount('garbage') + '</span>' +
         '<span>Дорога рядом</span><span>' + roadNear(b) + '</span></div>';
-      var show = R.families.slice(0, 8);
-      show.forEach(function (f) {
-        var adults = f.members.length;
-        h += '<div class="fam"><b>' + (f.flat ? 'Кв. ' + f.flat + ' — ' : '') + (adults > 1 ? 'Семья ' + esc(famName(f.surname[0])) : ('Живёт ' + (f.members[0].m ? 'один' : 'одна'))) + '</b>' +
-          f.members.map(function (m) { return '<div>' + esc(m.name) + ', ' + ageWord(m.age) + ' — ' + esc(m.job) + '</div>'; }).join('') +
-          (f.pet ? '<div>🐾 ' + esc(f.pet) + '</div>' : '') + '</div>';
-      });
-      if (R.families.length > show.length) h += '<div class="more">…и ещё ' + (R.families.length - show.length) + ' ' + plural(R.families.length - show.length, 'семья', 'семьи', 'семей') + '</div>';
     } else {
-      var w = workplace(b), headLabel = c.head[b.size] + (c.rank ? ' (' + c.rank[b.size] + ')' : ''), filled = sim.work[b.id];
+      var w = workplace(b), filled = sim.work[b.id];
       h += '<div class="about">' + esc(c.about[b.size]) + '</div>';
       if (b.cat === 'factory') {
         var u = G.units.brigade;
@@ -4314,6 +4428,11 @@
           '<span>«Бригада»</span><span>' + usd(u.factoryPrice) + ', ' + secText(u.makeTime) + '</span></div>' +
           '<div class="ubtns wrap"><button class="btn-buy alt" data-act="order">🚚 Заказать «Бригаду»</button><button class="btn-sell" data-act="cancel" id="iCancel"' + (queued('brigade') ? '' : ' disabled') + '>Отменить</button>' +
           '<button class="btn-buy" data-act="cars">🚗 Машины города</button></div></div>';
+      } else if (b.cat === 'hall') { h += hallHtml(b);
+      } else if (b.cat === 'market') { h += marketHtml(b);
+      } else if (b.cat === 'mill') { h += millHtml(b);
+      } else if (b.cat === 'busdepot') { h += busHtml(b);
+      } else if (b.cat === 'truckpark') { h += parkHtml(b);
       } else if (b.cat === 'saw') {
         var sp = G.sawmill[b.size], R0 = sawRate();
         h += '<div class="pbox"><b>🪚 Производство</b><div class="kv">' +
@@ -4345,17 +4464,12 @@
           '<button class="btn-buy wide" data-act="repair" id="iRep">🛠️ Отремонтировать изношенные</button>' +
           '<button class="btn-tog' + (state.autoRepair ? ' on' : '') + '" data-act="auto" id="iAuto">' + autoLabel() + '</button></div>';
       }
-      h += '<div class="kv">' + (w.company ? '<span>Компания</span><span>«' + esc(w.company) + '»</span>' : '') +
-        '<span>' + esc(headLabel) + '</span><span>' + esc(w.head) + '</span>' +
-        '<span>' + (b.cat === 'park' || b.cat === 'upark' ? 'Рабочих мест' : 'Мест') + '</span><span><b>' + w.staff + '</b></span>' +
-        '<span>Из горожан</span><span>' + (filled === undefined ? '…считаем' : filled + ' чел.' + (filled < w.staff ? ' — свободно ' + (w.staff - filled) : ' — все места заняты')) + '</span>' +
-        '<span>' + esc(cap(c.visitors[b.size])) + '</span><span>' + w.visits + '</span>' +
+      var fl = filled === undefined ? 0 : filled;
+      h += barRow('👷 Рабочие', fl, w.staff, 'нужно ' + w.staff + ' — сейчас ' + (filled === undefined ? '…' : filled), fl >= w.staff ? 'full' : 'fill');
+      h += '<div class="kv">' +
+        (c.visitors ? '<span>' + esc(cap(c.visitors[b.size])) + '</span><span>' + w.visits + '</span>' : '') +
         (servingText(b.cat) ? '<span>Машины в городе</span><span>' + esc(servingText(b.cat)) + '</span>' : '') +
-        '<span>Дорога рядом</span><span>' + roadNear(b) + '</span></div>';
-      if (w.team.length) {
-        h += '<div class="fam"><b>Сотрудники</b>' + w.team.map(function (t) { return '<div>' + esc(t.name) + ', ' + ageWord(t.age) + ' — ' + esc(t.role) + '</div>'; }).join('') + '</div>';
-        if (w.staff - 1 > w.team.length) h += '<div class="more">…и ещё ' + (w.staff - 1 - w.team.length) + ' чел.</div>';
-      }
+        '<span>Дорога рядом</span><span>' + (G.cats[b.cat].noRoad ? 'не нужна' : roadNear(b)) + '</span></div>';
     }
     $('infoBody').innerHTML = h; $('info').hidden = false; if (!keepScroll) $('info').scrollTop = 0;
     highlight(b.id);
@@ -4368,7 +4482,7 @@
   function renderRoadInfo() {
     var k = infoRoad, t = state.roads[k]; if (!t) { closeInfo(); return; }
     infoRoadT = t;
-    var p = k.split(','), x = +p[0], z = +p[1], h = '<h2>' + (t === 'asphalt' ? '🛣️ Асфальт' : t === 'cobble' ? '🪨 Булыжник' : '🟫 Простая дорога') + '</h2>' +
+    var p = k.split(','), x = +p[0], z = +p[1], h = '<h2>' + (t === 'asphalt' ? '🛣️ Асфальт' : t === 'cobble' ? '🪨 Брусчатка' : '🟫 Простая дорога') + '</h2>' +
       '<div class="sub">' + esc(G.streets[Math.floor(z / 4) % G.streets.length]) + ' · клетка ' + (x + 1) + ':' + (z + 1) + (traffic[k] ? ' · у работающего здания' : '') + '</div>';
     if (t === 'asphalt') {
       h += '<div class="kv"><span>Износ</span><span id="irWear">—</span><span>Состояние</span><span id="irState">—</span><span>Ремонт</span><span id="irCost">—</span></div>' +
@@ -4383,7 +4497,7 @@
     var c = cellCenter(x, z); setOverlay(hl, c.x, c.z, 1.12, 1.12);
     refreshLive();
   }
-  function famName(s) { return /(ов|ев|ин)$/.test(s) ? s + 'ых' : s; }
+  function barRow(label, a, b, txt, cls) { var pc = b > 0 ? Math.max(0, Math.min(100, Math.round(a / b * 100))) : 0; return '<div class="bar2"><span>' + label + '</span><b>' + txt + '</b><div class="pbar ' + (cls || '') + '"><i style="width:' + pc + '%"></i></div></div>'; }
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
   function plural(n, a, b, c) { var x = n % 10, y = n % 100; return y >= 11 && y <= 14 ? c : x === 1 ? a : x >= 2 && x <= 4 ? b : c; }
   function closeInfo() { infoId = 0; infoRoad = ''; $('info').hidden = true; highlight(0); }
@@ -4394,6 +4508,442 @@
     var f = foot(b.size, b.rot), p = bPos(b);
     setOverlay(hl, p.x, p.z, f.w + 0.2, f.d + 0.2);
     if (b.cat === 'lumber') showZone(b); else zoneOff();
+  }
+
+  // =====================================================================================================
+  // Город (с 0.25.0): люди приезжают, налоги и службы, восстание, рынок, мельница, дилижансы, грузовики, пешеходы
+  // =====================================================================================================
+  var SVK = Object.keys(G.eco.services), paused = false, autoPaused = false;
+  function ecoOf() { return state.eco; }
+  function hasHall() { return !!state.hall; }
+  function pctNum(x) { return Math.round(x * 100) + '%'; }
+  function notify(text, loud) {
+    var e = state.eco; e.log.push({ t: Math.round(state.gt), x: text }); if (e.log.length > 12) e.log.shift();
+    hint(text, false); if (loud) snd('error');
+    if (infoId) { var ib = getB(infoId); if (ib && ib.cat === 'hall') renderInfo(ib, true); }
+  }
+  // --- пауза ---
+  function setPause(on, auto) {
+    paused = !!on; if (!on) autoPaused = false; else autoPaused = !!auto;
+    var bt = $('btnPause'); bt.textContent = paused ? '▶' : '⏸'; bt.classList.toggle('on', paused);
+    bt.title = paused ? 'Продолжить игру' : 'Пауза'; $('pauseNote').hidden = !paused;
+    $('pauseNote').textContent = autoPaused ? 'Пауза — пока вы переносите или удаляете' : 'Игра на паузе';
+    dirty();
+  }
+  $('btnPause').addEventListener('click', function () { setPause(!paused, false); });
+  // --- перепись: сколько людей, домов, мельниц, рынков ---
+  function census() {
+    var P = 0, cap = 0, ck;
+    state.buildings.forEach(function (b) { if (b.cat === 'res' && !isSite(b)) { var R = residents(b); P += R.total; cap += R.cap; } });
+    for (ck in metaCs) if (!loaded[ck]) P += metaCs[ck][1] | 0;
+    return { P: P, cap: cap };
+  }
+  // --- один шаг экономики = 1 секунда игрового времени ---
+  var ecoAcc = 0, arrAcc = 0, wearAcc = 0;
+  function ecoStep() {
+    var D = G.eco, e = state.eco, C = census(), P = C.P, st = state.stock, i, k;
+    state.gt += 1;
+    // налоги и расходы на службы
+    var inc = hasHall() ? ((sim.employed || 0) * D.wage + (sim.unemployed || 0) * D.unemp) / 60 * e.tax / 100 : 0;
+    var want = 0; SVK.forEach(function (s) { want += D.services[s].c * P * e.fund[s] / 100 / 60; });
+    var avail = money(), pay = isFinite(avail) ? Math.min(want, Math.max(0, avail + inc)) : want, ratio = want > 0 ? pay / want : 1;
+    earn(inc); state.spent += pay;
+    var spent2 = 0;
+    SVK.forEach(function (s) { e.q[s] = clamp(e.q[s] + (e.fund[s] / 100 * ratio - D.drain) / D.relax, 0, 1); });
+    // еда: мельницы → грузовики → рынок → люди
+    var markets = working('market'), mills = state.buildings.filter(function (b) { return b.cat === 'mill' && !isSite(b); });
+    mills.forEach(function (b) {
+      var w = workplace(b), now = Math.min(1, (sim.work[b.id] || 0) / w.staff);
+      b.fs = Math.min(D.mill.store, (b.fs || 0) + D.mill.food * now / 60);
+    });
+    var truckCap = fleetN('all') * G.trucks.all.cap / 60;
+    if (markets.length && truckCap > 0) mills.forEach(function (b) {
+      if (!(b.fs > 0) || !hasRoadStrict(b)) return;
+      var take = Math.min(b.fs, truckCap); b.fs -= take; truckCap -= take; st.food += take; stockDirty = true;
+    });
+    var needFood = P * D.food / 60, foodOk = needFood <= 0 ? 1 : Math.min(1, st.food / needFood);
+    st.food = Math.max(0, st.food - needFood);
+    // вода: покупается на рынке автоматически
+    var horses = 0; for (k in coaches) horses += 4;
+    var needW = P * D.water + horses * D.waterHorse, costW = needW * D.waterPrice, waterOk = 1;
+    if (needW > 0) {
+      if (!markets.length) waterOk = 0;
+      else { var av2 = money(); if (isFinite(av2) && av2 < costW) { waterOk = Math.max(0, av2 / costW); state.spent += Math.max(0, av2); } else state.spent += costW; }
+    }
+    // уголь: тоже покупается на рынке
+    var needC = P * D.coalUse / 60, coalOk = 1;
+    if (needC > 0) {
+      if (st.coal < needC * 600 && markets.length) {
+        var amt = needC * 120, price = amt * D.coalPrice * (1 - 0.1 * Math.min(5, fleetN('coal'))), av3 = money();
+        if (!isFinite(av3) || av3 >= price) { state.spent += isFinite(av3) ? price : 0; st.coal += amt; }
+      }
+      if (st.coal >= needC) st.coal -= needC; else { st.coal = 0; coalOk = 0; }
+      stockDirty = true;
+    }
+    // продажа товаров рынками
+    markets.forEach(function (b) {
+      var sell = b.sell || {}, tot = 0;
+      Object.keys(D.goods).forEach(function (g) {
+        var pc = sell[g] | 0; if (!pc || !(st[g] > 0)) return;
+        var a = Math.min(st[g], D.market[b.size] * pc / 100 / 60); st[g] -= a; tot += a * D.goods[g]; stockDirty = true;
+      });
+      if (tot) { earn(tot); inc += tot; }
+    });
+    e.inc += (inc * 60 - e.inc) * 0.05; e.exp += ((pay + costW) * 60 - e.exp) * 0.05;
+    e.food = foodOk; e.water = waterOk; e.coal = coalOk;
+    // довольство и восстание
+    var qa = 0; SVK.forEach(function (s) { qa += e.q[s]; }); qa /= SVK.length;
+    var U = D.unrest, calm = qa - Math.max(0, e.tax - 25) / 100 - (1 - foodOk) * 0.25 - (1 - waterOk) * 0.2 - (1 - coalOk) * 0.1 + Math.min(0.1, coachCount() * 0.02);
+    e.calm = calm;
+    if (P >= 20) {
+      if (calm < U.low) e.unrest = clamp(e.unrest + (U.low - calm) / U.low * U.rise * 2, 0, 100);
+      else e.unrest = clamp(e.unrest - U.fall * (e.riot && calm >= U.calm ? 1.2 : 0.3), 0, 100);
+    } else e.unrest = Math.max(0, e.unrest - 1);
+    if (!e.riot && e.unrest >= U.limit) {
+      e.riot = true; notify('🔥 ВОССТАНИЕ! Конторы и заводы встали. Поднимите финансирование или вызовите армию в Городской Администрации.', true);
+      stopWorkSoon();
+    } else if (e.riot && e.unrest <= 30) { e.riot = false; notify('🕊️ Народ успокоился — конторы и заводы снова работают.'); stopWorkSoon(); }
+    // уведомления
+    function once(id, gap, text) { if ((e.notified[id] || -1e9) + gap <= state.gt) { e.notified[id] = state.gt; notify(text); } }
+    SVK.forEach(function (s) { if (e.q[s] < 0.4 && e.fund[s] > 0 && P >= 20) once('q' + s, 420, '📉 «' + D.services[s].name + '»: качество упало до ' + pctNum(e.q[s]) + '. Стоило бы поднять налоги (чтобы тратить больше) или урезать финансирование других служб.'); });
+    if (isFinite(money()) && money() < want * 120 && want > 0) once('cash', 420, '💸 В казне почти пусто — расходы на службы больше налогов. Поднимите налоги или урежьте финансирование.');
+    if (P >= 20 && foodOk < 1) once('food', 300, '🍞 Людям не хватает еды: нужны мельницы, рынок и универсальные грузовики.');
+    if (P >= 20 && waterOk < 1) once('water', 300, '💧 Не хватает воды: нужен рынок и деньги — воду покупают автоматически.');
+    if (e.unrest >= 60 && !e.riot) once('unrest', 240, '⚠️ Народ недоволен: ещё немного — и начнётся восстание.');
+    if (e.ban > state.gt && !e.banMsg) e.banMsg = 1;
+    if (e.ban <= state.gt && e.banMsg) { e.banMsg = 0; notify('🚚 Страх прошёл — в город снова приезжают люди.'); }
+    updateMoney(); stockDirty = true;
+  }
+  function stopWorkSoon() { resCache = {}; workCache = {}; syncVehicles(); simRequest(); statsSoon(); }
+  function hasRoadStrict(b) { var s = roadsAt(b.size, b.rot, b.x, b.z); return !!(s.asphalt || s.dirt || s.cobble); }
+  // --- вызвать армию ---
+  function callArmy() {
+    var e = state.eco, D = G.eco; if (!e.riot) return;
+    var k = D.army.min + Math.random() * (D.army.max - D.army.min), dead = 0;
+    state.buildings.forEach(function (b) {
+      if (b.cat !== 'res' || isSite(b)) return;
+      var R = residents(b), d = Math.round(R.total * k); b.pop = R.total - d; dead += d; touchB(b, false);
+    });
+    Object.keys(metaCs).forEach(function (ck) { if (!loaded[ck]) metaCs[ck][1] = Math.round((metaCs[ck][1] | 0) * (1 - k)); });
+    e.riot = false; e.unrest = 20; e.ban = state.gt + D.arrivalBan; e.banMsg = 1; e.q.army = 1;
+    for (var id in arrivals) removeArrival(id, false);
+    notify('🪖 Армия подавила восстание. Погибло ' + dead.toLocaleString('ru-RU') + ' чел. (' + Math.round(k * 100) + '% жителей). Около часа новые люди не приедут — они боятся.', true);
+    stopWorkSoon(); save(); renderInfo(getB(infoId) || { id: 0 }, true);
+  }
+  // --- приезд людей ---
+  var arrivals = {}, arrSeq = 0;
+  function incoming(bid) { var n = 0; for (var id in arrivals) if (arrivals[id].house === bid) n += arrivals[id].n; return n; }
+  function arrivalText(b, R) {
+    var e = state.eco;
+    if (e.ban > state.gt) return '⛔ люди боятся ехать: ещё ' + secText(e.ban - state.gt);
+    if (e.riot) return '⛔ в городе восстание';
+    var inn = incoming(b.id);
+    return R.total + inn >= R.cap ? (inn ? 'едут ' + inn + ' чел.' : 'дом заселён') : 'приезжают понемногу' + (inn ? ' — в пути ' + inn : '');
+  }
+  function arrModel(kind) { return kind === 'truck' ? vehBatch('f_all') : kind === 'cart' ? vehBatch('cart') : carBatch(G.cars.models[(arrSeq * 7) % G.cars.models.length].id); }
+  function farRoad(b) {
+    var S = curbSpots(b); if (!S.length) return null;
+    var start = S[Math.floor(Math.random() * S.length)].k, prev = {}, q = [start], h = 0, best = start, bd = 1e9; prev[start] = '';
+    while (h < q.length && q.length < 900) {
+      var k = q[h++], pp = k.split(','), x = +pp[0], z = +pp[1], ed = Math.min(x, z, N - 1 - x, N - 1 - z) - h * 0.001;
+      if (ed < bd) { bd = ed; best = k; }
+      for (var d = 0; d < 4; d++) { var nk = key(x + DIRS[d][0], z + DIRS[d][1]); if (prev[nk] === undefined && state.roads[nk]) { prev[nk] = k; q.push(nk); } }
+    }
+    var path = [best]; while (prev[path[0]]) path.unshift(prev[path[0]]);
+    path.reverse(); return { path: path, start: start };
+  }
+  function spawnArrival() {
+    var e = state.eco, D = G.eco.arrive;
+    if (e.ban > state.gt || e.riot || e.food < 0.5 && census().P > 120) return;
+    var L = state.buildings.filter(function (b) { return b.cat === 'res' && isWorking(b) && residents(b).total + incoming(b.id) < residents(b).cap; });
+    if (!L.length) return;
+    var b = randomOf(L), R = residents(b), room = R.cap - R.total - incoming(b.id), kind = 'car', n = Math.min(room, D.car), r = Math.random();
+    if (room >= D.truck && r < 0.3) { kind = 'truck'; n = D.truck; } else if (room >= D.cart && r < 0.65) { kind = 'cart'; n = D.cart; }
+    var far = farRoad(b), sp = spotAt(b, arrSeq, kind === 'car' ? 0.33 : 0.08);
+    if (!far || !sp) { b.pop = R.total + n; touchB(b, false); statsSoon(); return; }
+    var pts = lanePoints(far.path); pts.push({ x: sp.x, z: sp.z });
+    var id = ++arrSeq + 5000000, a = arrivals[id] = { id: id, kind: kind, n: n, house: b.id, pts: pts, pi: 1, x: pts[0].x, z: pts[0].z, yaw: 0, model: G.cars.models[arrSeq % G.cars.models.length].id, sp: kind === 'car' ? G.cars.speed : kind === 'cart' ? 1.3 : 1.7 };
+    writeArrival(a);
+  }
+  function arrBatch(a) { return a.kind === 'truck' ? vehBatch('f_all') : a.kind === 'cart' ? vehBatch('cart') : carBatch(a.model); }
+  function writeArrival(a) { batchSet(arrBatch(a), a.id, a.x, 0, a.z, a.yaw, 0.8, 0.8, 0.8); }
+  function removeArrival(id, add) {
+    var a = arrivals[id]; if (!a) return;
+    batchRemove(arrBatch(a), a.id); delete arrivals[id];
+    if (add) { var b = getB(a.house); if (b && b.cat === 'res') { b.pop = Math.min(G.cats.res.cap[b.size], residents(b).total + a.n); touchB(b, false); statsSoon(); if (infoId === b.id) renderInfo(b, true); } }
+  }
+  function tickArrivals(dt) {
+    var any = false;
+    for (var id in arrivals) {
+      var a = arrivals[id], sp = a.sp * dt;
+      while (sp > 0 && a.pi < a.pts.length) {
+        var p = a.pts[a.pi], dx = p.x - a.x, dz = p.z - a.z, d = Math.hypot(dx, dz);
+        if (d > 1e-4) a.yawT = Math.atan2(dx, dz);
+        if (d <= sp) { a.x = p.x; a.z = p.z; sp -= d; a.pi++; } else { a.x += dx / d * sp; a.z += dz / d * sp; sp = 0; }
+      }
+      if (a.yawT !== undefined) a.yaw = angTo(a.yaw, a.yawT, Math.min(1, dt * 9));
+      if (a.pi >= a.pts.length) { removeArrival(id, true); any = true; continue; }
+      writeArrival(a); any = true;
+    }
+    return any;
+  }
+  // --- пешеходы (не больше 100 на карте): из дома на работу и обратно ---
+  var peds = {}, pedSeq = 0, pedN = 0, pedT = 0;
+  var PED_COL = ['#7a5230', '#3d5a80', '#8a3b3b', '#4b6b45', '#6b5a7a', '#9a8a60'];
+  function pedBatch(c) { return getBatch('ped' + c, function () { return pedModel(kit, PED_COL[c]); }); }
+  function pedWrite(p) { batchSet(pedBatch(p.c), p.id, p.x, 0, p.z, p.yaw, 1.3, 1.3, 1.3); }
+  function pedRemove(p) { if (p.vis) batchRemove(pedBatch(p.c), p.id); delete peds[p.id]; pedN--; }
+  function spawnPed() {
+    var H = state.buildings.filter(function (b) { return b.cat === 'res' && isWorking(b) && residents(b).total > 0; });
+    var W = state.buildings.filter(function (b) { return b.cat !== 'res' && isWorking(b) && !G.cats[b.cat].noRoad; });
+    if (!H.length || !W.length) return;
+    var home = randomOf(H), hc = siteCenter(home), best = null, bd = 1e9;
+    for (var i = 0; i < 4; i++) { var c = randomOf(W), cc = siteCenter(c), d = Math.hypot(cc.x - hc.x, cc.z - hc.z) * (0.6 + Math.random()); if (d < bd) { bd = d; best = c; } }
+    var hs = curbSpots(home, 0.46); if (!hs.length || !best) return;
+    var s0 = hs[Math.floor(Math.random() * hs.length)], goal = goalSet(best);
+    var path = goal && roadPath(s0.k, goal); if (!path || path.length > 90) return;
+    var ws = curbSpots(best, 0.46).filter(function (s) { return s.k === path[path.length - 1]; })[0]; if (!ws) return;
+    var pts = [{ x: s0.x, z: s0.z }].concat(lanePoints(path, 0.4)); pts.push({ x: ws.x, z: ws.z });
+    var p = peds[++pedSeq] = { id: pedSeq, c: pedSeq % PED_COL.length, x: pts[0].x, z: pts[0].z, yaw: 0, pts: pts, pi: 1, back: 0, wait: 0, vis: 1 };
+    pedN++; pedWrite(p);
+  }
+  function tickPeds(dt) {
+    pedT -= dt;
+    if (pedT <= 0) { pedT = 0.5; if (pedN < 100 && state.buildings.length) spawnPed(); }
+    var any = false;
+    for (var id in peds) {
+      var p = peds[id];
+      if (p.wait > 0) { p.wait -= dt; if (p.wait <= 0) { p.vis = 1; pedWrite(p); } any = true; continue; }
+      var sp = 0.5 * dt;
+      while (sp > 0 && p.pi < p.pts.length) {
+        var q = p.pts[p.pi], dx = q.x - p.x, dz = q.z - p.z, d = Math.hypot(dx, dz);
+        if (d > 1e-4) p.yawT = Math.atan2(dx, dz);
+        if (d <= sp) { p.x = q.x; p.z = q.z; sp -= d; p.pi++; } else { p.x += dx / d * sp; p.z += dz / d * sp; sp = 0; }
+      }
+      if (p.yawT !== undefined) p.yaw = angTo(p.yaw, p.yawT, Math.min(1, dt * 10));
+      if (p.pi >= p.pts.length) {
+        if (p.back) { pedRemove(p); any = true; continue; }
+        p.back = 1; p.pts = p.pts.slice().reverse(); p.pi = 1; p.wait = 4 + Math.random() * 10; p.vis = 0; batchRemove(pedBatch(p.c), p.id); any = true; continue;
+      }
+      pedWrite(p); any = true;
+    }
+    return any;
+  }
+  function clearPeds() { for (var id in peds) pedRemove(peds[id]); peds = {}; pedN = 0; for (var a in arrivals) removeArrival(a, false); arrivals = {}; }
+  // --- дилижансы и остановки на дороге ---
+  var coaches = {}, coachSeq = 0;
+  function coachCount() { var n = 0; for (var k in coaches) n++; return n; }
+  function stopKeys() { return Object.keys(state.stops).filter(function (k) { return state.roads[k]; }); }
+  function stopId(k) { var p = k.split(','); return +p[0] * 10000 + +p[1]; }
+  function stopBatch() { return getBatch('busstop', function () { return stopModel(kit); }); }
+  function syncStops() {
+    var bt = stopBatch(); bt.ids.slice().forEach(function (id) { batchRemove(bt, id); });
+    Object.keys(state.stops).forEach(function (k) {
+      if (!state.roads[k]) { delete state.stops[k]; return; }
+      var p = k.split(','), c = cellCenter(+p[0], +p[1]); batchSet(bt, stopId(k), c.x + 0.36, 0, c.z - 0.36, 0, 1, 1, 1);
+    });
+    dirty();
+  }
+  function toggleStop(x, z) {
+    var k = key(x, z);
+    if (!state.roads[k]) { hint('🚏 Остановку ставят прямо на дорогу', true); return; }
+    if (state.stops[k]) { delete state.stops[k]; snd('roadx'); hint('Остановка убрана'); } else { state.stops[k] = 1; snd('road'); hint('🚏 Остановка поставлена'); }
+    syncStops(); save();
+  }
+  function coachWanted() {
+    var n = stopKeys().length, o = {};
+    working('busdepot').forEach(function (b) { o[b.id] = n >= 2 ? Math.min(6, 1 + Math.floor(n / 2)) : 1; });
+    return o;
+  }
+  function coachBatch() { return getBatch('coach', function () { return coachModel(kit); }); }
+  function syncCoaches() {
+    if (!state) return;
+    var want = coachWanted(), have = {}, id;
+    for (id in coaches) { var c = coaches[id]; have[c.depot] = (have[c.depot] || 0) + 1; if (!want[c.depot] || have[c.depot] > want[c.depot]) { batchRemove(coachBatch(), +id); delete coaches[id]; have[c.depot]--; } }
+    Object.keys(want).forEach(function (bid) {
+      var b = getB(+bid); if (!b) return;
+      while ((have[bid] || 0) < want[bid]) {
+        var sp = spotAt(b, have[bid] || 0, 0.08); if (!sp) break;
+        var cid = ++coachSeq, c2 = coaches[cid] = { id: cid, depot: +bid, x: sp.x, z: sp.z, yaw: sp.yaw, cell: sp.k, pts: null, pi: 0, wait: 1 + (have[bid] || 0) * 2.5, ri: (have[bid] || 0) };
+        batchSet(coachBatch(), cid, c2.x, 0, c2.z, c2.yaw, 0.62, 0.62, 0.62); have[bid] = (have[bid] || 0) + 1;
+      }
+    });
+    dirty();
+  }
+  function tickCoaches(dt) {
+    var any = false, stops = null;
+    for (var id in coaches) {
+      var c = coaches[id];
+      if (!c.pts) {
+        c.wait -= dt; if (c.wait > 0) continue;
+        stops = stops || stopKeys(); if (stops.length < 1) { c.wait = 4; continue; }
+        var tgt = stops[(c.ri++) % stops.length], path = roadPath(c.cell, (function (t) { var g = {}; g[t] = 1; return g; })(tgt));
+        if (!path || path.length < 1) { c.wait = 5; continue; }
+        c.pts = lanePoints(path); c.pi = 0; c.tgt = tgt; continue;
+      }
+      var cc = cellOf(c.x, c.z), kk = key(cc.x, cc.z), rt = state.roads[kk];
+      if (rt) c.cell = kk;
+      var sp = G.coach.speed * (rt === 'cobble' || rt === 'asphalt' ? G.coach.cobbleMul : 1) * dt;
+      while (sp > 0 && c.pts && c.pi < c.pts.length) {
+        var p = c.pts[c.pi], dx = p.x - c.x, dz = p.z - c.z, d = Math.hypot(dx, dz);
+        if (d > 1e-4) c.yawT = Math.atan2(dx, dz);
+        if (d <= sp) { c.x = p.x; c.z = p.z; sp -= d; c.pi++; } else { c.x += dx / d * sp; c.z += dz / d * sp; sp = 0; }
+      }
+      if (c.yawT !== undefined) c.yaw = angTo(c.yaw, c.yawT, Math.min(1, dt * 6));
+      if (c.pts && c.pi >= c.pts.length) { c.pts = null; c.wait = 4 + Math.random() * 3; state.pax = (state.pax | 0) + 1 + Math.floor(Math.random() * 6); }
+      batchSet(coachBatch(), c.id, c.x, 0, c.z, c.yaw, 0.62, 0.62, 0.62); any = true;
+    }
+    return any;
+  }
+  // --- грузовики (покупаются во вкладке «Механизмы») ---
+  function fleetN(k) { var n = 0, kk = 'f_' + k; state.vehicles.forEach(function (v) { if (v.kind === kk) n++; }); return n; }
+  function fleetTotal() { var n = 0; state.vehicles.forEach(function (v) { if (/^f_/.test(v.kind)) n++; }); return n; }
+  function parkTotal() { return working('truckpark').length * G.fleetPerPark; }
+  function parkUsed() { return state.brigades.length + fleetTotal(); }
+  function truckBonus(k) { return 1 + Math.min(0.5, 0.1 * (fleetN(k) + 0.5 * fleetN('all'))); }
+  function buyTruck(k) {
+    var T = G.trucks[k], pk = working('truckpark');
+    if (!T) return;
+    if (!pk.length) { hint('🅿️ Сначала постройте Грузовую парковку 4×6: без неё грузовики не купить', true); return; }
+    if (parkUsed() >= parkTotal()) { hint('🅿️ Парковки заполнены (' + parkTotal() + ' мест) — постройте ещё одну', true); return; }
+    if (!canPay(T.price)) { hint('Не хватает долларов: нужно ' + usd(T.price), true); return; }
+    pay(T.price); snd('buy');
+    var b = pk[fleetTotal() % pk.length], sp = spotAt(b, fleetTotal() + 3, 0.08), v = { id: state.nextVeh++, kind: 'f_' + k };
+    state.vehicles.push(v);
+    var c = siteCenter(b), a = makeAgent(v, sp ? sp.x : c.x, sp ? sp.z : c.z + 3, sp ? sp.yaw : 0); if (sp) a.cell = sp.k; a.t = 0.5;
+    save(); dirty(); stockDirty = true; renderMech();
+    hint('🚛 ' + T.name + ' куплен и выехал с парковки');
+  }
+  function sellTruck(k) {
+    var kk = 'f_' + k, j = -1; for (var i = state.vehicles.length - 1; i >= 0; i--) if (state.vehicles[i].kind === kk) { j = i; break; }
+    if (j < 0) return;
+    var v = state.vehicles.splice(j, 1)[0], a = agents[v.id]; if (a) { batchRemove(agentBatch(a), a.id); delete agents[v.id]; }
+    state.spent -= Math.round(G.trucks[k].price / 2); updateMoney(); snd('sell'); save(); dirty(); renderMech();
+    hint('Грузовик продан, вернули ' + usd(G.trucks[k].price / 2));
+  }
+  function fleetDests(kind) {
+    var k = kind.slice(2), cats = k === 'stone' ? ['quarry', 'stonework', 'market'] : k === 'wood' ? ['lumber', 'saw', 'market'] : k === 'all' ? ['mill', 'market', 'saw', 'quarry'] : ['market'];
+    var L = state.buildings.filter(function (b) { return cats.indexOf(b.cat) >= 0 && hasRoadStrict(b) && !isSite(b); });
+    return L.length ? L : working('truckpark');
+  }
+  // --- 10 бригад → одна машина, работающая за десятерых ---
+  function mergeBrigades() {
+    var M = G.brigadeMerge, plain = state.brigades.filter(function (br) { return !br.n; });
+    if (plain.length < M) return false;
+    var take = plain.slice(0, M), first = take[0];
+    take.forEach(function (br) { batchRemove(truckBatch(), br.id); });
+    state.brigades = state.brigades.filter(function (br) { return take.indexOf(br) < 0; });
+    var nb = { id: state.nextBr++, x: first.x, z: first.z, yaw: first.yaw || 0, park: first.park || { x: first.x, z: first.z }, site: first.site || 0, n: M };
+    state.brigades.push(nb); writeTruck(nb); assignBrigades(); dirty();
+    hint('🔧 ' + M + ' бригад слились в одну машину — она работает за ' + M);
+    return true;
+  }
+  function brUnits() { var n = 0; state.brigades.forEach(function (br) { n += br.n || 1; }); return n; }
+  // --- новый мир: Администрация в центре ---
+  function ensureHall() {
+    if (!state || state.hall || switching) return Promise.resolve();
+    var cx = Math.floor(N / 2 - 2), cz = Math.floor(N / 2 - 2), need = {}, r = Math.floor(WC / 1), ps = [];
+    [[-3, -3], [8, -3], [-3, 8], [8, 8]].forEach(function (d) { var ck = ckOf(clamp(cx + d[0], 0, N - 1), clamp(cz + d[1], 0, N - 1)); need[ck] = 1; });
+    var tok = worldTok;
+    return Promise.all(Object.keys(need).map(function (ck) { var q = ck.split(','); return loadChunk(+q[0], +q[1]); })).then(function () {
+      if (tok !== worldTok || state.hall) return;
+      for (var rad = 0; rad < 40; rad++) for (var dz = -rad; dz <= rad; dz++) for (var dx = -rad; dx <= rad; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== rad) continue;
+        var x = cx + dx, z = cz + dz;
+        if (x < 0 || z < 0 || x + 5 > N || z + 5 > N || !canPlace('5x5', 0, x, z, 0, 'hall')) continue;
+        var b = { id: state.nextId++, cat: 'hall', size: '5x5', x: x, z: z, rot: 0, seed: newSeed(), th: 0, pop: 0 };
+        clearArea(x, z, 5, 5);
+        state.buildings.push(b); markOcc(b, b.id); touchB(b, true); addBuildingMesh(b); state.hall = 1; save(); statsSoon(); dirty();
+        return;
+      }
+    });
+  }
+  // --- карточки в справке о здании ---
+  function setBtn(act, label, extra, cls) { return '<button class="btn-buy ' + (cls || 'alt') + ' sm" data-act="' + act + '" ' + (extra || '') + '>' + label + '</button>'; }
+  function stepRow(label, valId, val, act, extra, step) {
+    return '<div class="step"><span>' + label + '</span><div><button class="stp" data-act="' + act + '" ' + extra + ' data-d="-' + step + '">−</button><b id="' + valId + '">' + val + '</b><button class="stp" data-act="' + act + '" ' + extra + ' data-d="' + step + '">+</button></div></div>';
+  }
+  function hallHtml(b) {
+    var e = state.eco, D = G.eco, h = '<div class="pbox" id="hallLive"><b>🏛️ Управление городом</b>';
+    h += stepRow('💰 Налог с зарплат', 'hTax', e.tax + '%', 'tax', '', 1);
+    h += '<div class="unote">Доход ≈ <b id="hInc">—</b> в минуту · расходы на службы ≈ <b id="hExp">—</b> · казна <b id="hCash">—</b></div>';
+    SVK.forEach(function (s) {
+      var S = D.services[s];
+      h += stepRow(S.icon + ' ' + S.name + ' — расходы', 'hF_' + s, e.fund[s] + '%', 'fund', 'data-s="' + s + '"', 5);
+      h += '<div class="bar2"><span>качество</span><b id="hQt_' + s + '">' + pctNum(e.q[s]) + '</b><div class="pbar" id="hQb_' + s + '"><i style="width:' + Math.round(e.q[s] * 100) + '%"></i></div></div>';
+    });
+    h += '<div class="bar2"><span>😠 Недовольство</span><b id="hUt">' + Math.round(e.unrest) + '%</b><div class="pbar wear"><i id="hUb" style="width:' + Math.round(e.unrest) + '%"></i></div></div>';
+    h += '<div id="hRiot">' + (e.riot ? '<div class="noroad"><b>🔥 В городе восстание</b>Конторы и заводы стоят. Повысьте расходы на службы или вызовите армию: погибнет от 5 до 40% жителей, и около часа никто не приедет.</div><button class="btn-buy wide danger" data-act="army">🪖 Вызвать армию для защиты правительства</button>' : '') + '</div>';
+    h += '<div class="unote">Службы: чем выше расходы, тем лучше они работают, но качество со временем падает — следите за уведомлениями. Если урезать финансирование слишком сильно, случится восстание.</div>';
+    if (e.log.length) h += '<div class="fam"><b>Уведомления</b>' + e.log.slice(-6).reverse().map(function (l) { return '<div>' + esc(l.x) + '</div>'; }).join('') + '</div>';
+    return h + '</div>';
+  }
+  function hallLive() {
+    var e = state.eco; if (!$('hallLive')) return;
+    function set(id, v) { var x = $(id); if (x && x.innerHTML !== v) x.innerHTML = v; }
+    set('hTax', e.tax + '%'); set('hInc', usd(e.inc)); set('hExp', usd(e.exp)); set('hCash', usd(money()));
+    SVK.forEach(function (s) { set('hF_' + s, e.fund[s] + '%'); set('hQt_' + s, pctNum(e.q[s])); var bar = $('hQb_' + s); if (bar) bar.firstChild.style.width = Math.round(e.q[s] * 100) + '%'; });
+    set('hUt', Math.round(e.unrest) + '%'); var ub = $('hUb'); if (ub) ub.style.width = Math.round(e.unrest) + '%';
+    var rt = $('hRiot'); if (rt && !!rt.firstChild !== e.riot) { var ib = getB(infoId); if (ib) renderInfo(ib, true); }
+  }
+  function marketHtml(b) {
+    var D = G.eco, h = '<div class="pbox"><b>🛒 Что продаёт рынок</b><div class="unote">Выберите, какую часть выпуска товаров рынок продаёт за деньги (0 — не продаёт). Лимит ' + D.market[b.size] + ' единиц каждого товара в минуту при 100%.</div>';
+    b.sell = b.sell || {};
+    Object.keys(D.goods).forEach(function (g) { h += stepRow(G.stock[g].icon + ' ' + G.stock[g].name + ' · ' + D.goods[g] + '$', 'mk_' + g, (b.sell[g] | 0) + '%', 'sell', 'data-g="' + g + '"', 10); });
+    h += '<div class="unote">Здесь же город автоматически покупает воду и уголь, а еду привозят универсальные грузовики с мельниц.</div></div>';
+    return h;
+  }
+  function millHtml(b) {
+    var D = G.eco, w = workplace(b), now = Math.min(1, (sim.work[b.id] || 0) / w.staff), got = hasRoadStrict(b);
+    return '<div class="pbox"><b>🌾 Мельница и поля</b><div class="kv"><span>Выпуск еды</span><span><b>' + Math.round(D.mill.food * now) + '</b> в минуту</span>' +
+      '<span>На складе мельницы</span><span><b>' + Math.floor(b.fs || 0) + '</b> из ' + D.mill.store + '</span>' +
+      '<span>Универсальные грузовики</span><span>' + fleetN('all') + '</span>' +
+      '<span>Рынки</span><span>' + working('market').length + '</span></div>' +
+      (got ? '' : '<div class="noroad"><b>🚚 Нет дороги к мельнице</b>Мельница с полями работает без дороги, но грузовики не смогут забрать еду. Подведите дорогу к её краю.</div>') +
+      (fleetN('all') && working('market').length ? '' : '<div class="noroad"><b>🍞 Еда не дойдёт до людей</b>Нужны рынок и хотя бы один универсальный грузовик (🚚 Механизмы → 🚛 Грузовики) — он вывозит еду с мельницы на рынок.</div>') + '</div>';
+  }
+  function busHtml(b) {
+    var n = stopKeys().length, mine = 0; for (var k in coaches) if (coaches[k].depot === b.id) mine++;
+    return '<div class="pbox"><b>🚏 Дилижансы</b><div class="kv"><span>Остановок на дорогах</span><span><b>' + n + '</b></span><span>Дилижансов</span><span><b>' + mine + '</b></span>' +
+      '<span>Скорость</span><span>по простой дороге медленно, по брусчатке вдвое быстрее</span><span>Перевезено</span><span>' + (state.pax | 0) + ' чел.</span></div>' +
+      '<div class="unote">Остановки ставятся прямо на дороге: 🛣️ «Дорога» → «🚏 Остановка». Две остановки и больше — дилижансы ездят между ними (больше остановок — больше дилижансов). Лошади пьют воду: 4 л в секунду на каждую.</div></div>';
+  }
+  function parkHtml(b) {
+    return '<div class="pbox"><b>🅿️ Грузовая парковка</b><div class="kv"><span>Мест на парковку</span><span><b>' + G.fleetPerPark + '</b></span><span>Занято всеми парковками</span><span><b>' + parkUsed() + '</b> из ' + parkTotal() + '</span>' +
+      '<span>Грузовиков</span><span>' + fleetTotal() + '</span><span>Бригад (стоят здесь)</span><span>' + state.brigades.length + '</span></div>' +
+      '<button class="btn-buy wide" data-act="trucks">🚛 Купить грузовики</button></div>';
+  }
+  function trucksHtml() {
+    var h = '<div class="unote" id="tkNote"></div>';
+    Object.keys(G.trucks).forEach(function (k) {
+      var T = G.trucks[k];
+      h += '<div class="unit">' + thumbImg('uimg', 'veh_f_' + k, vehicleThumb('f_' + k)) +
+        '<div class="uinfo"><h3>' + T.icon + ' ' + esc(T.name) + '</h3><p>' + esc(T.about) + '</p>' +
+        '<div class="ukv"><span>Цена</span><span class="usd">' + usd(T.price) + '</span><span>Возит</span><span>' + T.cap + ' ед. в минуту' + (k === 'all' ? ' (вдвое меньше профильного)' : '') + '</span>' +
+        '<span>В парке</span><span><b id="tkN_' + k + '">0</b></span></div></div></div>' +
+        '<div class="ubtns"><button class="btn-buy" data-act="tbuy" data-k="' + k + '">Купить</button><button class="btn-sell" data-act="tsell" data-k="' + k + '" id="tkS_' + k + '">Продать</button></div>';
+    });
+    return h + '<p class="note">Профильный грузовик ускоряет выпуск своих ресурсов (каждый ≈ +10%, не больше +50%); универсальный вдвое слабее, но только он вывозит еду с мельниц на рынок. Угольный удешевляет покупку угля. Парковка вмещает ' + G.fleetPerPark + ' машин (бригады тоже стоят там). Грузовики разного цвета и формы.</p>';
+  }
+  function actEco(a, el) {
+    var e = state.eco, D = G.eco, d = +el.dataset.d || 0;
+    if (a === 'tax') e.tax = clamp(e.tax + d, 0, D.taxMax);
+    else if (a === 'fund') e.fund[el.dataset.s] = clamp(e.fund[el.dataset.s] + d, 0, 100);
+    else if (a === 'sell') { var mb = getB(infoId); if (mb) { mb.sell = mb.sell || {}; mb.sell[el.dataset.g] = clamp((mb.sell[el.dataset.g] | 0) + d, 0, 100); touchB(mb, false); } }
+    else if (a === 'army') { callArmy(); return; }
+    else if (a === 'tbuy') { buyTruck(el.dataset.k); return; }
+    else if (a === 'tsell') { sellTruck(el.dataset.k); return; }
+    else if (a === 'trucks') { openMech('trucks'); return; }
+    save(); var ib = getB(infoId); if (ib) renderInfo(ib, true);
+  }
+  // --- ядро: вызывается каждый кадр ---
+  function tickCity(dt) {
+    if (!state || !state.eco || dt <= 0) return false;
+    ecoAcc += dt; arrAcc += dt;
+    var guard = 0; while (ecoAcc >= 1 && guard++ < 3) { ecoAcc -= 1; ecoStep(); }
+    if (arrAcc >= G.eco.arrive.every) { arrAcc = 0; spawnArrival(); }
+    var a = tickArrivals(dt), b = tickPeds(dt), c = tickCoaches(dt);
+    return a || b || c;
   }
 
   // ---------- Статистика ----------
@@ -4423,7 +4973,7 @@
     $('stBuild').textContent = built;
     $('stOff').textContent = off; $('stOffWrap').hidden = !off;
     $('stOffWrap').title = 'Без дороги: ' + off + ' ' + plural(off, 'здание', 'здания', 'зданий') + ' не работают. Подведите к ним дорогу.';
-    rebuildTraffic(); syncRollers(); syncCars(); syncVehicles(); sawCache = null; stoneCache = null; stockDirty = true; updateStock();
+    rebuildTraffic(); syncRollers(); syncCars(); syncVehicles(); syncCoaches(); sawCache = null; stoneCache = null; stockDirty = true; updateStock();
     if (infoId) { var ib = getB(infoId); if (ib) renderInfo(ib, true); }
     simRequest();
   }
@@ -4488,6 +5038,8 @@
       '<button class="menu-btn" data-m="news">📝 Что нового</button>' +
       '<button class="menu-btn" data-m="city">📊 Город</button>' +
       '<button class="menu-btn" data-m="mech">🚚 Механизмы</button>' +
+      '<button class="menu-btn" data-m="fps">📈 Счётчик FPS<span class="mb-sub">' + (GFX.fps ? 'включён — вверху рядом с числом зданий' : 'выключен') + '</span></button>' +
+      '<button class="menu-btn" data-m="gfx">⚙️ Качество графики<span class="mb-sub">' + ['лёгкое', 'среднее', 'высокое'][GFX.q] + (GFX.fps ? ' · FPS виден' : '') + '</span></button>' +
       '<button class="menu-btn" data-m="center">🎯 В центр карты<span class="mb-sub">камера вернётся в середину карты · клавиша 8</span></button>' +
       '<p style="font-size:13px;color:#a9b6c8">Миры сохраняются сами — на этом устройстве, а после входа в аккаунт ещё и в облаке (одни и те же миры на телефоне и компьютере). Бригады, машины и деньги у каждого мира свои.</p>';
   }
@@ -4538,6 +5090,7 @@
       menuView(h, true, keep);
     });
   }
+  var newCap = 0;
   function showNew() {
     menuMode = 'new'; confirmArm = '';
     var groups = [], h = '<h2>➕ Новый мир</h2><p style="font-size:13px;color:#a9b6c8">Карта начинается пустой: купите бригаду, проложите дорогу и стройте. Большие миры загружаются кусками по 100×100 клеток — по мере того, как вы двигаете камеру.</p>' +
@@ -4549,6 +5102,9 @@
         return '<button class="size-opt' + (m.n === newSize ? ' on' : '') + '" data-n="' + m.n + '"><i style="width:' + Math.round(12 + Math.sqrt(m.n / 1000) * 30) + 'px;height:' + Math.round(12 + Math.sqrt(m.n / 1000) * 30) + 'px"></i><b>' + m.n + '×' + m.n + '</b><span>' + (c * c > 1 ? c * c + ' ' + plural(c * c, 'кусок', 'куска', 'кусков') : '1 кусок') + '</span></button>';
       }).join('') + '</div>';
     });
+    h += '<div class="sz-h">💵 Деньги в новой игре</div><div class="capbox"><label class="chk"><input type="radio" name="wCap" id="wCapInf" value="inf"' + (newCap ? '' : ' checked') + '> ∞ Бесконечные деньги</label>' +
+      '<label class="chk"><input type="radio" name="wCap" id="wCapLim" value="lim"' + (newCap ? ' checked' : '') + '> Стартовый капитал (дальше — только налоги)</label>' +
+      '<input type="range" id="wCapRange" min="' + G.capMin + '" max="' + G.capMax + '" step="' + G.capStep + '" value="' + (newCap || 200000) + '"><div class="capv" id="wCapV">$ ' + (newCap || 200000).toLocaleString('ru-RU') + '</div></div>';
     h += '<label class="chk"><input type="checkbox" id="wNature"' + (newNature ? ' checked' : '') + '> 🌲 Природа: леса, каменистые площадки, горы со снежными пиками, камень для дорог</label>' +
       '<label class="chk"><input type="checkbox" id="wDemo"' + (newDemo ? ' checked' : '') + '> Положить в центр город-пример</label>' +
       '<button class="menu-btn acc" data-m="wmake" id="wMake">✅ Создать мир ' + newSize + '×' + newSize + '</button>';
@@ -4600,7 +5156,7 @@
       updateChip(); ensureView();
       return waitLoads();
     }).then(function () { ensureView(); return waitLoads(); }).then(function () {
-      assignBrigades(); updateStats(); hideLoading();
+      assignBrigades(); updateStats(); hideLoading(); ensureHall();
       if (!WORLD.persistent()) hint('Хранилище браузера недоступно: мир живёт, пока открыта страница', true);
     }).catch(function (e) {
       switching = false; hideLoading();
@@ -4613,8 +5169,8 @@
       return createWorld('Мой город', G.mapSize, false).then(openWorld);
     });
   }
-  function createWorld(name, size, demo, nature) {
-    var s0 = emptyState(size);
+  function createWorld(name, size, demo, nature, capital) {
+    var s0 = emptyState(size); s0.cap = capital > 0 ? capital : 0; s0.stock.coal = G.startStock.coal; s0.eco = fixEco(null);
     if (nature) {
       s0.env = { seed: newSeed() }; s0.stock.stone = G.startStock.stone; s0.stock.gravel = G.startStock.gravel;
       if (demo) { var o0 = Math.floor((size - 48) / 2); s0.env.hole = [o0 - 1, o0 - 1, o0 + 49, o0 + 49]; }
@@ -4746,6 +5302,8 @@
     else if (m === 'gsec') { var d = document.getElementById('g-' + b.dataset.s); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); } }
     else if (m === 'city') { menuMode = 'city'; menuView(cityHtml(), true); }
     else if (m === 'mech') { closeModal(); closeSide(); openMech(); }
+    else if (m === 'gfx') { GFX.q = (GFX.q + 1) % 3; saveGfx(); applyGfx(); sideShow(menuRootHtml(), false, true); hint('Качество графики: ' + ['лёгкое', 'среднее', 'высокое'][GFX.q]); }
+    else if (m === 'fps') { GFX.fps = !GFX.fps; saveGfx(); applyGfx(); sideShow(menuRootHtml(), false, true); }
     else if (m === 'center') { closeModal(); closeSide(); centerCam(); }
     else if (m === 'news') menuView('<h2>Что нового</h2>' + changelogHtml(), true);
     else if (m === 'worlds') { showWorlds(); WORLD.cloud.poke(); }
@@ -4771,9 +5329,15 @@
       var nmv = (($('wName') || {}).value || '').trim() || 'Новый мир', demo = !!($('wDemo') || {}).checked; newNature = !!($('wNature') || {}).checked;
       newDemo = demo; b.disabled = true; b.textContent = 'Создаём…';
       if (worldId) saveNow(false);
-      createWorld(nmv, newSize, demo, newNature).then(function (id) { closeModal(); closeSide(); return openWorld(id); });
+      var capLim = !!($('wCapLim') || {}).checked; newCap = capLim ? +($('wCapRange') || {}).value || 200000 : 0;
+      createWorld(nmv, newSize, demo, newNature, newCap).then(function (id) { closeModal(); closeSide(); return openWorld(id); });
     }
   }
+  function capInput(e) {
+    var t = e.target; if (!t || t.id !== 'wCapRange') return;
+    $('wCapV').textContent = '$ ' + (+t.value).toLocaleString('ru-RU'); var l = $('wCapLim'); if (l) l.checked = true;
+  }
+  $('modalBody').addEventListener('input', capInput); $('sbBody').addEventListener('input', capInput);
   $('modalBody').addEventListener('click', menuClick);
   $('sbBody').addEventListener('click', menuClick);
 
@@ -4827,7 +5391,7 @@
   function mmClassLoaded(x, z) {
     var i = idx(x, z), o = occ[i];
     if (o) { var bb = byId[o]; return 7 + (bb ? mmCatIdx[bb.cat] | 0 : 0); }
-    var r = state.roads[key(x, z)]; if (r) return r === 'asphalt' ? 6 : r === 'cobble' ? 5 : 4;
+    var r = state.roads[key(x, z)]; if (r) return r === 'asphalt' || r === 'cobble' ? 5 : 4;
     var t = terr[i]; if (t === 2) return 3; if (t === 1 || t === 3) return 2;
     return treeA[i] ? 1 : 0;
   }
@@ -4917,22 +5481,26 @@
     var m = Math.round(N / 2); hint('🎯 Вернулись в центр карты · ' + m + ' : ' + m);
   }
 
-  var needRender = true, lastT = performance.now(), lastSave = 0, lastUi = 0, frames = 0, lastView = 0, camSig = '', camT = 0;
+  var fpsN = 0, fpsT = 0, needRender = true, lastT = performance.now(), lastSave = 0, lastUi = 0, frames = 0, lastView = 0, camSig = '', camT = 0;
   function dirty() { needRender = true; }
   function loop() {
-    var t = performance.now(), dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
-    keyPan(dt); tickCam(dt);
-    var active = tickBrigades(dt, t);
-    tickFactory(dt); tickWear(dt); tickTraffic(dt); tickSawmills(dt); tickStone(dt); tickJacks(dt);
-    var fixingNow = tickRepair(dt, t);
+    var t = performance.now(), rdt = Math.min(0.05, (t - lastT) / 1000), dt = paused ? 0 : rdt; lastT = t;
+    keyPan(rdt); tickCam(rdt);
+    var active = tickBrigades(dt, t), cityMoved = false, fixingNow = false;
+    if (!paused) {
+      tickFactory(dt); tickWear(dt); tickTraffic(dt); tickSawmills(dt); tickStone(dt); tickJacks(dt);
+      cityMoved = tickCity(dt); if (cityMoved) dirty();
+      fixingNow = tickRepair(dt, t);
+    }
     if ((active || fixingNow) && t - lastSave > 2000) { saveNow(true); lastSave = t; }
     if (t - lastView > 220) { lastView = t; ensureView(); var sg = Math.round(cam.tx) + ',' + Math.round(cam.tz) + ',' + Math.round(cam.dist); if (sg !== camSig) { camSig = sg; camT = t; } else if (camT && t - camT > 2500) { camT = 0; saveSoft(); } }
     if (t - lastUi > 400) {
       lastUi = t;
-      if (infoId) { var ib = getB(infoId); if (ib && (isSite(ib) || ib.cat === 'lumber')) renderInfo(ib, true); }
+      if (infoId) { var ib = getB(infoId); if (ib && (isSite(ib) || ib.cat === 'lumber')) renderInfo(ib, true); else hallLive(); }
       renderMech(); refreshLive(); updateStock();
       if (!$('panelBuild').hidden) updateBrRow();   // «заняты N из M» меняется, когда бригады уезжают на стройки
     }
+    fpsN++; if (t - fpsT >= 1000) { if (GFX.fps) { var fe = $('stFpsN'); if (fe) fe.textContent = Math.round(fpsN * 1000 / (t - fpsT)); } fpsN = 0; fpsT = t; }
     if (t - lastMm > 150) { lastMm = t; mmTick(); drawMini(false); }
     flushRoads(); flushBatches();
     if (needRender) {
@@ -4949,7 +5517,7 @@
   state = emptyState(G.mapSize); // до открытия мира — пустая заготовка
   $('ver').textContent = G.version;
   try { localStorage.removeItem('moe_gorod_view'); } catch (e) {} // старая настройка вида (3D / ИЗО / HD) больше не нужна
-  enableHD(); resize();
+  enableHD(); applyGfx(); resize();
   $('brImg').innerHTML = thumbImg('brimg', 'truck', truckThumb());   // картинка грузовика в строке «Бригады»
   renderChips(); rebuildAll(); setTool('view');
   camHome();
@@ -4975,6 +5543,8 @@
     wearAll: function (w) { for (var k in state.roads) if (state.roads[k] === 'asphalt') { state.wear[k] = typeof w === 'function' ? w(k) : w; markRoadKey(k); } dirty(); },
     finishAll: function () { state.buildings.forEach(function (b) { if (isSite(b)) { b.prog = 1; finishSite(b); } }); },
     env: function () { return { terr: terr, treeA: treeA, mt: Object.keys(mtMesh).length, cleared: cleared }; }, clearArea: clearArea, canPlace: canPlace, agents: function () { return { veh: agents, cars: carAgents, driving: carsDriving }; }, orderKind: orderKind, rollers: function () { return rollers; }, roadInfo: openRoadInfo, startPlace: startPlace, order: orderTruck, repairAll: repairAllAct, toggleAuto: toggleAuto,
+    info: function (id) { var b = getB(id); if (b) renderInfo(b, false); }, setTool: setTool, pause: setPause,
+    city: function (sec) { for (var i = 0; i < sec * 10; i++) tickCity(0.1); updateStats(); return state.gt; }, eco: function () { return { peds: pedN, arr: Object.keys(arrivals).length, coaches: coachCount(), stops: stopKeys().length, sim: sim }; }, callArmy: callArmy, buyTruck: buyTruck,
     jackTick: function (n, dt) { for (var i = 0; i < n; i++) tickJacks(dt); },
     jacks: function () { return Object.keys(jacks).map(function (k) { var j = jacks[k]; return j.mode + ' ' + j.x.toFixed(1) + ',' + j.z.toFixed(1) + ' t' + j.tree + ' c' + j.carry; }); },
     place: function (cat, size, x, z) { buildCat = cat; buildSize = size; buildRot = 0; placeBuilding({ px: x + G.sizes[size].w / 2, pz: z + G.sizes[size].d / 2 }); },

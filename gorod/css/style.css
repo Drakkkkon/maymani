@@ -394,7 +394,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .strow .chip { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 3px; border-radius: 10px; white-space: normal; line-height: 1.1; min-width: 0; }
 .strow .chip b { font-weight: 700; font-size: 14px; }
 .strow .chip small { font-size: 10.5px; opacity: .85; }
-.strow.info { margin: 8px 0 4px; padding-top: 8px; border-top: 1px solid var(--line); }
+.strow.inf { margin: 8px 0 4px; padding-top: 8px; border-top: 1px solid var(--line); }
 #roadChips { flex-wrap: wrap; overflow: visible; }
 
 /* страница «Эпохи» (с 0.19.0) */
@@ -467,3 +467,66 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .pl-vols label { display: grid; grid-template-columns: 84px 1fr; align-items: center; font-size: 12px; color: var(--mut); gap: 6px; }
 .sb-player.playing .pl-title::after { content: ' ♪'; }
 @media (max-height: 560px) { .pl-vols { display: none; } .pl-sub { margin-bottom: 2px; } }
+
+/* ---------- 0.25.0 ---------- */
+/* вверху ресурсы в несколько строк: люди и нужды / материалы / товары */
+.stats { flex-direction: column; align-items: flex-end; gap: 3px; white-space: nowrap; min-width: 0; }
+.stats .srow { display: flex; gap: 12px; align-items: center; flex-wrap: nowrap; }
+.stats .srow:empty, .stats .srow.mats:not(:has(span:not([hidden]))) { display: none; }
+.stats .srow.need, .stats .srow.mats, .stats .srow.goods { font-size: 13px; color: #cfd8e6; }
+.stats .srow.goods b, .stats .srow.need b { color: #e2c48c; }
+.stats .dim { opacity: .45; }
+.stats .bad, .stats .bad b { color: #ff8a80; font-weight: 600; }
+.stats .fps b { color: #9fd0ff; }
+.topbar { align-items: flex-start; padding-top: 6px; padding-bottom: 6px; }
+.topbar .brand, .topbar .world-chip, .topbar #btnMenu, .topbar .pause { margin-top: 0; }
+.icon-btn.pause { font-size: 18px; }
+.icon-btn.pause.on { background: var(--acc); color: #2a2205; }
+.pause-note { position: fixed; left: 50%; top: calc(150px + var(--safet)); transform: translateX(-50%); z-index: 6; background: rgba(217,176,74,.92); color: #2a2205;
+  padding: 6px 16px; border-radius: 999px; font-weight: 700; font-size: 14px; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+.pause-note[hidden] { display: none; }
+/* полоски людей и рабочих */
+.bar2 { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; align-items: baseline; margin: 8px 0 0; font-size: 13.5px; }
+.bar2 span { color: #cfd8e6; } .bar2 b { color: var(--acc); font-size: 13.5px; }
+.bar2 .pbar { grid-column: 1 / -1; margin: 3px 0 4px; height: 9px; }
+.pbar.full i { background: linear-gradient(90deg, #4fb84a, #7ee08a); }
+.pbar.fill i { background: linear-gradient(90deg, #5a9ad8, #8fc4ff); }
+/* шаговые кнопки «− 20% +» */
+.step { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 7px 0 0; font-size: 13.5px; }
+.step > div { display: flex; align-items: center; gap: 6px; }
+.step b { min-width: 46px; text-align: center; color: var(--acc); }
+.stp { width: 34px; height: 30px; border: 0; border-radius: 9px; background: rgba(255,255,255,.12); font-size: 18px; font-weight: 700; line-height: 1; }
+.stp:active { transform: scale(.92); background: var(--acc); color: #2a2205; }
+.btn-buy.danger { background: #d8473c; color: #fff; }
+.btn-buy.sm { padding: 8px 12px; font-size: 13px; }
+.capbox { background: rgba(255,255,255,.06); border-radius: 12px; padding: 8px 10px; margin: 4px 0 8px; }
+.capbox input[type=range] { width: 100%; margin: 6px 0 2px; }
+.capv { text-align: center; font-weight: 700; color: #7ee08a; }
+/* «Механизмы» — вкладка в панели справа */
+.mechpanel { max-height: min(62vh, 560px); overflow: hidden; }
+.mechpanel .tabs { padding: 2px 2px 6px; }
+.mechpanel .page-body { padding: 0 2px 6px; overflow-y: auto; }
+.mechpanel .unit .uimg { width: 84px; height: 84px; }
+.mechpanel .unit { padding: 8px; gap: 9px; margin-bottom: 8px; }
+.mechpanel .unit h3 { font-size: 15px; } .mechpanel .unit p { font-size: 12px; margin-bottom: 4px; }
+.mechpanel .ukv { font-size: 12px; }
+@media (min-width: 700px) and (min-height: 500px) {
+  .dock .mechpanel { max-height: calc(100vh - 190px); min-height: 0; }
+  .dock .mechpanel .page-body { max-height: calc(100vh - 250px); }
+  .pause-note { top: calc(170px + var(--safet)); }
+}
+@media (max-width: 899px) { .stats .srow { gap: 9px; } .stats .srow.need, .stats .srow.mats, .stats .srow.goods { font-size: 12px; } }
+@media (max-width: 640px) { .topbar { flex-wrap: wrap; } .stats { flex: 1 1 100%; align-items: flex-start; margin-left: 0; } .world-chip { max-width: 34vw; } .pause-note { top: calc(190px + var(--safet)); } }
+/* плеер: обложка, поиск, список */
+.pl-cover { width: 56px; height: 56px; border-radius: 10px; flex: none; display: block; }
+.pl-head { display: flex; gap: 10px; align-items: center; }
+.pl-head .pl-tt { min-width: 0; flex: 1; }
+.pl-search { width: 100%; box-sizing: border-box; margin: 8px 0 4px; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.08); color: var(--fg, #fff); font-size: 13px; }
+.pl-list { max-height: 270px; overflow-y: auto; border-radius: 10px; background: rgba(0,0,0,.18); overscroll-behavior: contain; }
+.pl-row { display: flex; gap: 8px; align-items: center; width: 100%; border: 0; background: none; color: inherit; text-align: left; padding: 5px 8px; height: 27px; box-sizing: border-box; font-size: 12.5px; }
+.pl-row:hover { background: rgba(255,255,255,.07); }
+.pl-row.on { background: rgba(217,176,74,.22); color: #ffe39a; font-weight: 600; }
+.pl-row i { flex: none; width: 10px; height: 10px; border-radius: 50%; }
+.pl-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.pl-row small { color: var(--mut); flex: none; }
+.pl-empty { padding: 10px; color: var(--mut); font-size: 12.5px; }

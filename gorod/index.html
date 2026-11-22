@@ -14,15 +14,30 @@
 <header class="topbar">
   <div class="brand">🏙️ <b>Мое_город</b> <span class="ver" id="ver"></span></div>
   <button class="world-chip" id="worldChip" type="button" aria-label="Миры">🌍 <b id="worldName">…</b> <i id="worldCloud"></i></button>
-  <div class="stats">
-    <span class="money" title="Доллары">$ <b id="stMoney">∞</b></span>
-    <span title="Жители">👥 <b id="stPeople">0</b></span>
-    <span id="stJobsWrap" title="Рабочие места">💼 <b id="stJobs">0</b></span>
-    <span title="Здания">🏢 <b id="stBuild">0</b></span>
-    <span class="stock stone" id="stStoneWrap" hidden>🪨 <b id="stStone">0</b> ⚪ <b id="stGravel">0</b></span>
-    <span class="stock" id="stStockWrap" hidden><span id="stLogsWrap">🪵 <b id="stLogs">0</b> </span>🪚 <b id="stBoards">0</b> 🟫 <b id="stDsp">0</b></span>
-    <span class="off" id="stOffWrap" hidden>🚫 <b id="stOff">0</b></span>
+  <div class="stats" id="stats">
+    <div class="srow">
+      <span class="money" title="Доллары">$ <b id="stMoney">∞</b></span>
+      <span title="Жители">👥 <b id="stPeople">0</b></span>
+      <span id="stJobsWrap" title="Рабочие места">💼 <b id="stJobs">0</b></span>
+      <span title="Здания">🏢 <b id="stBuild">0</b></span>
+      <span class="off" id="stOffWrap" hidden>🚫 <b id="stOff">0</b></span>
+      <span class="fps" id="stFps" hidden>FPS <b id="stFpsN">0</b></span>
+    </div>
+    <div class="srow need" id="rowNeeds" title="Люди и социальные нужды">
+      <span id="stFoodWrap" title="Еда на рынках">🍞 <b id="stFood">0</b></span>
+      <span id="stWaterWrap" title="Вода: покупается на рынке">💧 <b id="stWater">—</b></span>
+      <span class="dim" id="stPowerWrap" title="Электричества в городе пока нет — электростанции появятся позже">⚡ <b>—</b></span>
+      <span id="stUnrestWrap" title="Недовольство народа">😠 <b id="stUnrest">0%</b></span>
+    </div>
+    <div class="srow mats" id="rowMats" title="Материалы">
+      <span class="stock stone" id="stStoneWrap" hidden>🪨 <b id="stStone">0</b> ⚪ <b id="stGravel">0</b></span>
+      <span class="stock" id="stStockWrap" hidden><span id="stLogsWrap">🪵 <b id="stLogs">0</b> </span>🪚 <b id="stBoards">0</b> 🟫 <b id="stDsp">0</b></span>
+    </div>
+    <div class="srow goods" id="rowGoods" title="Товары (здания для них появятся позже)">
+      <span class="stock" id="stGoodsWrap">🧵 <b id="stFabric">0</b> 👕 <b id="stClothes">0</b> 🚬 <b id="stTobacco">0</b> ⚫ <b id="stCoal">0</b></span>
+    </div>
   </div>
+  <button class="icon-btn pause" id="btnPause" data-nosnd aria-label="Пауза" title="Пауза">⏸</button>
   <button class="icon-btn" id="btnMenu" data-nosnd aria-label="Меню" aria-expanded="false" aria-controls="sidebar">☰</button>
 </header>
 
@@ -79,24 +94,20 @@
     <div class="strow" id="styleRow"></div>
     <div class="bgrid" id="bGrid"></div>
   </section>
+
+  <!-- «Механизмы» (с 0.25.0 — вкладка в боковой панели): бригады, грузовики, здания, машины -->
+  <section class="subpanel mechpanel" id="panelMech" hidden>
+    <div class="tabs" id="mechTabs"></div>
+    <div class="page-body" id="mechBody"></div>
+  </section>
 </div>
+
+<div class="pause-note" id="pauseNote" hidden>Игра на паузе</div>
 
 <aside class="info" id="info" hidden>
   <button class="icon-btn close" id="infoClose" aria-label="Закрыть">✕</button>
   <div id="infoBody"></div>
 </aside>
-
-<!-- Страница «Механизмы» -->
-<section class="page" id="mech" hidden>
-  <div class="page-card">
-    <div class="page-head">
-      <h2>🚚 Механизмы</h2>
-      <button class="icon-btn" id="mechClose" aria-label="Закрыть">✕</button>
-    </div>
-    <div class="tabs" id="mechTabs"></div>
-    <div class="page-body" id="mechBody"></div>
-  </div>
-</section>
 
 <!-- Страница «Эпохи» (с 0.19.0) -->
 <section class="page" id="epochs" hidden>
@@ -119,8 +130,10 @@
   </div>
   <!-- Плеер (с 0.24.0): название трека над кнопками; музыка — папка music/, звуки действий рисуются в js/audio.js -->
   <div class="sb-player" id="plPlayer">
-    <div class="pl-title" id="plTitle">🎵 …</div>
-    <div class="pl-sub" id="plSub"></div>
+    <div class="pl-head">
+      <canvas class="pl-cover" id="plCover" width="112" height="112" aria-hidden="true"></canvas>
+      <div class="pl-tt"><div class="pl-title" id="plTitle">🎵 …</div><div class="pl-sub" id="plSub"></div></div>
+    </div>
     <input class="pl-seek" id="plSeek" type="range" min="0" max="1000" value="0" aria-label="Перемотка трека">
     <div class="pl-btns">
       <button class="pl-btn" id="plPrev" type="button" aria-label="Предыдущий трек" title="Предыдущий трек">⏮</button>
@@ -128,6 +141,8 @@
       <button class="pl-btn" id="plNext" type="button" aria-label="Следующий трек" title="Следующий трек">⏭</button>
       <button class="pl-btn pl-sfx" id="plSfx" type="button" aria-pressed="true" title="Звуки игры">🔊</button>
     </div>
+    <input class="pl-search" id="plSearch" type="search" placeholder="🔎 Композитор или название" autocomplete="off" aria-label="Поиск по композитору">
+    <div class="pl-list" id="plList" role="list"></div>
     <div class="pl-vols">
       <label><span>🎵 Музыка</span><input id="plVol" type="range" min="0" max="100" value="50" aria-label="Громкость музыки"></label>
       <label><span>🔨 Звуки</span><input id="plSfxVol" type="range" min="0" max="100" value="70" aria-label="Громкость звуков игры"></label>
