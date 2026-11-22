@@ -74,6 +74,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .chip.on { background: var(--acc); color: #2a2205; border-color: var(--acc); font-weight: 600; }
 .chip .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
 .chip.rot { flex: none; font-size: 18px; padding: 4px 12px; }
+/* несколько зданий сразу (1.1.0) */
+.multirow { gap: 6px; flex-wrap: wrap; }
+.multirow .chip { flex: 1 1 0; text-align: center; }
+.multirow .chip[hidden] { display: none; }
 /* меню категорий (0.13.0): кнопка «Категория ▾», по нажатию — список */
 .catrow { position: relative; }
 .catbtn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--bg2);

@@ -37,6 +37,10 @@
   function key(x, z) { return x + ',' + z; }
   function foot(sz, rot) { var s = G.sizes[sz]; return rot % 2 ? { w: s.d, d: s.w } : { w: s.w, d: s.d }; }
   function isSite(b) { return typeof b.prog === 'number' && b.prog < 1; }
+  // Эпоха (с 1.1.0): одна на весь город — state.era. Выбирается кнопкой «Эпохи» справа; все здания и новые постройки стоят в ней.
+  var THEME_KEY = 'moe_gorod_epoch';
+  function legacyEra() { try { return clamp(parseInt(localStorage.getItem(THEME_KEY), 10) || 0, 0, G.themes.length - 1); } catch (e) { return 0; } }
+  function curEra() { return state && G.themes[state.era | 0] ? state.era | 0 : 0; }
 
   function demoState(n) {
     n = n || G.mapSize;
@@ -59,14 +63,14 @@
     list.forEach(function (b) {
       var f = foot(b[1], b[4]), bx = b[2] + o, bz = b[3] + o;
       if (bx < 0 || bz < 0 || bx + f.w > n || bz + f.d > n) return;
-      // в городе-примере показаны все четыре эпохи: корпорации — ар-деко, армия — баухаус, нижний ряд домов — модерн, остальное — бель-эпок
-      var th = b[0] === 'corp' ? 2 : b[0] === 'army' ? 3 : (b[0] === 'res' && b[3] === 30) ? 1 : 0;
+      // с 1.1.0 эпоха в городе одна (s.era)
+      var th = s.era;
       s.buildings.push({ id: s.nextId++, cat: b[0], size: b[1], x: bx, z: bz, rot: b[4], seed: newSeed(), th: th });
     });
     return s;
   }
   // wear — износ асфальта по клеткам (0…1), rq — очередь ремонта, fql / fprog — очередь заказов завода, vehicles — машины завода
-  function emptyState(n) { return { v: 1, thv: 2, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fql: [], fprog: 0, vehicles: [], nextVeh: 1, stock: { logs: 0, boards: 0, dsp: 0, stone: 0, gravel: 0, fabric: 0, clothes: 0, tobacco: 0, coal: 0, food: 0 }, cap: 0, income: 0, gt: 0, stops: {}, eco: null, hall: 0 }; }
+  function emptyState(n) { return { v: 1, thv: 2, era: legacyEra(), size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fql: [], fprog: 0, vehicles: [], nextVeh: 1, stock: { logs: 0, boards: 0, dsp: 0, stone: 0, gravel: 0, fabric: 0, clothes: 0, tobacco: 0, coal: 0, food: 0 }, cap: 0, income: 0, gt: 0, stops: {}, eco: null, hall: 0 }; }
   function fixEco(e) {
     var D = G.eco, f = {}, q = {};
     e = e && typeof e === 'object' ? e : {};
@@ -92,7 +96,8 @@
     s.nextVeh = s.nextVeh || s.vehicles.reduce(function (m, v) { return Math.max(m, v.id); }, 0) + 1;
     s.buildings = s.buildings.filter(function (b) { return G.cats[b.cat] && G.sizes[b.size]; });
     if (s.thv !== 2) { var TMAP = [0, 3, 2, 1]; s.buildings.forEach(function (b) { b.th = TMAP[b.th | 0] || 0; }); s.thv = 2; } // 0.19.0: стили A–D 0.18.0 → ближайшие эпохи
-    s.buildings.forEach(function (b) { b.th = G.themes[b.th | 0] ? b.th | 0 : 0; }); // эпоха здания (с 0.18.0 — оформление); у старых сохранений — бель-эпок
+    s.era = s.era !== undefined && G.themes[s.era | 0] ? s.era | 0 : legacyEra();   // с 1.1.0 эпоха одна на весь город; у старых миров — та, в которой вы строили последней
+    s.buildings.forEach(function (b) { b.th = s.era; });
     if (!s.stock || typeof s.stock !== 'object') s.stock = {};
     s.stock.boards = +s.stock.boards || 0; s.stock.dsp = +s.stock.dsp || 0; // склад досок и ДСП (с 0.11.0)
     s.stock.logs = +s.stock.logs || 0; // бревна (с 0.23.0): их рубит Общество лесорубов, лесопилки распиливают на доски
@@ -168,7 +173,7 @@
     loaded[ck] = { x: cx, z: cz };
     d.b.forEach(function (b) {
       if (!validB(b) || byId[b.id]) return; // дом на границе лежит в двух кусках — берём один раз
-      b.th = G.themes[b.th | 0] ? b.th | 0 : 0;
+      b.th = state.era | 0;   // с 1.1.0 все здания — в эпохе города
       if (b.id >= state.nextId) state.nextId = b.id + 1;
       state.buildings.push(b); markOcc(b, b.id); addBuildingMesh(b); if (isSite(b)) sites++;
     });
@@ -3342,7 +3347,7 @@
   }
 
   function setGhost(cat, size, seed, th) {
-    th = th === undefined ? buildTheme : th;
+    th = th === undefined ? curEra() : th;
     var k = tplKey(cat, size, seed, th);
     if (k === ghostKey && ghost) return;
     if (ghost) { var mm = ghost.material; ghost.dispose(); if (mm) mm.dispose(); ghost = null; }
@@ -3357,7 +3362,8 @@
     setOverlay(ghostFoot, p.x, p.z, f.w, f.d, ok ? '#4cd964' : '#ff3b30');
     if (ghostCat === 'lumber') showZone(b); else zoneKeep();
   }
-  function hideGhost() { if (ghost) ghost.setEnabled(false); ghostFoot.setEnabled(false); zoneKeep(); dirty(); }
+  function ghostOff() { if (ghost) ghost.setEnabled(false); ghostFoot.setEnabled(false); dirty(); }
+  function hideGhost() { if (ghost) ghost.setEnabled(false); ghostFoot.setEnabled(false); zoneKeep(); if (multiPrev.ok || multiPrev.bad || multiPrev.road) clearMultiPreview(); dirty(); }
   function showCursor(x, z, color) {
     if (!inMap(x, z)) { cursor.setEnabled(false); dirty(); return; }
     var c = cellCenter(x, z); setOverlay(cursor, c.x, c.z, 1, 1, color);
@@ -3562,8 +3568,6 @@
 
   // ---------- Инструменты ----------
   var tool = 'view', buildCat = 'res', buildSize = '1x1', buildRot = 0, buildSeed = newSeed(), roadType = 'dirt';
-  var THEME_KEY = 'moe_gorod_epoch', buildTheme = 0;
-  try { buildTheme = clamp(parseInt(localStorage.getItem(THEME_KEY), 10) || 0, 0, G.themes.length - 1); } catch (e) {}
   var moving = null; // {b, offX, offZ, rot, x, z}
 
   var HINTS = {
@@ -3635,7 +3639,7 @@
     dock.style.setProperty('--bh', bh + 'px');
     g.classList.toggle('scroll', g.scrollHeight > g.clientHeight + 1);
   }
-  if (SIDE.addEventListener) SIDE.addEventListener('change', fitGrid);
+  if (SIDE.addEventListener) SIDE.addEventListener('change', function () { fitGrid(); updateEraBtn(); });
   // --- миниатюры: отдельный маленький движок, рисуются по очереди и подставляются в карточки ---
   var thumbs = {}, tq = [], T = null, tBusy = false;
   function thumbReq(k, make) {
@@ -3676,9 +3680,9 @@
     tq.shift();
     if (tq.length) requestAnimationFrame(thumbStep); else tBusy = false;
   }
-  function thumbKey(cat, size, th) { return cat + size + 't' + (th === undefined ? buildTheme : th); }
+  function thumbKey(cat, size, th) { return cat + size + 't' + (th === undefined ? curEra() : th); }
   function thumbUrl(cat, size, th) {
-    th = th === undefined ? buildTheme : th;
+    th = th === undefined ? curEra() : th;
     return thumbReq(thumbKey(cat, size, th), function (K) {
       var root = new B.Mesh('thumb', K.scene), g = buildModel(K, cat, size, modelSeed(cat, 0), th), s0 = G.sizes[size];
       g.parent = root;
@@ -3705,49 +3709,45 @@
     if (cat === 'park' || cat === 'upark') { var ps = G.parkSpots[cat][size]; return '🅿️ ' + ps + ' ' + plural(ps, 'место', 'места', 'мест') + (cat === 'upark' ? '<span class="wl"> под землёй</span>' : ''); }
     var n = c.staff[size]; return '👷 ~' + n.toLocaleString('ru-RU') + '<span class="wl"> работают</span><span class="ws"> чел.</span>';
   }
+  // Меню «Строить» (с 1.1.0): категории по назначению — G.menu (Жильё, Обучение, Медицина, Армия…). Карточка = пара [вид, размер].
   var buildFilter = 'all';
-  function catLabel(f) {
-    if (f === 'all') return { t: 'Все', c: '#c9d3e0' };
-    if (G.cats[f]) return { t: G.cats[f].label, c: G.cats[f].tag };
-    for (var i = 0; i < G.buildGroups.length; i++) if (G.buildGroups[i].id === f) return { t: G.buildGroups[i].label, c: G.buildGroups[i].tag };
-    return { t: 'Все', c: '#c9d3e0' };
+  function menuOf(cat, size) {   // в какой категории меню лежит здание
+    for (var i = 0; i < G.menu.length; i++) for (var k = 0; k < G.menu[i].items.length; k++) { var it = G.menu[i].items[k]; if (it[0] === cat && (size === undefined || it[1] === size)) return G.menu[i]; }
+    return null;
   }
-  function catCount(f) { return filterCats(f).reduce(function (n, ck) { return n + catSizes(ck).length; }, 0); }
+  function itemShown(it) { var c = G.cats[it[0]]; return !!c && !c.hidden && c.names[it[1]] !== undefined; }
+  function menuItems(f) {
+    if (f === 'all') { var all = []; G.menu.forEach(function (m) { m.items.forEach(function (it) { if (itemShown(it)) all.push(it); }); }); return all; }
+    for (var i = 0; i < G.menu.length; i++) if (G.menu[i].id === f) return G.menu[i].items.filter(itemShown);
+    return menuItems('all');
+  }
+  function catLabel(f) {
+    if (f === 'all') return { t: 'Все здания', c: '#c9d3e0' };
+    for (var i = 0; i < G.menu.length; i++) if (G.menu[i].id === f) return { t: G.menu[i].icon + ' ' + G.menu[i].label, c: G.menu[i].tag };
+    return { t: 'Все здания', c: '#c9d3e0' };
+  }
+  function catCount(f) { return menuItems(f).length; }
   function catItem(id) {
     var l = catLabel(id);
     return '<button class="chip' + (buildFilter === id ? ' on' : '') + '" data-cat="' + id + '" role="menuitem"><span class="sw" style="background:' + l.c + '"></span><span class="nm">' + l.t + '</span><em>' + catCount(id) + '</em></button>';
   }
-  // Оформление: A / B / C / D (с 0.18.0)
-  function themeChips(cur, act) {
-    return G.themes.map(function (t, i) {
-      return '<button class="chip' + (i === cur ? ' on' : '') + '" ' + act + '="' + i + '" title="' + esc(t.name + ', ' + t.era) + '"><b><span class="sw" style="background:' + t.color + '"></span>' + t.letter + '</b><small>' + esc(t.short) + '</small></button>';
-    }).join('');
-  }
-  function renderStyleRow() {
-    var t = G.themes[buildTheme];
-    $('styleRow').innerHTML = '<span class="stl">Эпоха: <b>' + t.letter + ' · ' + esc(t.name) + '</b> · ' + esc(t.era) + '</span>' + themeChips(buildTheme, 'data-bth');
-  }
   function renderChips() {
-    $('catChips').innerHTML = catItem('all') + Object.keys(G.cats).filter(function (k) { return !G.cats[k].mech && !G.cats[k].group; }).map(catItem).join('') +
-      G.buildGroups.map(function (g) { return catItem(g.id); }).join('');
+    $('catChips').innerHTML = catItem('all') + G.menu.map(function (m) { return catItem(m.id); }).join('');
     var cl = catLabel(buildFilter); $('catCur').textContent = cl.t; $('catSw').style.background = cl.c;
     $('roadChips').innerHTML = Object.keys(G.roads).filter(function (k) { return !G.roads[k].hidden; }).map(function (k) {
       return '<button class="chip' + (k === roadType ? ' on' : '') + '" data-road="' + k + '"><span class="sw" style="background:' + G.roads[k].color + '"></span>' + G.roads[k].label + (state.env && G.roadCost[k] ? ' <em>' + G.roadCost[k].n + (G.roadCost[k].res === 'stone' ? '🪨' : '⚪') + '</em>' : '') + '</button>';
     }).join('');
     $('roadChips').innerHTML += '<button class="chip' + (roadType === 'stop' ? ' on' : '') + '" data-road="stop"><span class="sw" style="background:#e8c13a"></span>🚏 Остановка</button>';
-    renderStyleRow();
     renderCards();
   }
   function renderCards() {
-    var cats = filterCats(buildFilter), h = '';
-    cats.forEach(function (ck) {
-      var c = G.cats[ck];
-      catSizes(ck).forEach(function (sk) {
-        var on = ck === buildCat && sk === buildSize;
-        h += '<button class="bcard' + (on ? ' on' : '') + '" data-cat="' + ck + '" data-size="' + sk + '">' + thumbImg('th', thumbKey(ck, sk), thumbUrl(ck, sk)) +
-          '<span class="tx"><b>' + esc(c.names[sk]) + '</b><small>' + workText(ck, sk) + '</small>' +
-          '<span class="sz"><i style="background:' + c.tag + '"></i>' + G.sizes[sk].label + ' · <em>' + usd(costOf(ck, sk)) + '</em></span></span></button>';
-      });
+    var items = menuItems(buildFilter), h = '';
+    items.forEach(function (it) {
+      var ck = it[0], sk = it[1], c = G.cats[ck], m = menuOf(ck, sk);
+      var on = ck === buildCat && sk === buildSize;
+      h += '<button class="bcard' + (on ? ' on' : '') + '" data-cat="' + ck + '" data-size="' + sk + '">' + thumbImg('th', thumbKey(ck, sk), thumbUrl(ck, sk)) +
+        '<span class="tx"><b>' + esc(c.names[sk]) + '</b><small>' + workText(ck, sk) + '</small>' +
+        '<span class="sz"><i style="background:' + (m ? m.tag : c.tag) + '"></i>' + G.sizes[sk].label + ' · <em>' + usd(costOf(ck, sk)) + '</em></span></span></button>';
     });
     $('bGrid').innerHTML = h;
     var sel = $('bGrid').querySelector('.bcard.on');
@@ -3761,11 +3761,6 @@
     hint('Строим: ' + G.cats[buildCat].names[buildSize] + ' (' + G.sizes[buildSize].label + ') · ' + usd(costOf(buildCat, buildSize)) +
       ' · ⏱ ~' + secText(G.buildTime[buildSize] / n) + ' (' + n + ' ' + plural(n, 'бригада', 'бригады', 'бригад') + ')');
   }
-  function filterCats(f) {
-    var all = Object.keys(G.cats).filter(function (k) { return !G.cats[k].hidden; });
-    return f === 'all' ? all : f === 'mech' ? all.filter(function (k) { return G.cats[k].mech; }) :
-      f === 'resrc' || f === 'stone' || f === 'econ' ? all.filter(function (k) { return G.cats[k].group === f; }) : [f];
-  }
   // Меню категорий: кнопка «Категория» под главными кнопками, по нажатию открывается список (с 0.13.0)
   function catsOpen(on) {
     var l = $('catChips'); if (l.hidden === !on) return;
@@ -3777,15 +3772,14 @@
   $('catChips').addEventListener('click', function (e) {
     var b = e.target.closest('[data-cat]'); if (!b) return;
     buildFilter = b.dataset.cat;
-    var fc = filterCats(buildFilter), ch = false;
-    if (fc.indexOf(buildCat) < 0) { buildCat = fc[0]; ch = true; }
-    if (catSizes(buildCat).indexOf(buildSize) < 0) { buildSize = catSizes(buildCat)[0]; ch = true; }
+    var its = menuItems(buildFilter), ch = false;
+    if (!its.some(function (it) { return it[0] === buildCat && it[1] === buildSize; })) { buildCat = its[0][0]; buildSize = its[0][1]; ch = true; }
     if (ch) { buildSeed = newSeed(); setGhost(buildCat, buildSize, buildSeed); buildHint(); }
     renderChips(); $('bGrid').scrollTop = 0; catsOpen(false);
   });
   // Кнопка «Построить» на странице «Механизмы» → «Здания»
   function startPlace(ck) {
-    buildCat = ck; buildSize = catSizes(ck)[0]; buildFilter = 'mech'; buildSeed = newSeed();
+    buildCat = ck; buildSize = catSizes(ck)[0]; buildFilter = (menuOf(ck, buildSize) || { id: 'all' }).id; buildSeed = newSeed();
     closeMech(); setTool('build'); renderChips(); catsOpen(false);
     if (state.brigades.length) hint('Поставьте «' + G.cats[ck].names[buildSize] + '» вплотную к дороге · ' + usd(costOf(ck, buildSize)));
   }
@@ -3794,13 +3788,6 @@
     buildCat = b.dataset.cat; buildSize = b.dataset.size; buildSeed = newSeed();
     $('bGrid').querySelectorAll('.bcard').forEach(function (x) { x.classList.toggle('on', x === b); });
     setGhost(buildCat, buildSize, buildSeed); buildHint();
-  });
-  $('styleRow').addEventListener('click', function (e) {
-    var b = e.target.closest('[data-bth]'); if (!b) return;
-    buildTheme = +b.dataset.bth; try { localStorage.setItem(THEME_KEY, String(buildTheme)); } catch (e2) {}
-    renderStyleRow(); renderCards(); setGhost(buildCat, buildSize, buildSeed);
-    if (lastHover && tool === 'build' && ghost && ghost.isEnabled()) buildGhostTo(lastHover);
-    hint('Эпоха: ' + G.themes[buildTheme].name + ' · ' + G.themes[buildTheme].era);
   });
   $('roadChips').addEventListener('click', function (e) {
     var b = e.target.closest('[data-road]'); if (!b) return;
@@ -3812,6 +3799,9 @@
     if (tool === 'build' && lastHover && ghost && ghost.isEnabled()) buildGhostTo(lastHover);
   }
   $('btnRotate').addEventListener('click', rotateCurrent);
+  $('btnMulti').addEventListener('click', function () { setMulti(!buildMulti); });
+  $('btnMultiRoad').addEventListener('click', function () { multiRoad = !multiRoad; multiSave(); multiUi(); hint(multiRoad ? '🛣️ С дорогой: между зданиями остаётся клетка с простой дорогой' : 'Здания встанут вплотную друг к другу'); });
+  multiUi();
   $('toolbar').addEventListener('click', function (e) {
     var b = e.target.closest('.tool'); if (!b) return;
     if (b.dataset.tool === 'mech') { if (tool === 'mech') setTool('view'); else openMech(); } else if (b.dataset.tool === 'epochs') openEpochs(); else if (b.dataset.tool === 'home') centerCam(); else setTool(b.dataset.tool);
@@ -3823,6 +3813,89 @@
     var o = originFor(buildSize, buildRot, c);
     showGhostAt(buildSize, buildRot, o.x, o.z, canPlace(buildSize, buildRot, o.x, o.z, 0, buildCat) && state.brigades.length > 0);
     return o;
+  }
+  // ---------- Несколько зданий сразу (с 1.1.0) ----------
+  // Кнопка «Несколько» (клавиша M): нажать на карту и протянуть рамку — в ней встаёт сетка зданий выбранного размера, отпустили — все идут на стройку.
+  // «С дорогой»: между зданиями остаётся клетка, и на ней сразу кладётся простая дорога (она бесплатна), чтобы каждое здание работало.
+  var MULTI_KEY = 'moe_gorod_multi', MULTI_MAX = 400, buildMulti = false, multiRoad = false, multiPrev = { ok: null, bad: null, road: null }, multiMat = null;
+  multiRoad = true; try { var mk = localStorage.getItem(MULTI_KEY) || ''; if (mk) { buildMulti = mk.charAt(0) === '1'; multiRoad = mk.charAt(1) === '1'; } } catch (e) {}   // по умолчанию — с дорогой: иначе здания внутри сетки остались бы без дороги
+  function multiSave() { try { localStorage.setItem(MULTI_KEY, (buildMulti ? '1' : '0') + (multiRoad ? '1' : '0')); } catch (e) {} }
+  function multiUi() {
+    $('btnMulti').classList.toggle('on', buildMulti); $('btnMulti').setAttribute('aria-pressed', buildMulti ? 'true' : 'false');
+    $('btnMultiRoad').hidden = !buildMulti; $('btnMultiRoad').classList.toggle('on', multiRoad); $('btnMultiRoad').setAttribute('aria-pressed', multiRoad ? 'true' : 'false');
+    fitGrid();
+  }
+  function setMulti(on) {
+    buildMulti = !!on; multiSave(); multiUi(); clearMultiPreview();
+    if (tool === 'build') hint(buildMulti ? '▦ Несколько зданий: нажмите на карту и протяните рамку — внутри встанет сетка зданий. Простое нажатие ставит одно.' : 'Строим по одному зданию');
+  }
+  function multiActive() { return buildMulti && !G.cats[buildCat].unique; }
+  function multiPlan(a, b) {
+    var f = foot(buildSize, buildRot), gap = multiRoad ? 1 : 0, pw = f.w + gap, pd = f.d + gap, o0 = originFor(buildSize, buildRot, a), o1 = originFor(buildSize, buildRot, b);
+    var x0 = Math.min(o0.x, o1.x), x1 = Math.max(o0.x, o1.x) + f.w - 1, z0 = Math.min(o0.z, o1.z), z1 = Math.max(o0.z, o1.z) + f.d - 1;
+    var nx = Math.max(1, Math.floor((x1 - x0 + 1 + gap) / pw)), nz = Math.max(1, Math.floor((z1 - z0 + 1 + gap) / pd)), cut = false;
+    if (nx * nz > MULTI_MAX) { cut = true; if (nx > MULTI_MAX) nx = MULTI_MAX; nz = Math.max(1, Math.floor(MULTI_MAX / nx)); }
+    var dx = o1.x >= o0.x ? 1 : -1, dz = o1.z >= o0.z ? 1 : -1, tiles = [], ok = 0, i, j;
+    for (j = 0; j < nz; j++) for (i = 0; i < nx; i++) {
+      var x = o0.x + dx * i * pw, z = o0.z + dz * j * pd, good = canPlace(buildSize, buildRot, x, z, 0, buildCat);
+      tiles.push({ x: x, z: z, ok: good }); if (good) ok++;
+    }
+    var roads = [];
+    if (gap && nx * nz > 1) {
+      var bx0 = Math.min(o0.x, o0.x + dx * (nx - 1) * pw), bz0 = Math.min(o0.z, o0.z + dz * (nz - 1) * pd);
+      var bx1 = bx0 + (nx - 1) * pw + f.w - 1, bz1 = bz0 + (nz - 1) * pd + f.d - 1;
+      for (var zz = bz0; zz <= bz1; zz++) for (var xx = bx0; xx <= bx1; xx++) {
+        if (((xx - bx0) % pw) < f.w && ((zz - bz0) % pd) < f.d) continue;   // клетка здания
+        if (!inMap(xx, zz) || !loaded[ckOf(xx, zz)] || occ[idx(xx, zz)] || state.roads[key(xx, zz)] || terr[idx(xx, zz)] === 2) continue;
+        roads.push([xx, zz]);
+      }
+    }
+    return { tiles: tiles, ok: ok, nx: nx, nz: nz, roads: roads, cut: cut, f: f, nl: plural(roads.length, 'клетка', 'клетки', 'клеток') };
+  }
+  function clearMultiPreview() {
+    ['ok', 'bad', 'road'].forEach(function (k) { var m = multiPrev[k]; if (m) { m.dispose(); multiPrev[k] = null; } });
+    dirty();
+  }
+  function showMultiPreview(plan) {
+    if (!multiMat) multiMat = { ok: flatMat('#4cd964', { overlay: true, alpha: 0.5 }), bad: flatMat('#ff3b30', { overlay: true, alpha: 0.5 }), road: flatMat('#e8c13a', { overlay: true, alpha: 0.4 }) };
+    var q = { ok: [], bad: [], road: [] }, f = plan.f;
+    plan.tiles.forEach(function (t) { q[t.ok ? 'ok' : 'bad'].push([t.x + f.w / 2 - N / 2, t.z + f.d / 2 - N / 2, f.w - 0.08, f.d - 0.08, 0.04]); });
+    plan.roads.forEach(function (r) { q.road.push([r[0] + 0.5 - N / 2, r[1] + 0.5 - N / 2, 1, 1, 0.035]); });
+    ['ok', 'bad', 'road'].forEach(function (k) {
+      if (multiPrev[k]) { multiPrev[k].dispose(); multiPrev[k] = null; }
+      if (q[k].length) { var m = quadsMesh('mp' + k, q[k], multiMat[k]); multiPrev[k] = m; }
+    });
+    dirty();
+  }
+  function multiHint(plan) {
+    var n = plan.ok, cost = costOf(buildCat, buildSize) * n, nb = state.brigades.length;
+    if (!nb) { hint(NO_BRIGADE, true); return; }
+    var bad = plan.tiles.length - n;
+    hint('▦ ' + G.cats[buildCat].names[buildSize] + ' × ' + n + (bad ? ' (ещё ' + bad + ' не встанут — занято или нельзя)' : '') + ' · ' + usd(cost) + (canPay(cost) ? '' : ' — не хватает долларов, поставится сколько хватит') +
+      (plan.roads.length ? ' · 🛣️ ' + plan.roads.length + ' ' + plan.nl : plan.tiles.length > 1 && !multiRoad ? ' · ⚠️ без «С дорогой» здания внутри сетки останутся без дороги' : '') + (plan.cut ? ' · не больше ' + MULTI_MAX + ' за раз' : ''));
+  }
+  function placeMulti(plan) {
+    if (!state.brigades.length) { hint(NO_BRIGADE, true); return; }
+    var cost = costOf(buildCat, buildSize), f0 = foot(buildSize, buildRot), made = 0, noMoney = false, notReady = 0;
+    plan.tiles.forEach(function (t) {
+      if (!t.ok || noMoney) return;
+      if (!canPay(cost)) { noMoney = true; return; }
+      if (!ready4(t.x, t.z, f0.w, f0.d)) { notReady++; return; }
+      pay(cost); clearArea(t.x, t.z, f0.w, f0.d);
+      var b = { id: state.nextId++, cat: buildCat, size: buildSize, x: t.x, z: t.z, rot: buildRot, seed: newSeed(), th: curEra(), prog: 0 };
+      if (buildCat === 'res') b.pop = 0;
+      state.buildings.push(b); markOcc(b, b.id); touchB(b, true); addBuildingMesh(b); made++;
+    });
+    var roads = 0;
+    if (made) plan.roads.forEach(function (r) { if (!occ[idx(r[0], r[1])] && !state.roads[key(r[0], r[1])]) { setRoad(r[0], r[1], 'dirt'); roads++; } });
+    if (!made) { hint(noMoney ? 'Не хватает долларов: одно здание стоит ' + usd(cost) : notReady ? 'Эта часть карты ещё подгружается — подождите секунду' : 'Здесь ничего не встанет: всё занято или нельзя строить', true); return; }
+    assignBrigades(); snd('place');
+    buildSeed = newSeed(); setGhost(buildCat, buildSize, buildSeed);
+    save(); updateStats(); renderMech(); dirty();
+    var nb = state.brigades.length;
+    hint((noMoney ? '⚠️ ' : '🏗️ ') + 'Поставлено зданий: ' + made + ' из ' + plan.tiles.length + (roads ? ' · 🛣️ дорог: ' + roads + ' ' + plan.nl : '') + ' · ' + usd(cost * made) +
+      ' · ⏱ все будут готовы примерно через ' + secText(G.buildTime[buildSize] * made / Math.max(1, nb)) + ' (' + nb + ' ' + plural(nb, 'бригада', 'бригады', 'бригад') + ')' +
+      (noMoney ? ' — остальные не поставлены: не хватило долларов' : ''), noMoney);
   }
   function placeBuilding(c) {
     if (!state.brigades.length) { hint(NO_BRIGADE, true); return; }
@@ -3836,7 +3909,7 @@
     if (!canPay(cost)) { hint('Не хватает долларов: нужно ' + usd(cost), true); return; }
     if (buildCat === 'hall' && state.hall) { hint('🏛️ Городская Администрация в городе одна — её можно только перенести', true); return; }
     pay(cost); clearArea(o.x, o.z, f0.w, f0.d);
-    var b = { id: state.nextId++, cat: buildCat, size: buildSize, x: o.x, z: o.z, rot: buildRot, seed: buildSeed, th: buildTheme, prog: 0 };
+    var b = { id: state.nextId++, cat: buildCat, size: buildSize, x: o.x, z: o.z, rot: buildRot, seed: buildSeed, th: curEra(), prog: 0 };
     if (buildCat === 'res') b.pop = 0;
     if (buildCat === 'hall') state.hall = 1;
     state.buildings.push(b); markOcc(b, b.id); touchB(b, true); addBuildingMesh(b);
@@ -3847,14 +3920,34 @@
     var msg = crew ? '🏗️ Стройка началась: ' + G.cats[b.cat].names[b.size] : '🏗️ Стройка ждёт: все бригады заняты — купите ещё, чтобы быстрее';
     hint(hasRoad(b) ? msg : msg + '. 🛣️ Не забудьте дорогу — без неё здание не заработает');
   }
-  // Смена оформления готового здания (с 0.18.0): бесплатно, без новой стройки
-  function setBuildingTheme(b, th) {
-    if (isSite(b) || !G.themes[th] || (b.th | 0) === th) return;
-    b.th = th; touchB(b, true);
-    if (moving && moving.b.id === b.id) cancelMove();
-    removeBuildingMesh(b.id); addBuildingMesh(b);
-    save(); dirty();
-    if (infoId === b.id) renderInfo(b, true);
+  // Смена эпохи всего города (с 1.1.0): бесплатно, без новой стройки. Здания перерисовываются порциями по кадрам, чтобы большой город не подвисал.
+  var eraJob = 0;
+  function setEra(th) {
+    var t = G.themes[th]; if (!t || !state) return;
+    var same = curEra() === th && !state.buildings.some(function (b) { return (b.th | 0) !== th; });
+    state.era = th; try { localStorage.setItem(THEME_KEY, String(th)); } catch (e) {}
+    if (same) { updateEraBtn(); renderEpochs(); return; }
+    if (moving) cancelMove();
+    var todo = state.buildings.filter(function (b) { return (b.th | 0) !== th; }), i = 0, job = ++eraJob;
+    todo.forEach(function (b) { b.th = th; touchB(b, true); });   // в сохранение — сразу; достраиваемые здания получат эпоху при завершении стройки
+    var vis = todo.filter(function (b) { return !isSite(b); });
+    function step() {
+      if (job !== eraJob) return;
+      var t0 = performance.now();
+      while (i < vis.length && performance.now() - t0 < 12) { var b = vis[i++]; if (getB(b.id) && placed[b.id]) { removeBuildingMesh(b.id); addBuildingMesh(b); } }
+      dirty();
+      if (i < vis.length) requestAnimationFrame(step);
+    }
+    step();
+    renderCards(); setGhost(buildCat, buildSize, buildSeed);
+    if (infoId && getB(infoId)) renderInfo(getB(infoId), true);
+    save(); updateEraBtn(); renderEpochs(); snd('place');
+    hint('🕰️ Весь город — эпоха «' + t.name + '» (' + t.era + ')' + (todo.length ? ': ' + todo.length + ' ' + plural(todo.length, 'здание', 'здания', 'зданий') : ''));
+  }
+  function updateEraBtn() {
+    var t = G.themes[curEra()], b = document.querySelector('.tool.epochs');
+    if (!b) return;
+    b.querySelector('span').textContent = t.icon; b.querySelector('small').textContent = SIDE.matches ? t.short : 'Эпохи'; b.title = 'Эпоха города: ' + t.name + ', ' + t.era + ' — нажмите, чтобы сменить (клавиша 7)';
   }
   function deleteBuilding(b) {
     if (b.cat === 'hall') { hint('🏛️ Городскую Администрацию снести нельзя — только перенести', true); return; }
@@ -3961,7 +4054,7 @@
     if (tool === 'view') { startPan(e, true); return; }
     var c2 = cellAt(e.clientX, e.clientY); if (!c2) return;
     gest = { type: 'action', sx: e.clientX, sy: e.clientY, t: Date.now(), touch: !mouse, last: c2 };
-    if (tool === 'build') buildGhostTo(c2);
+    if (tool === 'build') { if (multiActive()) gest.mstart = c2; buildGhostTo(c2); }
     else if (tool === 'road') { gest.log = undoLog = []; setRoad(c2.x, c2.z, roadType); }
     else if (tool === 'delete') { gest.log = undoLog = []; deleteAt(e.clientX, e.clientY, c2); }
     else if (tool === 'move') {
@@ -4005,7 +4098,11 @@
     }
     if (gest.type === 'action') {
       var cl = cellAt(e.clientX, e.clientY); if (!cl) return; lastHover = cl;
-      if (tool === 'build') buildGhostTo(cl);
+      if (tool === 'build' && gest.mstart && multiActive() && (gest.mdrag || cl.x !== gest.mstart.x || cl.z !== gest.mstart.z)) {   // рамка из нескольких зданий
+        gest.mdrag = true; ghostOff();
+        var pl = multiPlan(gest.mstart, cl); showMultiPreview(pl); multiHint(pl);
+      }
+      else if (tool === 'build') buildGhostTo(cl);
       else if (tool === 'move' && moving) moveGhostTo(cl);
       else if (tool === 'road') { if (roadType !== 'stop') lineCells(gest.last, cl, function (x, z) { setRoad(x, z, roadType); }); showCursor(cl.x, cl.z, '#ffffff'); }
       else if (tool === 'delete') {
@@ -4036,7 +4133,8 @@
     }
     if (g.type === 'action') {
       var c = cellAt(e.clientX, e.clientY) || g.last;
-      if (tool === 'build') { placeBuilding(c); if (g.touch) hideGhost(); else buildGhostTo(c); }
+      if (tool === 'build' && g.mdrag && multiActive()) { var pl2 = multiPlan(g.mstart, c); clearMultiPreview(); placeMulti(pl2); if (g.touch) hideGhost(); else buildGhostTo(c); }
+      else if (tool === 'build') { clearMultiPreview(); placeBuilding(c); if (g.touch) hideGhost(); else buildGhostTo(c); }
       else if (tool === 'move' && moving) finishMove();
       if (g.touch) { cursor.setEnabled(false); dirty(); }
     }
@@ -4091,6 +4189,7 @@
     if (k === 'q' || k === 'й') rotateCam(1);
     else if (k === 'e' || k === 'у') rotateCam(-1);
     else if (k === 'r' || k === 'к') rotateCurrent();
+    else if ((k === 'm' || k === 'ь') && tool === 'build') setMulti(!buildMulti);
     else if (k === 'escape') { if (sideOpen) closeSide(); else if (!$('modal').hidden) closeModal(); else if (tool === 'mech') closeMech(); else if (!$('epochs').hidden) closeEpochs(); else { closeInfo(); setTool('view'); } }
     else if (k === '6') openMech();
     else if (k === '7') openEpochs();
@@ -4119,57 +4218,40 @@
   $('camIn').addEventListener('click', function () { cam.dist /= 1.25; updateCam(); });
   $('camOut').addEventListener('click', function () { cam.dist *= 1.25; updateCam(); });
 
-  // ---------- Страница «Эпохи» (с 0.19.0) ----------
+  // ---------- Страница «Эпохи» (с 0.19.0; с 1.1.0 эпоха одна на весь город) ----------
   // Четыре карточки: миниатюра, годы, рассказ о времени, стилистика и что это значит в игре.
-  // «Строить в этой эпохе» — выбор эпохи для новых зданий; «Весь город в эту эпоху» — перекрасить уже построенные (нажать дважды).
-  var epochArm = -1;
+  // Кнопка «Выбрать эпоху» перестраивает в ней весь город сразу и задаёт эпоху для новых зданий.
   function openEpochs() {
-    closeInfo(); if (moving) cancelMove(); closeSide && sideOpen && closeSide(); epochArm = -1;
+    closeInfo(); if (moving) cancelMove(); closeSide && sideOpen && closeSide();
     $('epochs').hidden = false;
     document.querySelector('.tool.epochs').classList.add('open');
     renderEpochs(); $('epochsBody').scrollTop = 0;
   }
-  function closeEpochs() { $('epochs').hidden = true; document.querySelector('.tool.epochs').classList.remove('open'); epochArm = -1; }
+  function closeEpochs() { $('epochs').hidden = true; document.querySelector('.tool.epochs').classList.remove('open'); }
   function renderEpochs() {
     if ($('epochs').hidden) return;
-    var cnt = G.themes.map(function () { return 0; }), done = 0;
-    state.buildings.forEach(function (b) { if (!isSite(b)) { cnt[b.th | 0]++; done++; } });
-    var h = '<p class="note epnote">Четыре эпохи архитектуры Европы начала XX века. Любое здание можно построить в любой из них: у каждой свои крыши, окна, цвета и детали.</p>';
+    var done = 0, cur = curEra();
+    state.buildings.forEach(function (b) { if (!isSite(b)) done++; });
+    var h = '<p class="note epnote">Четыре эпохи архитектуры Европы начала XX века. Эпоха одна на весь город: выберите её — и все здания сразу перестроятся в этом стиле, новые тоже будут стоять в ней. У каждой эпохи свои крыши, окна, цвета и детали. Выбор бесплатный, его можно менять сколько угодно.</p>';
     G.themes.forEach(function (t, i) {
-      var cur = i === buildTheme, other = done - cnt[i], arm = epochArm === i;
-      h += '<div class="epc' + (cur ? ' on' : '') + '" style="--ec:' + t.color + '">' +
+      var on = i === cur;
+      h += '<div class="epc' + (on ? ' on' : '') + '" style="--ec:' + t.color + '">' +
         '<div class="epc-top">' + thumbImg('epc-img', thumbKey('res', '2x2', i), thumbUrl('res', '2x2', i)) +
         '<div class="epc-hd"><h3><span class="epc-let">' + t.letter + '</span>' + esc(t.name) + '</h3><div class="epc-era">' + t.icon + ' ' + esc(t.era) + '</div>' +
         '<div class="epc-ab">' + esc(t.about) + '</div></div></div>' +
         '<div class="epc-sec"><b>🕰️ О времени</b><p>' + esc(t.time) + '</p></div>' +
         '<div class="epc-sec"><b>🏛️ Стилистика</b><p>' + esc(t.look) + '</p></div>' +
         '<div class="epc-sec"><b>🎮 В игре</b><p>' + esc(t.game) + '</p></div>' +
-        '<div class="epc-cnt">В городе в этой эпохе: <b>' + cnt[i] + '</b> ' + plural(cnt[i], 'здание', 'здания', 'зданий') + (cur ? ' · выбрана для новых построек' : '') + '</div>' +
-        '<div class="epc-btns"><button class="btn-buy" data-ep="use" data-th="' + i + '">' + (cur ? '✔ Строить в этой эпохе' : 'Строить в этой эпохе') + '</button>' +
-        '<button class="btn-sell' + (arm ? ' arm' : '') + '" data-ep="all" data-th="' + i + '"' + (other ? '' : ' disabled') + '>' +
-        (arm ? 'Точно? Нажмите ещё раз (' + other + ')' : other ? 'Весь город в эту эпоху (' + other + ')' : 'Весь город уже в этой эпохе') + '</button></div></div>';
+        '<div class="epc-cnt">' + (on ? 'Сейчас весь город — в этой эпохе (' + done + ' ' + plural(done, 'здание', 'здания', 'зданий') + ')' : 'Сейчас в городе другая эпоха') + '</div>' +
+        '<div class="epc-btns"><button class="btn-buy" data-ep="use" data-th="' + i + '"' + (on ? ' disabled' : '') + '>' + (on ? '✔ Выбрана для всего города' : 'Выбрать эпоху для всего города') + '</button></div></div>';
     });
     var sc = $('epochsBody').scrollTop;
     $('epochsBody').innerHTML = h; $('epochsBody').scrollTop = sc;
   }
-  function epochAct(act, th) {
-    var t = G.themes[th]; if (!t) return;
-    if (act === 'use') {
-      buildTheme = th; try { localStorage.setItem(THEME_KEY, String(th)); } catch (e) {}
-      renderStyleRow(); renderCards(); setGhost(buildCat, buildSize, buildSeed);
-      closeEpochs(); setTool('build');
-      hint('Эпоха для новых зданий: ' + t.name + ' · ' + t.era);
-    } else if (act === 'all') {
-      if (epochArm !== th) { epochArm = th; renderEpochs(); return; }
-      epochArm = -1; var n = 0;
-      state.buildings.slice().forEach(function (b) { if (!isSite(b) && (b.th | 0) !== th) { setBuildingTheme(b, th); n++; } });
-      renderEpochs(); hint('Весь город — эпоха «' + t.name + '»: ' + n + ' ' + plural(n, 'здание', 'здания', 'зданий'));
-    }
-  }
   $('epochsClose').addEventListener('click', closeEpochs);
   $('epochs').addEventListener('click', function (e) {
     if (e.target === $('epochs')) { closeEpochs(); return; }
-    var b = e.target.closest('[data-ep]'); if (b && !b.disabled) epochAct(b.dataset.ep, +b.dataset.th);
+    var b = e.target.closest('[data-ep]'); if (b && !b.disabled) setEra(+b.dataset.th);
   });
 
   // ---------- Страница «Механизмы» ----------
@@ -4299,7 +4381,6 @@
     else if (a === 'fixone' && infoRoad) repairOneAct(infoRoad);
     else if (a === 'cars') { openMech('cars'); return; }
     else if (/^(tax|fund|sell|army|tbuy|tsell|trucks)$/.test(a)) { actEco(a, el); return; }
-    else if (a === 'style') { var sb = getB(infoId); if (sb) setBuildingTheme(sb, +el.dataset.th); return; }
     renderMech();
   }
   $('panelMech').addEventListener('click', function (e) {
@@ -4390,8 +4471,8 @@
     infoId = b.id; infoRoad = '';
     var c = G.cats[b.cat], name = c.names[b.size], h = '';
     h += '<h2>' + esc(name) + '</h2>';
-    h += '<div class="sub"><span class="tag" style="background:' + c.tag + '">' + esc(c.label) + '</span>' + esc(address(b)) + ' · ' + G.sizes[b.size].label + '</div>';
-    if (!isSite(b)) var bt0 = G.themes[b.th | 0]; h += '<div class="strow inf"><span class="stl">Эпоха: <b>' + bt0.letter + ' · ' + esc(bt0.name) + '</b> · ' + esc(bt0.era) + ' — сменить можно бесплатно</span>' + themeChips(b.th | 0, 'data-act="style" data-th') + '</div>';
+    var mo = menuOf(b.cat, b.size);
+    h += '<div class="sub"><span class="tag" style="background:' + (mo ? mo.tag : c.tag) + '">' + esc(mo ? mo.icon + ' ' + mo.label : c.label) + '</span>' + esc(address(b)) + ' · ' + G.sizes[b.size].label + '</div>';
     if (isSite(b)) {
       var crew = siteCrew(b.id), pct = Math.floor(b.prog * 100), left = (1 - b.prog) * buildTime(b) / Math.max(1, crew.all);
       var sg = stageOf(b.prog);
@@ -4653,11 +4734,17 @@
     path.reverse(); return { path: path, start: start };
   }
   function spawnArrival() {
-    var e = state.eco, D = G.eco.arrive;
+    var e = state.eco;
     if (e.ban > state.gt || e.riot || e.food < 0.5 && census().P > 120) return;
-    var L = state.buildings.filter(function (b) { return b.cat === 'res' && isWorking(b) && residents(b).total + incoming(b.id) < residents(b).cap; });
+    var L = [], room = 0;
+    state.buildings.forEach(function (b) { if (b.cat === 'res' && isWorking(b)) { var r = residents(b).cap - residents(b).total - incoming(b.id); if (r > 0) { L.push(b); room += r; } } });
     if (!L.length) return;
-    var b = randomOf(L), R = residents(b), room = R.cap - R.total - incoming(b.id), kind = 'car', n = Math.min(room, D.car), r = Math.random();
+    var burst = clamp(1 + Math.floor(room / 500), 1, 5);   // с 1.1.0 дома большие (до 1000 человек): за один раз приезжает до 5 машин, а не одна
+    for (var k = 0; k < burst; k++) spawnOne(randomOf(L));
+  }
+  function spawnOne(b) {
+    var D = G.eco.arrive, R = residents(b), room = R.cap - R.total - incoming(b.id), kind = 'car', n = Math.min(room, D.car), r = Math.random();
+    if (room <= 0) return;
     if (room >= D.truck && r < 0.3) { kind = 'truck'; n = D.truck; } else if (room >= D.cart && r < 0.65) { kind = 'cart'; n = D.cart; }
     var far = farRoad(b), sp = spotAt(b, arrSeq, kind === 'car' ? 0.33 : 0.08);
     if (!far || !sp) { b.pop = R.total + n; touchB(b, false); statsSoon(); return; }
@@ -5162,7 +5249,7 @@
       updateChip(); ensureView();
       return waitLoads();
     }).then(function () { ensureView(); return waitLoads(); }).then(function () {
-      assignBrigades(); updateStats(); hideLoading(); ensureHall();
+      assignBrigades(); updateStats(); hideLoading(); ensureHall(); updateEraBtn();
       if (!WORLD.persistent()) hint('Хранилище браузера недоступно: мир живёт, пока открыта страница', true);
     }).catch(function (e) {
       switching = false; hideLoading();
@@ -5543,7 +5630,9 @@
   } catch (e) {}
   window.__gorod = {
     state: function () { return state; }, size: function () { return N; }, world: function () { return worldId; }, loaded: function () { return Object.keys(loaded); }, loading: function () { return Object.keys(loading); }, ensureView: ensureView, beginLog: function () { undoLog = []; }, undo: function () { var l = undoLog; undoLog = null; if (l) undoOps(l); }, delAt: function (x, z) { deleteAt(0, 0, { x: x, z: z }); }, openWorld: openWorld, createWorld: createWorld, natureUpgrade: natureUpgrade, saveNow: saveNow, metaCs: function () { return metaCs; }, ready4: ready4, WC: WC, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam,
-    road: function (x, z, t) { setRoad(x, z, t); }, stats: updateStats, setTheme: function (id, th) { var b = getB(id); if (b) setBuildingTheme(b, th); }, allTheme: function (th) { state.buildings.forEach(function (b) { setBuildingTheme(b, th); }); },
+    road: function (x, z, t) { setRoad(x, z, t); }, stats: updateStats, setEra: setEra,
+    multi: function (cat, size, ax, az, bx, bz, withRoad, rot) { buildCat = cat; buildSize = size; buildRot = rot | 0; multiRoad = !!withRoad; var pl = multiPlan({ x: ax, z: az, px: ax + 0.5, pz: az + 0.5 }, { x: bx, z: bz, px: bx + 0.5, pz: bz + 0.5 }); showMultiPreview(pl); var r = { tiles: pl.tiles.length, ok: pl.ok, nx: pl.nx, nz: pl.nz, roads: pl.roads.length }; placeMulti(pl); clearMultiPreview(); return r; },
+    menu: function () { return G.menu.map(function (m) { return m.id + ':' + menuItems(m.id).length; }); },
     scene: scene, buy: buyBrigade, siteAt: function (id, p) { var b = getB(id); b.prog = p; writeBuilding(b); updateSite(b, 0.016); }, openMech: openMech, sim: function () { return sim; }, frames: function () { return frames; },
     batches: function () { return Object.keys(batches).map(function (k) { return k + ':' + batches[k].ids.length; }); },
     wearAll: function (w) { for (var k in state.roads) if (state.roads[k] === 'asphalt') { state.wear[k] = typeof w === 'function' ? w(k) : w; markRoadKey(k); } dirty(); },
