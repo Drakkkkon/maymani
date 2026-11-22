@@ -403,3 +403,31 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .epc-btns button[disabled] { opacity: .5; }
 .epc-btns .arm { outline: 2px solid #ff8a7a; }
 @media (min-width: 900px) { .toolbar .tool.epochs { grid-column: 1 / -1; } }
+
+/* ---------- Миры и аккаунт (с 0.20.0) ---------- */
+.world-chip { display: flex; align-items: center; gap: 5px; max-width: 34vw; min-width: 0; border: 1px solid var(--line); background: rgba(255,255,255,.07);
+  border-radius: 999px; padding: 4px 10px; font-size: 13px; white-space: nowrap; }
+.world-chip b { overflow: hidden; text-overflow: ellipsis; color: var(--fg); font-weight: 600; }
+.world-chip i { font-style: normal; font-size: 12px; }
+.world-chip:hover { background: rgba(255,255,255,.14); }
+@media (max-width: 640px) { .brand b, .brand .ver { display: none; } .world-chip { max-width: 40vw; } .stats { gap: 9px; font-size: 13px; } }
+.chunk-note { position: fixed; left: 50%; top: calc(104px + var(--safet)); transform: translateX(-50%); z-index: 4; padding: 5px 12px; border-radius: 999px;
+  background: var(--bg); color: var(--mut); font-size: 12px; pointer-events: none; }
+.menu-btn .mb-sub { float: right; color: var(--mut); font-size: 12px; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.menu-btn.acc, .sb-body .menu-btn.acc { background: var(--acc); color: #2a2205; font-weight: 600; text-align: center; }
+.sb-body .menu-btn.acc:hover { background: #ffd467; }
+.wcard { border: 1px solid var(--line); background: rgba(255,255,255,.05); border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
+.wcard.cur { border-color: var(--acc); background: rgba(255,201,74,.09); }
+.wc-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.wc-top b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wc-top em { font-style: normal; font-size: 12px; color: var(--acc); white-space: nowrap; }
+.wc-sub { font-size: 12px; color: var(--mut); margin: 3px 0 8px; }
+.wc-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.wc-btns .mini { border: 0; background: rgba(255,255,255,.1); border-radius: 10px; padding: 7px 12px; font-size: 13px; }
+.wc-btns .mini:hover { background: rgba(255,255,255,.18); }
+.wc-btns .mini.danger { color: #ffb4a8; margin-left: auto; }
+.wname { width: 100%; margin: 6px 0 4px; padding: 11px 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(0,0,0,.25); color: var(--fg); font: inherit; user-select: text; -webkit-user-select: text; }
+.sz-h { margin: 12px 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--mut); }
+.chk { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: 14px; }
+.chk input { width: 18px; height: 18px; }
+.cloudrow { display: flex; gap: 8px; align-items: center; margin: 10px 0; font-size: 13px; color: var(--mut); }

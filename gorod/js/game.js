@@ -4,7 +4,7 @@
 // Одинаковые здания рисуются пачками (thin instances): тысячи домов — это десятки вызовов отрисовки.
 (function () {
   'use strict';
-  var G = window.GAME, N = G.mapSize, B = window.BABYLON;
+  var G = window.GAME, N = G.mapSize, B = window.BABYLON, WORLD = window.WORLD, WC = 100; // WC — сторона куска карты (с 0.20.0)
   var SAVE_KEY = 'moe_gorod_save_v1', SEEN_KEY = 'moe_gorod_seen';
   var $ = function (id) { return document.getElementById(id); };
   var TOUCH = window.matchMedia && matchMedia('(pointer: coarse)').matches;
@@ -28,7 +28,7 @@
   // ---------- Состояние ----------
   // b.prog (0…1) есть только у зданий, которые ещё строятся.
   var state, occ = new Int32Array(N * N);
-  function sizeOk(n) { return typeof n === 'number' && n >= 16 && n <= 160 && (n | 0) === n; }
+  function sizeOk(n) { return typeof n === 'number' && n >= 16 && n <= 1000 && (n | 0) === n; }
   function idx(x, z) { return z * N + x; }
   function inMap(x, z) { return x >= 0 && z >= 0 && x < N && z < N; }
   function key(x, z) { return x + ',' + z; }
@@ -87,19 +87,143 @@
   }
   function catSizes(ck) { return G.cats[ck].sizes || ['1x1', '2x1', '2x2', '4x4']; }
 
-  function load() {
+  function legacyLoad() { // старое сохранение (до 0.20.0) — один город в браузере
     try {
       var s = JSON.parse(localStorage.getItem(SAVE_KEY));
       if (s && s.v === 1 && Array.isArray(s.buildings) && s.roads) return fixState(s);
     } catch (e) {}
     return null;
   }
-  var saveTimer = 0;
-  function save() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 250); }
-  function saveNow() {
-    clearTimeout(saveTimer);
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {}
+
+  // ---------- Миры и куски карты (с 0.20.0) ----------
+  // Мир хранится в IndexedDB (и в облаке, если вы вошли в аккаунт) кусками по 100×100 клеток. В памяти — только те куски,
+  // что рядом с камерой: state.buildings / state.roads / state.wear содержат лишь загруженную часть карты.
+  var worldId = '', worldName = '', metaCs = {}, loaded = {}, loading = {}, dirtyCk = {}, worldTok = 0, switching = false, stale = false;
+  function ckey(cx, cz) { return cx + ',' + cz; }
+  function ckOf(x, z) { return ckey(Math.floor(x / WC), Math.floor(z / WC)); }
+  function ckOfKey(k) { var i = k.indexOf(','); return ckey(Math.floor(+k.slice(0, i) / WC), Math.floor(+k.slice(i + 1) / WC)); }
+  function nChunks() { return Math.ceil(N / WC); }
+  function bChunks(b) { // куски, которых касается здание (дом на границе — в обоих)
+    var f = foot(b.size, b.rot), out = [], x0 = Math.floor(b.x / WC), x1 = Math.floor((b.x + f.w - 1) / WC), z0 = Math.floor(b.z / WC), z1 = Math.floor((b.z + f.d - 1) / WC);
+    for (var cz = z0; cz <= z1; cz++) for (var cx = x0; cx <= x1; cx++) out.push(ckey(cx, cz));
+    return out;
   }
+  function allLoaded(b) { return bChunks(b).every(function (c) { return loaded[c]; }); }
+  function ready4(x, z, w, d) { return !!(loaded[ckOf(x, z)] && loaded[ckOf(x + w - 1, z)] && loaded[ckOf(x, z + d - 1)] && loaded[ckOf(x + w - 1, z + d - 1)]); }
+  var META_SKIP = { buildings: 1, roads: 1, wear: 1 };
+  function metaOf(st) { var g = {}; for (var k in st) if (!META_SKIP[k]) g[k] = st[k]; return JSON.parse(JSON.stringify(g)); }
+  function camSave() { return { tx: Math.round(cam.tx * 100) / 100, tz: Math.round(cam.tz * 100) / 100, dist: Math.round(cam.dist * 10) / 10, yaw: Math.round(cam.yaw * 1000) / 1000 }; }
+  // какие куски изменились (1 — мелочь вроде износа дорог и хода стройки, 2 — построили/снесли/переложили)
+  function touchCk(ck, hard) { if (loaded[ck]) dirtyCk[ck] = Math.max(dirtyCk[ck] || 0, hard ? 2 : 1); }
+  function touchB(b, hard) { bChunks(b).forEach(function (ck) { touchCk(ck, hard); }); }
+  function touchCell(x, z, hard) { touchCk(ckOf(x, z), hard); }
+  function flushChunks(only) {
+    var set = {}, any = false;
+    Object.keys(dirtyCk).forEach(function (ck) { if (!only || only === ck) { set[ck] = dirtyCk[ck]; delete dirtyCk[ck]; any = true; } });
+    if (!any) return;
+    var bl = {};
+    state.buildings.forEach(function (b) { bChunks(b).forEach(function (ck) { if (set[ck]) (bl[ck] = bl[ck] || []).push(b); }); });
+    Object.keys(set).forEach(function (ck) {
+      var p = ck.split(','), cx = +p[0], cz = +p[1];
+      var doc = WORLD.codec.encode(cx, cz, N, bl[ck] || [], function (x, z) { return state.roads[key(x, z)]; }, function (x, z) { return state.wear[key(x, z)] || 0; });
+      WORLD.putChunk(worldId, cx, cz, doc, set[ck] === 2);
+    });
+  }
+  var saveTimer = 0, saveHard = false;
+  function save() { saveHard = true; clearTimeout(saveTimer); saveTimer = setTimeout(function () { saveNow(false); }, 250); }
+  function saveSoft() { if (!saveTimer) saveTimer = setTimeout(function () { saveNow(true); }, 1500); }
+  function saveNow(soft) {
+    clearTimeout(saveTimer); saveTimer = 0;
+    if (!worldId || switching || stale || !WORLD.exists(worldId)) return;
+    var hardMeta = !soft || saveHard; saveHard = false;
+    flushChunks();
+    computeStats();
+    WORLD.update(worldId, { g: metaOf(state), cam: camSave(), cs: metaCs }, hardMeta);
+  }
+
+  // ---------- Подгрузка кусков по мере движения камеры ----------
+  function validB(b) { return b && typeof b.x === 'number' && typeof b.z === 'number' && G.cats[b.cat] && G.sizes[b.size]; }
+  function applyChunk(cx, cz, doc) {
+    var ck = ckey(cx, cz), d = WORLD.codec.decode(doc, cx, cz), sites = 0, mx, mz;
+    loaded[ck] = { x: cx, z: cz };
+    d.b.forEach(function (b) {
+      if (!validB(b) || byId[b.id]) return; // дом на границе лежит в двух кусках — берём один раз
+      b.th = G.themes[b.th | 0] ? b.th | 0 : 0;
+      if (b.id >= state.nextId) state.nextId = b.id + 1;
+      state.buildings.push(b); markOcc(b, b.id); addBuildingMesh(b); if (isSite(b)) sites++;
+    });
+    d.roads.forEach(function (r) { if (inMap(r[0], r[1])) state.roads[key(r[0], r[1])] = r[2]; });
+    d.wear.forEach(function (w) { state.wear[key(w[0], w[1])] = w[2]; });
+    var r = WC / CH; // куски дорог 20×20 вокруг и внутри (края зависят от соседей)
+    for (mz = cz * r - 1; mz <= cz * r + r; mz++) for (mx = cx * r - 1; mx <= cx * r + r; mx++) if (mx >= 0 && mz >= 0 && mx * CH < N && mz * CH < N) dirtyChunks[mx + ',' + mz] = 1;
+    resCache = {}; workCache = {};
+    if (sites) assignBrigades();
+    statsSoon(); dirty();
+  }
+  function loadChunk(cx, cz) {
+    var ck = ckey(cx, cz);
+    if (loaded[ck]) return Promise.resolve();
+    if (loading[ck]) return loading[ck];
+    var tok = worldTok, id = worldId;
+    return (loading[ck] = WORLD.getChunk(id, cx, cz).then(function (doc) {
+      if (tok !== worldTok) return;
+      delete loading[ck]; applyChunk(cx, cz, doc);
+    }, function (e) { if (tok === worldTok) delete loading[ck]; console.warn('кусок ' + ck + ' не загрузился', e); }));
+  }
+  function unloadChunk(ck) {
+    var L = loaded[ck]; if (!L) return;
+    flushChunks(ck); computeStats();
+    delete loaded[ck];
+    var keep = [], gone = [];
+    state.buildings.forEach(function (b) {
+      var cks = bChunks(b);
+      if (cks.indexOf(ck) < 0) { keep.push(b); return; }
+      if (cks.some(function (c) { return loaded[c]; })) keep.push(b); else gone.push(b); // дом на границе остаётся, пока загружен соседний кусок
+    });
+    gone.forEach(function (b) {
+      markOcc(b, 0); removeBuildingMesh(b.id); delete byId[b.id];
+      if (infoId === b.id) closeInfo();
+      if (moving && moving.b.id === b.id) cancelMove();
+    });
+    state.buildings = keep;
+    var x0 = L.x * WC, z0 = L.z * WC, x1 = Math.min(N, x0 + WC), z1 = Math.min(N, z0 + WC), x, z;
+    for (z = z0; z < z1; z++) for (x = x0; x < x1; x++) { var k = key(x, z); if (state.roads[k]) { delete state.roads[k]; delete state.wear[k]; } }
+    var r = WC / CH, mx, mz;
+    for (mz = L.z * r; mz < L.z * r + r; mz++) for (mx = L.x * r; mx < L.x * r + r; mx++) { var mk = mx + ',' + mz; (chunks[mk] || []).forEach(function (m) { m.dispose(); }); delete chunks[mk]; delete dirtyChunks[mk]; }
+    for (mz = L.z * r - 1; mz <= L.z * r + r; mz++) for (mx = L.x * r - 1; mx <= L.x * r + r; mx++) if (mx >= 0 && mz >= 0 && chunks[mx + ',' + mz]) dirtyChunks[mx + ',' + mz] = 1;
+    resCache = {}; workCache = {};
+    statsSoon(); dirty();
+  }
+  function viewBox() { // какая часть карты (в клетках) сейчас на экране
+    var rc = canvas.getBoundingClientRect(), x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+    [[rc.left, rc.top], [rc.right, rc.top], [rc.left, rc.bottom], [rc.right, rc.bottom]].forEach(function (q) {
+      var g = groundAt(q[0], q[1]); if (!g) return;
+      x0 = Math.min(x0, g.x); x1 = Math.max(x1, g.x); z0 = Math.min(z0, g.z); z1 = Math.max(z1, g.z);
+    });
+    if (x0 > x1) { x0 = x1 = cam.tx; z0 = z1 = cam.tz; }
+    return { x0: x0 + N / 2, x1: x1 + N / 2, z0: z0 + N / 2, z1: z1 + N / 2 };
+  }
+  function rangeOf(box, m) {
+    var n = nChunks();
+    return [Math.max(0, Math.floor((box.x0 - m) / WC)), Math.min(n - 1, Math.floor((box.x1 + m) / WC)), Math.max(0, Math.floor((box.z0 - m) / WC)), Math.min(n - 1, Math.floor((box.z1 + m) / WC))];
+  }
+  function ensureView() {
+    if (!worldId || switching) return;
+    var box = viewBox(), R = rangeOf(box, 14), K = rangeOf(box, 90), need = [], cx, cz, mid = { x: (box.x0 + box.x1) / 2, z: (box.z0 + box.z1) / 2 };
+    for (cz = R[2]; cz <= R[3]; cz++) for (cx = R[0]; cx <= R[1]; cx++) need.push([cx, cz]);
+    need.sort(function (a, b) { return Math.hypot(a[0] * WC + 50 - mid.x, a[1] * WC + 50 - mid.z) - Math.hypot(b[0] * WC + 50 - mid.x, b[1] * WC + 50 - mid.z); });
+    var active = Object.keys(loading).length;
+    need.forEach(function (c) { var ck = ckey(c[0], c[1]); if (!loaded[ck] && !loading[ck] && active < 4) { loadChunk(c[0], c[1]); active++; } });
+    var pin = {}; // куски со стройплощадками не выгружаем: там идёт работа
+    state.buildings.forEach(function (b) { if (isSite(b)) bChunks(b).forEach(function (c) { pin[c] = 1; }); });
+    Object.keys(loaded).forEach(function (ck) {
+      var L = loaded[ck];
+      if (pin[ck] || (L.x >= K[0] && L.x <= K[1] && L.z >= K[2] && L.z <= K[3])) return;
+      unloadChunk(ck);
+    });
+    var ld = Object.keys(loading).length; $('chunkNote').hidden = !ld;
+  }
+  function waitLoads() { return Promise.all(Object.keys(loading).map(function (k) { return loading[k]; })); }
   function rebuildOcc() { occ.fill(0); state.buildings.forEach(function (b) { markOcc(b, b.id); }); }
   function markOcc(b, val) {
     var f = foot(b.size, b.rot);
@@ -109,6 +233,7 @@
   function getB(id) { return byId[id] || null; }
   function canPlace(sz, rot, x, z, ignoreId) {
     var f = foot(sz, rot);
+    if (!ready4(x, z, f.w, f.d)) return false; // эта часть карты ещё не подгружена
     for (var zz = z; zz < z + f.d; zz++) for (var xx = x; xx < x + f.w; xx++) {
       if (!inMap(xx, zz)) return false;
       var o = occ[idx(xx, zz)];
@@ -1350,7 +1475,7 @@
     return m;
   }
 
-  // ---------- Дороги: куски карты 16×16 клеток, каждый — одна сетка на материал ----------
+  // ---------- Дороги: куски 20×20 клеток, каждый — одна сетка на материал ----------
   var roadMat = {};
   ['asphalt', 'dirt'].forEach(function (t) {
     var c = document.createElement('canvas'); c.width = c.height = 64; var g = c.getContext('2d');
@@ -1420,7 +1545,7 @@
   // Стадия износа клетки асфальта: 0 — новая, 1 — средний износ, 2 — почти изношена
   function wearOf(k) { return state.wear[k] || 0; }
   function wearStage(w) { return w < G.wear.mid ? 0 : w < G.wear.worn ? 1 : 2; }
-  var CH = 16, chunks = {}, dirtyChunks = {};
+  var CH = 20, chunks = {}, dirtyChunks = {}; // 20 клеток: куски дорог ровно ложатся на куски мира 100×100
   var DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   function markRoad(x, z) { dirtyChunks[Math.floor(x / CH) + ',' + Math.floor(z / CH)] = 1; }
   function buildChunk(ck) {
@@ -1877,7 +2002,11 @@
   // ---------- Бригады ----------
   function truckBatch() { return getBatch('truck', function () { return truckModel(kit); }); }
   function writeTruck(br, bob, roll) { batchSet(truckBatch(), br.id, br.x, bob || 0, br.z, br.yaw || 0, 0.78, 0.78, 0.78, roll || 0); }
-  function parkSpot(i, n) { n = n || N; return { x: ((i % 6) - 2.5) * 0.9, z: n / 2 - 0.9 - Math.floor(i / 6) * 0.9 }; }
+  function parkSpot(i, cx, cz) { // стоянка бригад — рядом с центром экрана (или с заводом), а не у края карты
+    if (cx === undefined) { cx = cam.tx; cz = cam.tz; }
+    var h = N / 2 - 1;
+    return { x: clamp(cx + ((i % 6) - 2.5) * 0.9, -h, h), z: clamp(cz + Math.floor(i / 6) * 0.9, -h, h) };
+  }
   function siteCenter(b) { var f = foot(b.size, b.rot); return { x: b.x + f.w / 2 - N / 2, z: b.z + f.d / 2 - N / 2 }; }
   // k-я машина на объекте встаёт вдоль сторон участка
   function slotPos(b, k) {
@@ -1931,7 +2060,7 @@
     if (!canPay(u.price)) { hint('Не хватает долларов на бригаду', true); return; }
     pay(u.price);
     var i = state.brigades.length, p = parkSpot(i);
-    var br = { id: state.nextBr++, x: p.x, z: N / 2 + 1.6, yaw: Math.PI, park: p, site: 0 };
+    var br = { id: state.nextBr++, x: p.x, z: Math.min(N / 2 - 0.2, p.z + 3), yaw: Math.PI, park: p, site: 0 };
     state.brigades.push(br); writeTruck(br); dirty();
     assignBrigades(); save(); refreshNeed(); renderMech();
     hint(state.buildings.some(isSite) ? '🚚 Бригада выехала на стройку' : '🚚 Бригада куплена — теперь можно строить');
@@ -1978,7 +2107,7 @@
     state.buildings.forEach(function (b) {
       if (!isSite(b)) return;
       var a = arrived[b.id], st = sites[b.id];
-      if (a) b.prog = Math.min(1, b.prog + dt * a * u.power * (1 + useStock(dt)) / buildTime(b));
+      if (a) { b.prog = Math.min(1, b.prog + dt * a * u.power * (1 + useStock(dt)) / buildTime(b)); touchB(b, false); }
       if (a || (st && st.wn)) updateSite(b, dt);
       if (b.prog >= 1) done.push(b);
     });
@@ -1987,7 +2116,7 @@
     return any;
   }
   function finishSite(b) {
-    delete b.prog;
+    delete b.prog; touchB(b, true);
     removeBuildingMesh(b.id); addBuildingMesh(b);
     assignBrigades(); updateStats(); saveNow();
     if (infoId === b.id) renderInfo(b, true);
@@ -2067,7 +2196,7 @@
   }
   function spawnTruck(fb) {
     var g = localPos(fb, 0.6, 0.65), i = state.brigades.length;
-    var br = { id: state.nextBr++, x: g.x, z: g.z, yaw: g.yaw, park: parkSpot(i), site: 0 };
+    var br = { id: state.nextBr++, x: g.x, z: g.z, yaw: g.yaw, park: parkSpot(i, g.x, g.z + 2), site: 0 };
     state.brigades.push(br); writeTruck(br);
     assignBrigades(); saveNow(); refreshNeed(); renderMech(); dirty();
     hint('🏭 Завод выпустил грузовик «Бригада»' + (br.site ? ' — он поехал на стройку' : ''));
@@ -2342,24 +2471,25 @@
   function tickWear(dt) {
     wearAcc += dt; if (wearAcc < 1) return;
     var step = wearAcc; wearAcc = 0;
-    var base = step / G.wear.life, auto = state.autoRepair && working('depot').length > 0, qd = auto ? queuedSet() : null, broken = [], ch = false;
+    var wearCk = {}, base = step / G.wear.life, auto = state.autoRepair && working('depot').length > 0, qd = auto ? queuedSet() : null, broken = [], ch = false;
     for (var k in state.roads) {
       if (state.roads[k] !== 'asphalt' || fixing[k]) continue;
       var w = state.wear[k] || 0, nw = w + base * cellK(k) * (traffic[k] ? G.wear.traffic : 1);
       if (wearStage(nw) !== wearStage(w)) { markRoadKey(k); ch = true; }
       if (nw >= 1) { broken.push(k); continue; }
-      state.wear[k] = nw;
+      state.wear[k] = nw; wearCk[ckOfKey(k)] = 1;
       if (auto && nw >= G.repair.autoAt && !qd[k]) { state.rq.push(k); qd[k] = 1; }
     }
     // разбитый асфальт становится простой дорогой — здания у неё продолжают работать
-    broken.forEach(function (k) { var p = k.split(','); state.roads[k] = 'dirt'; delete state.wear[k]; refreshRoadAround(+p[0], +p[1]); });
+    broken.forEach(function (k) { var p = k.split(','); state.roads[k] = 'dirt'; delete state.wear[k]; touchCk(ckOfKey(k), true); refreshRoadAround(+p[0], +p[1]); });
     if (broken.length) {
       var t = performance.now();
       if (t - brokeHintT > 20000) { brokeHintT = t; hint('🕳️ Асфальт разбит (' + broken.length + ' ' + plural(broken.length, 'клетка', 'клетки', 'клеток') + ') и стал простой дорогой. Чините дороги в Дорожном депо', true); }
       statsSoon();
     }
     if (ch || broken.length) dirty();
-    wearSaveT += step; if (wearSaveT >= 5 || broken.length) { wearSaveT = 0; save(); }
+    Object.keys(wearCk).forEach(function (c) { touchCk(c, false); });
+    wearSaveT += step; if (wearSaveT >= 5 || broken.length) { wearSaveT = 0; if (broken.length) save(); else saveSoft(); }
   }
   function roadStats() {
     var r = { asphalt: 0, dirt: 0, cobble: 0, mid: 0, worn: 0, sum: 0, todo: 0, todoCost: 0 }, qd = queuedSet();
@@ -2434,11 +2564,11 @@
         if (state.roads[k] !== 'asphalt') { finishJob(r); return; }
         r.t += dt;
         var q = Math.min(1, r.t / R.work), s0 = wearStage(state.wear[k] || 0), w = r.w0 * (1 - q);
-        state.wear[k] = w; if (wearStage(w) !== s0) markRoadKey(k);
+        state.wear[k] = w; touchCk(ckOfKey(k), false); if (wearStage(w) !== s0) markRoadKey(k);
         var off = Math.sin(r.t * 3.2) * 0.26;
         r.x = r.bx + Math.sin(r.yaw) * off; r.z = r.bz + Math.cos(r.yaw) * off;
         writeRoller(r, Math.abs(Math.sin(t * 0.03)) * 0.005); any = true;
-        if (q >= 1) { delete state.wear[k]; markRoadKey(k); repairedN++; finishJob(r); }
+        if (q >= 1) { delete state.wear[k]; touchCk(ckOfKey(k), true); markRoadKey(k); repairedN++; finishJob(r); }
         return;
       }
       var tgt = r.home;
@@ -2594,18 +2724,18 @@
   function snapYaw(y) { var q = Math.PI / 2; return Math.round((y - Math.PI / 4) / q) * q + Math.PI / 4; }
   function camHome() {
     cam.tx = 0; cam.tz = 2; cam.yaw = Math.PI / 4; cam.pitch = ISO_PITCH; cam.yawGoal = null;
-    cam.dist = clamp(N * 0.72, 24, 90) * (window.innerWidth < window.innerHeight ? 1.3 : 1);
+    cam.dist = clamp(N * 0.72, 24, 45) * (window.innerWidth < window.innerHeight ? 1.3 : 1);
     updateCam();
   }
   function aspect() { return engine.getRenderWidth() / Math.max(1, engine.getRenderHeight()); }
   function updateCam() {
-    cam.dist = clamp(cam.dist, 5, Math.max(80, N * 1.3));
+    cam.dist = clamp(cam.dist, 5, Math.max(80, Math.min(N * 1.3, 150))); // дальше 150 не отдаляем: видимая часть не должна быть больше ~5×5 кусков
     cam.pitch = ISO_PITCH;
     cam.tx = clamp(cam.tx, -N / 2, N / 2); cam.tz = clamp(cam.tz, -N / 2, N / 2);
     var cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch), dx = cp * Math.sin(cam.yaw), dz = cp * Math.cos(cam.yaw);
     var halfH = cam.dist * Math.tan(camera.fov / 2);
     // Ортографическая камера: дальние дома не уменьшаются, все линии параллельны.
-    var far = N * 2 + 60;
+    var far = Math.min(N * 2 + 60, 600);
     camera.mode = B.Camera.ORTHOGRAPHIC_CAMERA;
     camera.orthoTop = halfH; camera.orthoBottom = -halfH;
     // Компьютер и планшет: панель справа — центр города сдвигаем в середину свободной части экрана (влево)
@@ -3027,11 +3157,13 @@
   function placeBuilding(c) {
     if (!state.brigades.length) { hint(NO_BRIGADE, true); return; }
     var o = originFor(buildSize, buildRot, c), cost = costOf(buildCat, buildSize);
+    var f0 = foot(buildSize, buildRot);
+    if (inMap(o.x, o.z) && !ready4(o.x, o.z, f0.w, f0.d)) { hint('Эта часть карты ещё подгружается — подождите секунду', true); return; }
     if (!canPlace(buildSize, buildRot, o.x, o.z, 0)) { hint('Здесь занято или край карты', true); return; }
     if (!canPay(cost)) { hint('Не хватает долларов: нужно ' + usd(cost), true); return; }
     pay(cost);
     var b = { id: state.nextId++, cat: buildCat, size: buildSize, x: o.x, z: o.z, rot: buildRot, seed: buildSeed, th: buildTheme, prog: 0 };
-    state.buildings.push(b); markOcc(b, b.id); addBuildingMesh(b);
+    state.buildings.push(b); markOcc(b, b.id); touchB(b, true); addBuildingMesh(b);
     assignBrigades();
     buildSeed = newSeed(); setGhost(buildCat, buildSize, buildSeed);
     save(); updateStats(); renderMech(); dirty();
@@ -3042,25 +3174,28 @@
   // Смена оформления готового здания (с 0.18.0): бесплатно, без новой стройки
   function setBuildingTheme(b, th) {
     if (isSite(b) || !G.themes[th] || (b.th | 0) === th) return;
-    b.th = th;
+    b.th = th; touchB(b, true);
     if (moving && moving.b.id === b.id) cancelMove();
     removeBuildingMesh(b.id); addBuildingMesh(b);
     save(); dirty();
     if (infoId === b.id) renderInfo(b, true);
   }
   function deleteBuilding(b) {
-    markOcc(b, 0); removeBuildingMesh(b.id); delete byId[b.id];
+    if (!allLoaded(b)) { hint('Эта часть карты ещё подгружается — подождите секунду', true); return; }
+    if (undoLog) undoLog.push(['b', JSON.parse(JSON.stringify(b))]);
+    touchB(b, true); markOcc(b, 0); removeBuildingMesh(b.id); delete byId[b.id];
     state.buildings.splice(state.buildings.indexOf(b), 1);
     if (infoId === b.id) closeInfo();
     if (isSite(b)) { assignBrigades(); renderMech(); }
     save(); updateStats(); dirty();
   }
   function setRoad(x, z, t) {
-    if (!inMap(x, z)) return;
-    var k = key(x, z);
-    if (t) { if (occ[idx(x, z)] || state.roads[k] === t) return; state.roads[k] = t; delete state.wear[k]; }
-    else { if (!state.roads[k]) return; delete state.roads[k]; delete state.wear[k]; }
-    refreshRoadAround(x, z); save(); statsSoon(); dirty();
+    if (!inMap(x, z) || !loaded[ckOf(x, z)]) return;
+    var k = key(x, z), pt = state.roads[k], pw = state.wear[k];
+    if (t) { if (occ[idx(x, z)] || pt === t) return; state.roads[k] = t; delete state.wear[k]; }
+    else { if (!pt) return; delete state.roads[k]; delete state.wear[k]; }
+    if (undoLog) undoLog.push(['r', k, pt, pw]);
+    touchCell(x, z, true); refreshRoadAround(x, z); save(); statsSoon(); dirty();
   }
   function lineCells(a, b, fn) { // Брезенхэм
     var x0 = a.x, z0 = a.z, x1 = b.x, z1 = b.z, dx = Math.abs(x1 - x0), dz = Math.abs(z1 - z0), sx = x0 < x1 ? 1 : -1, sz = z0 < z1 ? 1 : -1, err = dx - dz;
@@ -3082,6 +3217,7 @@
   }
 
   function startMove(b, c) {
+    if (!allLoaded(b)) { hint('Эта часть карты ещё подгружается — подождите секунду', true); return; }
     moving = { b: b, offX: c.px - b.x, offZ: c.pz - b.z, rot: b.rot, x: b.x, z: b.z };
     writeBuilding(b);
     setGhost(b.cat, b.size, b.seed, b.th | 0);
@@ -3097,7 +3233,7 @@
   function finishMove() {
     var mv = moving, b = mv.b; moving = null;
     if (canPlace(b.size, mv.rot, mv.x, mv.z, b.id)) {
-      markOcc(b, 0); b.x = mv.x; b.z = mv.z; b.rot = mv.rot; markOcc(b, b.id);
+      touchB(b, true); markOcc(b, 0); b.x = mv.x; b.z = mv.z; b.rot = mv.rot; markOcc(b, b.id); touchB(b, true);
       save(); updateStats();
       if (!isSite(b) && !hasRoad(b)) hint('🛣️ Здесь нет дороги — здание не работает, пока её не подведёте', true);
     } else hint('Сюда нельзя — здание вернулось на место', true);
@@ -3130,8 +3266,8 @@
     var c2 = cellAt(e.clientX, e.clientY); if (!c2) return;
     gest = { type: 'action', sx: e.clientX, sy: e.clientY, t: Date.now(), touch: !mouse, last: c2 };
     if (tool === 'build') buildGhostTo(c2);
-    else if (tool === 'road') { gest.snap = JSON.stringify(state.roads); setRoad(c2.x, c2.z, roadType); }
-    else if (tool === 'delete') { gest.snap = JSON.stringify(state); deleteAt(e.clientX, e.clientY, c2); }
+    else if (tool === 'road') { gest.log = undoLog = []; setRoad(c2.x, c2.z, roadType); }
+    else if (tool === 'delete') { gest.log = undoLog = []; deleteAt(e.clientX, e.clientY, c2); }
     else if (tool === 'move') {
       var b = pickBuilding(e.clientX, e.clientY);
       if (b) startMove(b, c2); else startPan(e, false);
@@ -3190,7 +3326,7 @@
     if (!gest) return;
     if (gest.type === 'two') { if (ptrs.size === 0) gest = null; return; }
     if (ptrs.size > 0) return;
-    var g = gest; gest = null;
+    var g = gest; gest = null; undoLog = null;
     if (e.type === 'pointercancel') { cancelAction(g); return; }
     if (g.type === 'pan' && g.tap && !g.moved) {
       var b = pickBuilding(e.clientX, e.clientY);
@@ -3209,6 +3345,21 @@
   canvas.addEventListener('pointercancel', endPointer);
   canvas.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse' && !gest) { if (!moving) hideGhost(); cursor.setEnabled(false); dirty(); } });
 
+  var undoLog = null;
+  function undoOps(log) { // вернуть дороги и здания, тронутые случайным жестом (журнал, а не снимок всего города)
+    for (var i = log.length - 1; i >= 0; i--) {
+      var o = log[i];
+      if (o[0] === 'r') {
+        var k = o[1], p = k.split(',');
+        if (o[2]) state.roads[k] = o[2]; else delete state.roads[k];
+        if (o[3]) state.wear[k] = o[3]; else delete state.wear[k];
+        touchCk(ckOfKey(k), true); refreshRoadAround(+p[0], +p[1]);
+      } else if (!byId[o[1].id]) {
+        var b = o[1]; state.buildings.push(b); markOcc(b, b.id); touchB(b, true); addBuildingMesh(b);
+      }
+    }
+    assignBrigades(); updateStats(); save(); dirty();
+  }
   function cancelAction(g) {
     g = g || gest;
     if (!g || g.type !== 'action') return;
@@ -3216,9 +3367,9 @@
     if (tool === 'move') cancelMove();
     // второй палец быстро после первого — отменить случайную дорогу/удаление
     if (g.touch && Date.now() - g.t < 450) {
-      if (tool === 'road' && g.snap) { state.roads = JSON.parse(g.snap); rebuildAll(); save(); }
-      if (tool === 'delete' && g.snap) { state = fixState(JSON.parse(g.snap)); rebuildAll(); save(); }
+      if (g.log) undoOps(g.log);
     }
+    undoLog = null;
     cursor.setEnabled(false); gest = null; dirty();
   }
 
@@ -3680,15 +3831,25 @@
 
   // ---------- Статистика ----------
   var noRoadCount = 0, statsTimer = 0;
-  function updateStats() {
-    clearTimeout(statsTimer);
-    var people = 0, jobs = 0, built = 0, off = 0;
+  // Сводка по кускам (здания, жители, рабочие места): загруженные считаем заново, остальные берём из записи мира
+  function computeStats() {
+    var per = {}, off = 0;
+    Object.keys(loaded).forEach(function (ck) { per[ck] = [0, 0, 0]; });
     state.buildings.forEach(function (b) {
       pinFor(b);
-      if (isSite(b)) return; built++;
+      var c = per[ckOf(b.x, b.z)];
+      if (isSite(b)) return;
+      if (c) c[0]++;
       if (!hasRoad(b)) { off++; return; }
-      if (b.cat === 'res') people += residents(b).total; else jobs += workplace(b).staff;
+      if (c) { if (b.cat === 'res') c[1] += residents(b).total; else c[2] += workplace(b).staff; }
     });
+    Object.keys(per).forEach(function (ck) { var a = per[ck]; if (a[0] || a[1] || a[2]) metaCs[ck] = a; else delete metaCs[ck]; });
+    var T = totals(); T.off = off; return T;
+  }
+  function totals() { var r = { b: 0, p: 0, j: 0 }; for (var ck in metaCs) { r.b += metaCs[ck][0]; r.p += metaCs[ck][1]; r.j += metaCs[ck][2]; } return r; }
+  function updateStats() {
+    clearTimeout(statsTimer);
+    var T = computeStats(), people = T.p, jobs = T.j, built = T.b, off = T.off;
     noRoadCount = off;
     $('stPeople').textContent = people.toLocaleString('ru-RU');
     $('stJobs').textContent = jobs.toLocaleString('ru-RU');
@@ -3723,13 +3884,16 @@
     var f = function (n) { return Number(n).toLocaleString('ru-RU'); };
     var nb = Object.keys(batches).filter(function (k) { return batches[k].ids.length; }).length;
     return '<h2>📊 Город</h2><div class="kv">' +
-      '<span>Жителей</span><span><b>' + f(sim.people) + '</b></span>' +
+      '<span>Мир</span><span>' + esc(worldName) + ', ' + N + '×' + N + '</span>' +
+      '<span>Загружено кусков 100×100</span><span>' + Object.keys(loaded).length + ' из ' + nChunks() * nChunks() + '</span>' +
+      '<span>Жителей во всём мире</span><span><b>' + f(totals().p) + '</b></span>' +
+      '<span>Из них в загруженной части</span><span>' + f(sim.people) + '</span>' +
       '<span>Взрослых, кто может работать</span><span>' + f(sim.adults) + '</span>' +
       '<span>Работают</span><span>' + f(sim.employed) + '</span>' +
       '<span>Ищут работу</span><span>' + f(sim.unemployed) + '</span>' +
       '<span>Рабочих мест</span><span>' + f(sim.jobs) + ' (свободно ' + f(sim.freeJobs) + ')</span>' +
-      '<span>Зданий</span><span>' + f(state.buildings.length) + '</span>' +
-      '<span>Не работают — нет дороги</span><span>' + (noRoadCount ? '<span class="bad">' + f(noRoadCount) + '</span>' : '0') + '</span>' +
+      '<span>Зданий во всём мире</span><span>' + f(totals().b) + '</span>' +
+      '<span>Не работают — нет дороги (загруженная часть)</span><span>' + (noRoadCount ? '<span class="bad">' + f(noRoadCount) + '</span>' : '0') + '</span>' +
       (function () { var R = roadStats(); return '<span>Асфальт</span><span>' + f(R.asphalt) + ' кл., средний износ ' + pctText(R.avg) + '</span>' +
         '<span>Средний износ / почти изношен</span><span>' + f(R.mid) + ' / ' + (R.worn ? '<span class="bad">' + f(R.worn) + '</span>' : '0') + '</span>' +
         '<span>Простая дорога</span><span>' + f(R.dirt) + ' кл.</span>' +
@@ -3748,21 +3912,21 @@
   // открываются внутри неё (кнопка «←» — назад в меню); при первом запуске новой версии окно «Что нового» остаётся всплывающим.
   var sideOpen = false;
   function menuRootHtml() {
+    var u = WORLD.cloud.status().user;
     return '<h2>Мое_город ' + G.version + '</h2>' +
+      '<button class="menu-btn" data-m="worlds">🌍 Миры<span class="mb-sub">' + esc(worldName) + ' · ' + N + '×' + N + '</span></button>' +
+      '<button class="menu-btn" data-m="acct">👤 Аккаунт<span class="mb-sub">' + (u ? esc(u.email) : 'вход не выполнен') + '</span></button>' +
       '<button class="menu-btn" data-m="help">📖 Гайд по игре</button>' +
       '<button class="menu-btn" data-m="news">📝 Что нового</button>' +
       '<button class="menu-btn" data-m="city">📊 Город</button>' +
       '<button class="menu-btn" data-m="mech">🚚 Механизмы</button>' +
-      '<button class="menu-btn" data-m="size">🗺️ Размер карты <span style="float:right;color:#a9b6c8">' + N + '×' + N + '</span></button>' +
-      '<button class="menu-btn" data-m="demo">🏘️ Загрузить город-пример</button>' +
-      '<button class="menu-btn danger" data-m="clear">🧹 Новая пустая карта</button>' +
-      '<p style="font-size:13px;color:#a9b6c8">Город сохраняется сам в этом браузере. Бригады переезжают на новую карту вместе с вами.</p>';
+      '<p style="font-size:13px;color:#a9b6c8">Миры сохраняются сами — на этом устройстве, а после входа в аккаунт ещё и в облаке (одни и те же миры на телефоне и компьютере). Бригады, машины и деньги у каждого мира свои.</p>';
   }
-  function sideShow(html, sub) { $('sbBody').innerHTML = html; $('sbBody').scrollTop = 0; $('sbPrev').hidden = !sub; }
-  function menuView(html, sub) { if (sideOpen) sideShow(html, sub); else openModal(html); }
+  function sideShow(html, sub, keep) { var st = $('sbBody').scrollTop; $('sbBody').innerHTML = html; $('sbBody').scrollTop = keep ? st : 0; $('sbPrev').hidden = !sub; }
+  function menuView(html, sub, keep) { if (sideOpen) sideShow(html, sub, keep); else openModal(html); }
   function openSide() {
     if (sideOpen) return;
-    sideOpen = true; confirmArm = ''; pickSize = 0;
+    sideOpen = true; confirmArm = ''; menuMode = '';
     sideShow(menuRootHtml(), false);
     $('sidebar').classList.add('open'); $('sidebar').setAttribute('aria-hidden', 'false'); $('sbScrim').classList.add('open');
     $('btnMenu').setAttribute('aria-expanded', 'true');
@@ -3776,92 +3940,180 @@
   function openMenu() { if (sideOpen) closeSide(); else openSide(); }
   $('sbClose').addEventListener('click', closeSide);
   $('sbScrim').addEventListener('click', closeSide);
-  $('sbPrev').addEventListener('click', function () { confirmArm = ''; pickSize = 0; sideShow(menuRootHtml(), false); });
-  var pickSize = 0;
+  $('sbPrev').addEventListener('click', function () { confirmArm = ''; menuMode = ''; sideShow(menuRootHtml(), false); });
+  // ---------- Миры (с 0.20.0) ----------
+  var menuMode = '', confirmArm = '', newSize = G.mapSize, newDemo = false, newName = '';
   function sizeLabel(n) { for (var i = 0; i < G.mapSizes.length; i++) if (G.mapSizes[i].n === n) return G.mapSizes[i].label; return 'Своя'; }
-  function lostCount(n) { // сколько зданий и дорог не поместится при смене размера
-    var o = Math.floor((n - N) / 2), lb = 0, lr = 0;
-    state.buildings.forEach(function (b) { var f = foot(b.size, b.rot); if (b.x + o < 0 || b.z + o < 0 || b.x + o + f.w > n || b.z + o + f.d > n) lb++; });
-    Object.keys(state.roads).forEach(function (k) { var p = k.split(','), x = +p[0] + o, z = +p[1] + o; if (x < 0 || z < 0 || x >= n || z >= n) lr++; });
-    return { b: lb, r: lr };
+  function worldCard(w) {
+    var cur = w.id === worldId, nc = Math.ceil(w.size / WC);
+    var tags = [w.size + '×' + w.size, '🏢 ' + w.b.toLocaleString('ru-RU'), '👥 ' + w.p.toLocaleString('ru-RU')];
+    if (w.cloudOnly) tags.push('☁️ только в облаке'); else if (w.cloud) tags.push('☁️ в облаке'); else if (WORLD.cloud.on()) tags.push('⏳ ждёт отправки');
+    var btns = '';
+    if (!cur) btns += '<button class="mini" data-m="wopen" data-id="' + w.id + '">Открыть</button>';
+    else if (stale) btns += '<button class="mini" data-m="wopen" data-id="' + w.id + '">↻ Загрузить новую версию</button>';
+    btns += '<button class="mini" data-m="wren" data-id="' + w.id + '" aria-label="Переименовать">✏️</button><button class="mini danger" data-m="wdel" data-id="' + w.id + '" aria-label="Удалить">🗑️</button>';
+    return '<div class="wcard' + (cur ? ' cur' : '') + '"><div class="wc-top"><b>' + esc(w.name) + '</b>' + (cur ? '<em>▶ открыт</em>' : '') + '</div>' +
+      '<div class="wc-sub">' + tags.join(' · ') + ' · ' + nc * nc + ' ' + plural(nc * nc, 'кусок', 'куска', 'кусков') + '</div><div class="wc-btns">' + btns + '</div></div>';
   }
-  function openSize() {
-    if (!pickSize) pickSize = N;
-    var h = '<h2>Размер карты</h2><p>Сейчас: <b>' + sizeLabel(N).toLowerCase() + ', ' + N + '×' + N + '</b> клеток.</p><div class="size-grid">' +
-      G.mapSizes.map(function (m) {
-        return '<button class="size-opt' + (m.n === pickSize ? ' on' : '') + '" data-n="' + m.n + '"><i style="width:' + Math.round(14 + m.n / 128 * 30) + 'px;height:' + Math.round(14 + m.n / 128 * 30) + 'px"></i><b>' + m.label + '</b><span>' + m.n + '×' + m.n + '</span></button>';
+  function showWorlds(keep) {
+    menuMode = 'worlds';
+    return WORLD.list().then(function (L) {
+      if (menuMode !== 'worlds') return;
+      var h = '<h2>🌍 Миры</h2><button class="menu-btn acc" data-m="wnew">➕ Новый мир</button>' +
+        (L.length ? L.map(worldCard).join('') : '<p>Миров пока нет — создайте первый.</p>') +
+        '<p style="font-size:13px;color:#a9b6c8">' + (WORLD.cloud.on() ? '☁️ Миры сохраняются в облаке вашего аккаунта и открываются на любом устройстве.' : 'Миры лежат на этом устройстве. Войдите в аккаунт («👤 Аккаунт»), и они появятся в облаке — на телефоне и на компьютере будет одно и то же.') + '</p>';
+      menuView(h, true, keep);
+    });
+  }
+  function showNew() {
+    menuMode = 'new'; confirmArm = '';
+    var groups = [], h = '<h2>➕ Новый мир</h2><p style="font-size:13px;color:#a9b6c8">Карта начинается пустой: купите бригаду, проложите дорогу и стройте. Большие миры загружаются кусками по 100×100 клеток — по мере того, как вы двигаете камеру.</p>' +
+      '<input id="wName" class="wname" maxlength="40" placeholder="Название мира" value="' + esc(newName) + '">';
+    G.mapSizes.forEach(function (m) { if (groups.indexOf(m.g) < 0) groups.push(m.g); });
+    groups.forEach(function (g) {
+      h += '<div class="sz-h">' + g + '</div><div class="size-grid">' + G.mapSizes.filter(function (m) { return m.g === g; }).map(function (m) {
+        var c = Math.ceil(m.n / WC);
+        return '<button class="size-opt' + (m.n === newSize ? ' on' : '') + '" data-n="' + m.n + '"><i style="width:' + Math.round(12 + Math.sqrt(m.n / 1000) * 30) + 'px;height:' + Math.round(12 + Math.sqrt(m.n / 1000) * 30) + 'px"></i><b>' + m.n + '×' + m.n + '</b><span>' + (c * c > 1 ? c * c + ' ' + plural(c * c, 'кусок', 'куска', 'кусков') : '1 кусок') + '</span></button>';
       }).join('') + '</div>';
-    if (pickSize !== N) {
-      var L = lostCount(pickSize), warn = '';
-      if (L.b || L.r) warn = '<p class="warn">Не поместятся у края: ' + (L.b ? L.b + ' ' + plural(L.b, 'здание', 'здания', 'зданий') : '') + (L.b && L.r ? ' и ' : '') + (L.r ? L.r + ' ' + plural(L.r, 'клетка', 'клетки', 'клеток') + ' дороги' : '') + ' — они будут удалены.</p>';
-      h += '<button class="menu-btn" data-m="resize">' + (pickSize > N ? '↔️ Расширить карту — город останется в центре' : '↘️ Уменьшить карту — город останется в центре') + '</button>' + warn +
-        '<button class="menu-btn" data-m="newdemo">🏘️ Новая карта ' + pickSize + '×' + pickSize + ' с городом-примером</button>' +
-        '<button class="menu-btn danger" data-m="newempty">🧹 Новая пустая карта ' + pickSize + '×' + pickSize + '</button>';
-    } else h += '<p style="font-size:13px;color:#a9b6c8">Выберите другой размер, чтобы расширить или уменьшить карту.</p>';
-    h += '<p style="font-size:13px;color:#a9b6c8">Огромные карты на слабых телефонах могут работать медленнее.</p>';
+    });
+    h += '<label class="chk"><input type="checkbox" id="wDemo"' + (newDemo ? ' checked' : '') + '> Положить в центр город-пример</label>' +
+      '<button class="menu-btn acc" data-m="wmake" id="wMake">✅ Создать мир ' + newSize + '×' + newSize + '</button>';
     menuView(h, true);
   }
-  function resizeMap(n) {
-    var o = Math.floor((n - N) / 2), nb = [], nr = {};
-    state.buildings.forEach(function (b) {
-      var f = foot(b.size, b.rot); b.x += o; b.z += o;
-      if (b.x >= 0 && b.z >= 0 && b.x + f.w <= n && b.z + f.d <= n) nb.push(b);
-    });
-    Object.keys(state.roads).forEach(function (k) {
-      var p = k.split(','), x = +p[0] + o, z = +p[1] + o;
-      if (x >= 0 && z >= 0 && x < n && z < n) nr[key(x, z)] = state.roads[k];
-    });
-    state.brigades.forEach(function (br, i) {
-      br.x = clamp(br.x, -n / 2, n / 2); br.z = clamp(br.z, -n / 2, n / 2 + 2);
-      if (br.park) br.park = parkSpot(i, n);
-    });
-    var nw = {};
-    function shift(k) { var p = k.split(','), x = +p[0] + o, z = +p[1] + o; return x >= 0 && z >= 0 && x < n && z < n ? key(x, z) : null; }
-    Object.keys(state.wear).forEach(function (k) { var k2 = shift(k); if (k2) nw[k2] = state.wear[k]; });
-    clearRollers();
-    state.rq = state.rq.map(shift).filter(Boolean);
-    state.buildings = nb; state.roads = nr; state.size = n; state.wear = nw;
-    resCache = {}; workCache = {};
+  function showAcct() {
+    menuMode = 'acct';
+    menuView('<h2>👤 Аккаунт</h2><div id="acct-box"></div><div id="acct-cloud"></div>' +
+      '<p style="font-size:13px;color:#a9b6c8">Это тот же аккаунт, что на других моих сайтах: вошли один раз — вошли везде. Без входа миры остаются только на этом устройстве.</p>', true);
+    if (window.MMAccount) MMAccount.mount('#acct-box'); else $('acct-box').innerHTML = '<p class="warn">Модуль входа не загрузился. Проверьте интернет и обновите страницу.</p>';
+    renderCloud();
   }
-  // Новая карта: бригады и потраченные доллары переезжают с игроком
-  function carryUnits(s) {
-    s.brigades = state.brigades.map(function (br, i) { var p = parkSpot(i, s.size); return { id: br.id, x: p.x, z: p.z, yaw: Math.PI, park: p, site: 0 }; });
-    s.nextBr = state.nextBr; s.spent = state.spent;
-    s.fql = state.fql.slice(); s.fprog = state.fprog; s.autoRepair = state.autoRepair; // заказы на заводе и настройка депо тоже переезжают
-    s.vehicles = state.vehicles.map(function (v) { return { id: v.id, kind: v.kind }; }); s.nextVeh = state.nextVeh; // и машины завода
-    return s;
+  function renderCloud() {
+    var el = $('acct-cloud'); if (!el) return;
+    var c = WORLD.cloud.status(), ico = { ok: '✅', syncing: '🔄', error: '⚠️', offline: '📴', off: '💾' }[c.state] || '💾';
+    el.innerHTML = c.user ? '<div class="cloudrow">' + ico + ' <span>Миры в облаке: ' + esc(c.text || 'готово') + '</span></div><button class="menu-btn" data-m="wsync">🔄 Синхронизировать миры сейчас</button>' : '';
   }
-  function applyState(s, keepCam) {
-    closeInfo(); cancelMove(); state = s; rebuildAll(); save();
-    if (keepCam) updateCam(); else camHome();
-    pickSize = 0; closeModal(); closeSide();
-    hint('Карта ' + N + '×' + N + ' готова');
+  function updateChip() {
+    var c = WORLD.cloud.status(), ico = !c.user ? '' : stale ? '⚠️' : { ok: '☁️', syncing: '🔄', error: '⚠️', offline: '📴' }[c.state] || '';
+    $('worldName').textContent = worldName || '…'; $('worldCloud').textContent = ico;
+    $('worldChip').title = (stale ? 'Мир изменили на другом устройстве — откройте его заново. ' : '') + (c.text || '');
   }
+  WORLD.onChange(function (ev) {
+    if (ev.type === 'list') { if (sideOpen && menuMode === 'worlds') showWorlds(true); updateChip(); }
+    else if (ev.type === 'status') { updateChip(); if (sideOpen && menuMode === 'acct') renderCloud(); }
+    else if (ev.type === 'remote' && ev.id === worldId) { stale = true; updateChip(); hint('☁️ Этот мир изменили на другом устройстве. «🌍 Миры» → «Загрузить новую версию». Пока сохранения этого устройства на паузе.', true); }
+    else if (ev.type === 'removed' && ev.id === worldId) { worldId = ''; hint('Этот мир удалили на другом устройстве', true); openAnyWorld(); }
+  });
+  $('worldChip').addEventListener('click', function () { openSide(); showWorlds(); WORLD.cloud.poke(); });
+
+  // ---------- Открыть, создать, удалить мир ----------
+  function showLoading(t) { $('loading').textContent = t || 'Загрузка мира…'; $('loading').classList.remove('done'); }
+  function hideLoading() { $('loading').classList.add('done'); dirty(); }
+  function openWorld(id) {
+    if (switching) return Promise.resolve();
+    if (worldId) saveNow(false);
+    switching = true; showLoading('Загрузка мира…');
+    return WORLD.open(id).then(function (meta) {
+      closeInfo(); cancelMove(); closeMech(); closeEpochs();
+      worldTok++; loaded = {}; loading = {}; dirtyCk = {}; stale = false; undoLog = null;
+      worldId = meta.id; worldName = meta.name; WORLD.setOpen(meta.id);
+      var g = Object.assign(emptyState(meta.size), meta.g || {}); g.buildings = []; g.roads = {}; g.wear = {}; g.size = meta.size;
+      state = fixState(g); metaCs = meta.cs || {};
+      rebuildAll();
+      if (meta.cam && isFinite(meta.cam.tx)) { cam.tx = meta.cam.tx; cam.tz = meta.cam.tz; cam.dist = meta.cam.dist || cam.dist; cam.yaw = meta.cam.yaw || Math.PI / 4; cam.pitch = ISO_PITCH; cam.yawGoal = null; updateCam(); }
+      else camHome();
+      try { localStorage.setItem('moe_gorod_last', meta.id); } catch (e) {}
+      switching = false;
+      updateChip(); ensureView();
+      return waitLoads();
+    }).then(function () { ensureView(); return waitLoads(); }).then(function () {
+      assignBrigades(); updateStats(); hideLoading();
+      if (!WORLD.persistent()) hint('Хранилище браузера недоступно: мир живёт, пока открыта страница', true);
+    }).catch(function (e) {
+      switching = false; hideLoading();
+      hint(String((e && e.message) || e), true);
+    });
+  }
+  function openAnyWorld() {
+    return WORLD.list().then(function (L) {
+      if (L.length) return openWorld(L[0].id);
+      return createWorld('Мой город', G.mapSize, false).then(openWorld);
+    });
+  }
+  function createWorld(name, size, demo) {
+    var s0 = emptyState(size);
+    return WORLD.create({ name: name, size: size, g: metaOf(s0), cs: {} }).then(function (w) {
+      if (!demo) return w.id;
+      var d = demoState(size), docs = WORLD.codec.chunkify(size, d.buildings, d.roads, {}, function (b) { return foot(b.size, b.rot); });
+      WORLD.update(w.id, { g: Object.assign(metaOf(s0), { nextId: d.nextId }) }, true);
+      return Promise.all(Object.keys(docs).map(function (ck) { var q = ck.split(','); return WORLD.putChunk(w.id, +q[0], +q[1], docs[ck], true); })).then(function () { return w.id; });
+    });
+  }
+  function migrateLegacy() { // прежнее сохранение (одна карта в браузере) становится первым миром
+    var done = false; try { done = !!localStorage.getItem('moe_gorod_migrated'); } catch (e) {}
+    var old = done ? null : legacyLoad();
+    if (!old) return Promise.resolve();
+    var docs = WORLD.codec.chunkify(old.size, old.buildings, old.roads, old.wear, function (b) { return foot(b.size, b.rot); });
+    return WORLD.create({ name: 'Мой город', size: old.size, g: metaOf(old), cs: {} }).then(function (w) {
+      return Promise.all(Object.keys(docs).map(function (ck) { var q = ck.split(','); return WORLD.putChunk(w.id, +q[0], +q[1], docs[ck], true); }));
+    }).then(function () { try { localStorage.setItem('moe_gorod_migrated', '1'); } catch (e) {} });
+  }
+  function deleteWorld(id) {
+    var cur = id === worldId;
+    if (cur) { saveNow(false); worldId = ''; worldTok++; }
+    return WORLD.remove(id).then(function () { if (cur) return openAnyWorld(); });
+  }
+  function startWorlds() {
+    var remembered = false; try { remembered = !!localStorage.getItem('mma.user'); } catch (e) {}
+    return WORLD.ready.then(migrateLegacy).then(function () { return WORLD.list(); }).then(function (L) {
+      if (L.length || !remembered || !window.MMAccount) return L;
+      // первый запуск на этом устройстве, но вход уже был: даём облаку несколько секунд — вдруг там уже есть миры
+      return Promise.race([MMAccount.whenReady(3000).then(function () { return WORLD.cloud.sync(false); }), new Promise(function (r) { setTimeout(r, 5000); })]).then(function () { return WORLD.list(); });
+    }).then(function (L) {
+      if (!L.length) return createWorld('Мой город', G.mapSize, false).then(function () { return WORLD.list(); });
+      return L;
+    }).then(function (L) {
+      var last = ''; try { last = localStorage.getItem('moe_gorod_last') || ''; } catch (e) {}
+      var pick = L.filter(function (w) { return w.id === last; })[0] || L[0];
+      return openWorld(pick.id);
+    }).catch(function (e) { console.error(e); hint('Не удалось открыть мир: ' + ((e && e.message) || e), true); hideLoading(); });
+  }
+
   $('btnMenu').addEventListener('click', openMenu);
-  var confirmArm = '';
   function menuClick(e) {
     var b = e.target.closest('[data-m],[data-n]'); if (!b) return;
     var m = b.dataset.m;
     var sb = e.target.closest('[data-n]');
-    if (sb) { pickSize = +sb.dataset.n; confirmArm = ''; openSize(); return; }
+    if (sb && !m) { // выбор размера нового мира
+      newSize = +sb.dataset.n;
+      var box = sb.closest('#sbBody, #modalBody');
+      Array.prototype.forEach.call(box.querySelectorAll('.size-opt'), function (x) { x.classList.toggle('on', x === sb); });
+      var mk = $('wMake'); if (mk) mk.textContent = '✅ Создать мир ' + newSize + '×' + newSize;
+      return;
+    }
     if (m === 'help') menuView(guideHtml(), true);
     else if (m === 'gsec') { var d = document.getElementById('g-' + b.dataset.s); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); } }
-    else if (m === 'city') menuView(cityHtml(), true);
+    else if (m === 'city') { menuMode = 'city'; menuView(cityHtml(), true); }
     else if (m === 'mech') { closeModal(); closeSide(); openMech(); }
-    else if (m === 'size') { pickSize = N; confirmArm = ''; openSize(); }
-    else if (m === 'resize') {
-      var L = lostCount(pickSize);
-      if ((L.b || L.r) && confirmArm !== m) { confirmArm = m; b.textContent = 'Точно? Часть города у края пропадёт — нажмите ещё раз'; return; }
-      confirmArm = ''; resizeMap(pickSize); applyState(state, false);
-    }
-    else if (m === 'newdemo' || m === 'newempty') {
-      if (confirmArm !== m) { confirmArm = m; b.textContent = 'Точно? Текущий город пропадёт — нажмите ещё раз'; return; }
-      confirmArm = ''; applyState(carryUnits(m === 'newdemo' ? demoState(pickSize) : emptyState(pickSize)), false);
-    }
     else if (m === 'news') menuView('<h2>Что нового</h2>' + changelogHtml(), true);
-    else if (m === 'demo' || m === 'clear') {
-      if (confirmArm !== m) { confirmArm = m; b.textContent = 'Точно? Текущий город пропадёт — нажмите ещё раз'; return; }
-      confirmArm = ''; applyState(carryUnits(m === 'demo' ? demoState(N) : emptyState(N)), true);
+    else if (m === 'worlds') { showWorlds(); WORLD.cloud.poke(); }
+    else if (m === 'acct') showAcct();
+    else if (m === 'wsync') { WORLD.cloud.sync(true).then(function () { renderCloud(); }); }
+    else if (m === 'wnew') { WORLD.list().then(function (L) { newName = 'Мир ' + (L.length + 1); showNew(); }); }
+    else if (m === 'wopen') { var id = b.dataset.id; closeModal(); closeSide(); openWorld(id); }
+    else if (m === 'wren') {
+      var wid = b.dataset.id, cur0 = WORLD.get(wid), nm = window.prompt('Название мира', cur0 ? cur0.name : '');
+      if (nm !== null) { WORLD.rename(wid, nm); if (wid === worldId) { worldName = (WORLD.get(wid) || {}).name || worldName; updateChip(); } }
+    }
+    else if (m === 'wdel') {
+      var did = b.dataset.id, tag = 'wdel' + did;
+      if (confirmArm !== tag) { confirmArm = tag; b.textContent = 'Точно? Мир исчезнет навсегда'; return; }
+      confirmArm = ''; deleteWorld(did);
+    }
+    else if (m === 'wmake') {
+      var nmv = (($('wName') || {}).value || '').trim() || 'Новый мир', demo = !!($('wDemo') || {}).checked;
+      newDemo = demo; b.disabled = true; b.textContent = 'Создаём…';
+      if (worldId) saveNow(false);
+      createWorld(nmv, newSize, demo).then(function (id) { closeModal(); closeSide(); return openWorld(id); });
     }
   }
   $('modalBody').addEventListener('click', menuClick);
@@ -3892,7 +4144,7 @@
     dirty();
   }
 
-  var needRender = true, lastT = performance.now(), lastSave = 0, lastUi = 0, frames = 0;
+  var needRender = true, lastT = performance.now(), lastSave = 0, lastUi = 0, frames = 0, lastView = 0, camSig = '', camT = 0;
   function dirty() { needRender = true; }
   function loop() {
     var t = performance.now(), dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
@@ -3900,7 +4152,8 @@
     var active = tickBrigades(dt, t);
     tickFactory(dt); tickWear(dt); tickTraffic(dt); tickSawmills(dt);
     var fixingNow = tickRepair(dt, t);
-    if ((active || fixingNow) && t - lastSave > 2000) { saveNow(); lastSave = t; }
+    if ((active || fixingNow) && t - lastSave > 2000) { saveNow(true); lastSave = t; }
+    if (t - lastView > 220) { lastView = t; ensureView(); var sg = Math.round(cam.tx) + ',' + Math.round(cam.tz) + ',' + Math.round(cam.dist); if (sg !== camSig) { camSig = sg; camT = t; } else if (camT && t - camT > 2500) { camT = 0; saveSoft(); } }
     if (t - lastUi > 400) {
       lastUi = t;
       if (infoId) { var ib = getB(infoId); if (ib && isSite(ib)) renderInfo(ib, true); }
@@ -3915,10 +4168,11 @@
       if (!scene.isReady()) needRender = true; // шейдеры ещё собираются — дорисуем следующим кадром
     }
   }
-  window.addEventListener('pagehide', saveNow);
+  window.addEventListener('pagehide', function () { saveNow(false); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') saveNow(false); });
 
   // ---------- Старт ----------
-  state = load() || demoState(G.mapSize);
+  state = emptyState(G.mapSize); // до открытия мира — пустая заготовка
   $('ver').textContent = G.version;
   try { localStorage.removeItem('moe_gorod_view'); } catch (e) {} // старая настройка вида (3D / ИЗО / HD) больше не нужна
   enableHD(); resize();
@@ -3926,8 +4180,10 @@
   renderChips(); rebuildAll(); setTool('view');
   camHome();
   engine.runRenderLoop(loop);
-  scene.executeWhenReady(function () { $('loading').classList.add('done'); dirty(); });
-  setTimeout(function () { $('loading').classList.add('done'); }, 5000);
+  setTimeout(function () { $('loading').classList.add('done'); }, 15000);
+  if (window.MMAccount) MMAccount.setup({ app: 'gorod', title: 'Мое_город', toast: function (t) { hint(t); }, ls: ['moe_gorod_prefs'], onRemoteApplied: function () {},
+    note: 'Сами миры (карты) хранятся в облаке отдельно — они в разделе «🌍 Миры».' });
+  startWorlds();
   try {
     var seen = localStorage.getItem(SEEN_KEY);
     if (seen !== G.version) {
@@ -3936,7 +4192,7 @@
     }
   } catch (e) {}
   window.__gorod = {
-    state: function () { return state; }, size: function () { return N; }, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam,
+    state: function () { return state; }, size: function () { return N; }, world: function () { return worldId; }, loaded: function () { return Object.keys(loaded); }, loading: function () { return Object.keys(loading); }, ensureView: ensureView, beginLog: function () { undoLog = []; }, undo: function () { var l = undoLog; undoLog = null; if (l) undoOps(l); }, delAt: function (x, z) { deleteAt(0, 0, { x: x, z: z }); }, openWorld: openWorld, createWorld: createWorld, saveNow: saveNow, metaCs: function () { return metaCs; }, ready4: ready4, WC: WC, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam,
     road: function (x, z, t) { setRoad(x, z, t); }, stats: updateStats, setTheme: function (id, th) { var b = getB(id); if (b) setBuildingTheme(b, th); }, allTheme: function (th) { state.buildings.forEach(function (b) { setBuildingTheme(b, th); }); },
     scene: scene, buy: buyBrigade, siteAt: function (id, p) { var b = getB(id); b.prog = p; writeBuilding(b); updateSite(b, 0.016); }, openMech: openMech, sim: function () { return sim; }, frames: function () { return frames; },
     batches: function () { return Object.keys(batches).map(function (k) { return k + ':' + batches[k].ids.length; }); },
@@ -3950,7 +4206,7 @@
         var cat = cats[made % cats.length], s = sz[made % 3], f = foot(s, 0), x = Math.floor(Math.random() * (N - f.w)), z = Math.floor(Math.random() * (N - f.d));
         if (!canPlace(s, 0, x, z, 0)) continue;
         var b = { id: state.nextId++, cat: cat, size: s, x: x, z: z, rot: 0, seed: newSeed() };
-        state.buildings.push(b); markOcc(b, b.id); addBuildingMesh(b); made++;
+        state.buildings.push(b); markOcc(b, b.id); touchB(b, true); addBuildingMesh(b); made++;
       }
       updateStats(); save(); return made;
     }

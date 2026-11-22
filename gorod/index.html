@@ -13,6 +13,7 @@
 
 <header class="topbar">
   <div class="brand">🏙️ <b>Мое_город</b> <span class="ver" id="ver"></span></div>
+  <button class="world-chip" id="worldChip" type="button" aria-label="Миры">🌍 <b id="worldName">…</b> <i id="worldCloud"></i></button>
   <div class="stats">
     <span class="money" title="Доллары">$ <b id="stMoney">∞</b></span>
     <span title="Жители">👥 <b id="stPeople">0</b></span>
@@ -32,6 +33,7 @@
 </div>
 
 <div class="hint" id="hint"></div>
+<div class="chunk-note" id="chunkNote" hidden>⏳ Подгружаем карту…</div>
 
 <!-- Панель: на телефоне кнопки внизу экрана, на компьютере и планшете — одна панель сбоку:
      сверху главные кнопки, ниже меню построек (2 колонки × 10 рядов) -->
@@ -117,12 +119,14 @@
   </div>
 </div>
 
-<div class="loading" id="loading">Загрузка города…</div>
+<div class="loading" id="loading">Загрузка мира…</div>
 
 <script src="js/babylon.js"></script>
 <script src="js/data.js"></script>
 <script src="js/guide.js"></script>
 <script src="js/sim.js"></script>
+<script src="js/mm-account.js"></script>
+<script src="js/world.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>
