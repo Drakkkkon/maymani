@@ -1,4 +1,4 @@
-// «Мое_город» — градостроитель на Babylon.js. С 0.21.0: природа (деревья, каменистые площадки, горы — js/terrain.js) и камень. С 0.22.0: кнопка «🌲 Обновить» засевает природой старые миры.
+// «Мое_город» — градостроитель на Babylon.js. С 0.21.0: природа (деревья, каменистые площадки, горы — js/terrain.js) и камень. С 0.22.0: кнопка «🌲 Обновить» засевает природой старые миры. С 0.23.0: миникарта, Общество лесорубов (брёвна только от него), служебные машины появляются вместе со зданиями.
 // Один вид — качественная изометрия («ИЗО HD», с 0.12.0): полное разрешение экрана, сглаживание
 // и подробные текстуры. Свободный 3D-вид и пиксельная изометрия убраны.
 // Одинаковые здания рисуются пачками (thin instances): тысячи домов — это десятки вызовов отрисовки.
@@ -66,7 +66,7 @@
     return s;
   }
   // wear — износ асфальта по клеткам (0…1), rq — очередь ремонта, fql / fprog — очередь заказов завода, vehicles — машины завода
-  function emptyState(n) { return { v: 1, thv: 2, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fql: [], fprog: 0, vehicles: [], nextVeh: 1, stock: { boards: 0, dsp: 0, stone: 0, gravel: 0 } }; }
+  function emptyState(n) { return { v: 1, thv: 2, size: n || G.mapSize, nextId: 1, buildings: [], roads: {}, brigades: [], nextBr: 1, spent: 0, wear: {}, rq: [], autoRepair: false, fql: [], fprog: 0, vehicles: [], nextVeh: 1, stock: { logs: 0, boards: 0, dsp: 0, stone: 0, gravel: 0 } }; }
   function fixState(s) {
     if (!sizeOk(s.size)) s.size = 48;
     if (!Array.isArray(s.brigades)) s.brigades = [];
@@ -77,7 +77,9 @@
     s.autoRepair = !!s.autoRepair; s.fprog = +s.fprog || 0;
     if (!Array.isArray(s.fql)) { s.fql = []; for (var i = 0; i < (s.fq | 0); i++) s.fql.push('brigade'); } // до 0.10.0 — число заказанных бригад
     delete s.fq;
-    s.fql = s.fql.filter(function (k) { return k === 'brigade' || G.vehicles[k]; });
+    // с 0.23.0 машины на заводе не заказывают (они появляются сами вместе со зданиями): заказанные ранее отменяются, деньги возвращаются; купленные остаются
+    var OLD_PRICE = { garbage: 18000, ambulance: 16000, police: 14000, army: 24000, van: 12000, semi: 30000, dump: 20000 };
+    s.fql = s.fql.filter(function (k) { if (k === 'brigade') return true; if (OLD_PRICE[k]) s.spent = (s.spent || 0) - OLD_PRICE[k]; return false; });
     if (!Array.isArray(s.vehicles)) s.vehicles = [];
     s.vehicles = s.vehicles.filter(function (v) { return v && G.vehicles[v.kind]; });
     s.nextVeh = s.nextVeh || s.vehicles.reduce(function (m, v) { return Math.max(m, v.id); }, 0) + 1;
@@ -86,6 +88,7 @@
     s.buildings.forEach(function (b) { b.th = G.themes[b.th | 0] ? b.th | 0 : 0; }); // эпоха здания (с 0.18.0 — оформление); у старых сохранений — бель-эпок
     if (!s.stock || typeof s.stock !== 'object') s.stock = {};
     s.stock.boards = +s.stock.boards || 0; s.stock.dsp = +s.stock.dsp || 0; // склад досок и ДСП (с 0.11.0)
+    s.stock.logs = +s.stock.logs || 0; // бревна (с 0.23.0): их рубит Общество лесорубов, лесопилки распиливают на доски
     s.stock.stone = +s.stock.stone || 0; s.stock.gravel = +s.stock.gravel || 0; // камень и щебень (с 0.21.0)
     if (s.env && (typeof s.env.seed !== 'number' || !isFinite(s.env.seed))) delete s.env; // природа: есть у миров, созданных с 0.21.0 или обновлённых кнопкой 🌲 (с 0.22.0)
     if (s.env && s.env.keep) s.env.keep = Array.isArray(s.env.keep) ? s.env.keep.filter(function (k) { return Array.isArray(k) && k.length === 4 && k.every(isFinite); }) : []; // зоны построенного (с 0.22.0)
@@ -120,7 +123,7 @@
   function metaOf(st) { var g = {}; for (var k in st) if (!META_SKIP[k]) g[k] = st[k]; return JSON.parse(JSON.stringify(g)); }
   function camSave() { return { tx: Math.round(cam.tx * 100) / 100, tz: Math.round(cam.tz * 100) / 100, dist: Math.round(cam.dist * 10) / 10, yaw: Math.round(cam.yaw * 1000) / 1000 }; }
   // какие куски изменились (1 — мелочь вроде износа дорог и хода стройки, 2 — построили/снесли/переложили)
-  function touchCk(ck, hard) { if (loaded[ck]) dirtyCk[ck] = Math.max(dirtyCk[ck] || 0, hard ? 2 : 1); }
+  function touchCk(ck, hard) { if (loaded[ck]) { dirtyCk[ck] = Math.max(dirtyCk[ck] || 0, hard ? 2 : 1); if (hard && mmDirty) mmDirty[ck] = 1; } }
   function touchB(b, hard) { bChunks(b).forEach(function (ck) { touchCk(ck, hard); }); }
   function touchCell(x, z, hard) { touchCk(ckOf(x, z), hard); }
   function flushChunks(only) {
@@ -180,7 +183,7 @@
   function unloadChunk(ck) {
     var L = loaded[ck]; if (!L) return;
     flushChunks(ck); computeStats();
-    delete loaded[ck];
+    delete loaded[ck]; if (mmKnown) mmKnown[ck] = 1;   // на миникарте остаётся как было; при следующей загрузке перерисуется
     var keep = [], gone = [];
     state.buildings.forEach(function (b) {
       var cks = bChunks(b);
@@ -1167,6 +1170,29 @@
         cube(2.2, 3.35, 2.55, 3.7, 0.04, 0.12, '#a8844f'); cube(2.32, 3.55, 2.36, 3.7, 0.16, 0.16, '#3b3f45'); // телега с грузом
         [[2.23, 3.4], [2.52, 3.4], [2.23, 3.65], [2.52, 3.65]].forEach(function (w) { S.bake(S.cyl(0.05, 0.05, 0.02, 10, '#1c1c1c', w[0], 0.05, w[1]), 0, 0, Math.PI / 2); });
       }
+    } else if (cat === 'lumber') {
+      // Общество лесорубов 2×2 (с 0.23.0): бревенчатая изба с каменным цоколем, навес с поленницей, штабель брёвен, пень с топором
+      var LB = '#8a5a33', LB2 = '#9a6a3c', LBE = '#d8b07a';
+      function lgx(x0, x1, y, z, rr, col) { S.bake(S.cyl(rr, rr, x1 - x0, 8, col || LB, (x0 + x1) / 2, y, z), 0, 0, Math.PI / 2); S.bake(S.cyl(rr * 0.8, rr * 0.8, 0.005, 8, LBE, x1 + 0.002, y, z), 0, 0, Math.PI / 2); }
+      function lgz(z0, z1, y, x, rr, col) { S.bake(S.cyl(rr, rr, z1 - z0, 8, col || LB, x, y, (z0 + z1) / 2), Math.PI / 2, 0, 0); S.bake(S.cyl(rr * 0.8, rr * 0.8, 0.005, 8, LBE, x, y, z1 + 0.002), Math.PI / 2, 0, 0); }
+      cube(m, m, W - m, D - m, 0, 0.012, '#7b6a47');                                              // вытоптанная земля
+      cube(0.17, 0.17, 1.33, 1.13, 0, 0.04, '#7d7a72');                                           // каменный цоколь
+      for (var li = 0; li < 7; li++) {                                                            // сруб: венцы из брёвен, концы выступают «в лапу»
+        var ly = 0.075 + li * 0.07, off = (li % 2) * 0.05;
+        lgx(0.17 - off, 1.33 + off, ly, 0.2, 0.036, li % 3 === 1 ? LB2 : LB); lgx(0.17 - off, 1.33 + off, ly, 1.1, 0.036, li % 3 === 1 ? LB2 : LB);
+        lgz(0.2, 1.1, ly, 0.2, 0.036, li % 3 === 0 ? LB2 : LB); lgz(0.2, 1.1, ly, 1.3, 0.036, li % 3 === 0 ? LB2 : LB);
+      }
+      S.gable(0.2, 0.2, 1.3, 1.1, 0.56, 0.3, '#6b4a2e', 'x', 0.07, LB);                           // тесовая крыша
+      cube(0.6, 1.1, 0.92, 1.135, 0.04, 0.32, '#4a2f1a');                                         // дверь
+      cube(0.98, 1.1, 1.22, 1.13, 0.2, 0.2, '#4a2f1a'); cube(1.0, 1.1, 1.2, 1.14, 0.22, 0.16, '#9cc3dd');   // окно в раме
+      cube(1.08, 0.4, 1.18, 0.5, 0.5, 0.45, '#9a4b35'); cube(1.06, 0.38, 1.2, 0.52, 0.95, 0.03, '#d9d2c2'); // печная труба
+      [[1.4, 0.25], [1.88, 0.25], [1.4, 0.9], [1.88, 0.9]].forEach(function (pp) { cube(pp[0], pp[1], pp[0] + 0.04, pp[1] + 0.04, 0, 0.42, '#6b4a2e'); });   // навес для дров
+      cube(1.35, 0.2, 1.94, 0.97, 0.42, 0.04, '#7a5a3a');
+      [[1.52, 0.045], [1.64, 0.045], [1.76, 0.045], [1.58, 0.13], [1.7, 0.13], [1.64, 0.215]].forEach(function (pp) { lgz(0.3, 0.88, pp[1], pp[0], 0.05, LB2); });   // поленница
+      for (var la = 0; la < 3; la++) for (var lq = 0; lq < 3 - la; lq++) lgx(0.25, 1.15, 0.05 + la * 0.085, 1.45 + (lq + la / 2) * 0.102, 0.05);   // штабель брёвен у ворот
+      S.cyl(0.07, 0.08, 0.1, 10, LB2, 1.45, 0.05, 1.6); S.cyl(0.07, 0.07, 0.01, 10, LBE, 1.45, 0.105, 1.6);                 // пень
+      S.bake(S.cyl(0.012, 0.012, 0.2, 6, '#5a3d28', 1.45, 0.2, 1.6), 0.25, 0, 0.45); cube(1.45, 1.55, 1.56, 1.62, 0.25, 0.07, '#b9bec6');   // топор в пне
+      tree(1.78, 1.72, 0.8); tree(0.14, 1.85, 0.55); lamp(0.3, 1.3, 0.3);
     } else if (cat === 'quarry' || cat === 'stonework') {
       // Камень (с 0.21.0): каменоломня и горный карьер — скальные уступы, рельсы с вагонетками, копёр; камнеобработка — навес с пилой и дробилка, завод с бункерами
       var SG = '#a39d92', SG2 = '#b8b2a5', SG3 = '#8c867b', SBL = '#d8d0bd', SBL2 = '#cdc5b1', RAILC = '#6b7077', TIE = '#5a4630';
@@ -1431,6 +1457,19 @@
       box(0.34, 0.32, 0.78, '#3c7d7a', 0, y0 + 0.24, -0.22);                            // контейнер
       for (var j = 0; j < 7; j++) box(0.346, 0.3, 0.015, '#336b68', 0, y0 + 0.24, -0.56 + j * 0.11);
       box(0.3, 0.28, 0.012, '#2c5e5b', 0, y0 + 0.24, -0.612);
+    } else if (kind === 'timber') {              // лесовоз (с 0.23.0): рыжая кабина с краном-манипулятором, длинный прицеп-роспуск с брёвнами
+      box(0.24, 0.05, 0.36, '#2a2a28', 0, 0.12, 0.3);
+      wheelSet(S, [[0.13, 0.4], [-0.13, 0.4], [0.13, 0.2], [-0.13, 0.2]], 0.07, 0.06);
+      cabin(S, K, '#c9692b', 0.4, 0.3, 0.28, y0);
+      box(0.05, 0.05, 0.9, '#2a2a28', 0, 0.15, -0.2);                                     // дышло прицепа
+      wheelSet(S, [[0.14, -0.5], [-0.14, -0.5], [0.14, -0.62], [-0.14, -0.62]], 0.07, 0.06);
+      box(0.36, 0.035, 0.05, '#2a2a28', 0, 0.2, 0.1); box(0.36, 0.035, 0.05, '#2a2a28', 0, 0.2, -0.55);   // поперечины-кониксы
+      [[0.12, 0.26], [0.0, 0.26], [-0.12, 0.26], [0.06, 0.35], [-0.06, 0.35], [0.0, 0.44]].forEach(function (p) {   // штабель брёвен
+        S.bake(S.cyl(0.055, 0.055, 0.95, 8, '#8a5a33', p[0], p[1], -0.22), Math.PI / 2, 0, 0);
+        S.bake(S.cyl(0.044, 0.044, 0.006, 8, '#d8b07a', p[0], p[1], 0.26), Math.PI / 2, 0, 0);
+      });
+      [[0.19, 0.1], [-0.19, 0.1], [0.19, -0.55], [-0.19, -0.55]].forEach(function (p) { box(0.015, 0.3, 0.015, '#3a3a38', p[0], 0.33, p[1]); });   // стойки
+      box(0.05, 0.05, 0.1, '#3a3a38', 0.12, y0 + 0.3, 0.2);                               // кран-манипулятор у кабины
     } else if (kind === 'dump') {                // самосвал: жёлтая кабина, оранжевый кузов со щебнем
       box(0.26, 0.05, 0.84, '#2c2c2a', 0, 0.12, 0);
       wheelSet(S, [[0.15, 0.28], [-0.15, 0.28], [0.15, -0.18], [-0.15, -0.18], [0.15, -0.31], [-0.15, -0.31]], 0.075, 0.065);
@@ -2391,9 +2430,11 @@
   function finishSite(b) {
     delete b.prog; touchB(b, true);
     removeBuildingMesh(b.id); addBuildingMesh(b);
+    newVehNote = '';
     assignBrigades(); updateStats(); saveNow();
+    var vnote = newVehNote ? ' · с ним появилась машина: ' + newVehNote : ''; newVehNote = '';
     if (infoId === b.id) renderInfo(b, true);
-    if (hasRoad(b)) hint('✅ Построено: ' + G.cats[b.cat].names[b.size]);
+    if (hasRoad(b)) hint('✅ Построено: ' + G.cats[b.cat].names[b.size] + vnote);
     else hint('✅ Построено: ' + G.cats[b.cat].names[b.size] + '. Но к нему нет дороги — подведите, чтобы заработало', true);
     renderMech();
   }
@@ -2408,9 +2449,9 @@
       if (st.dsp >= nd) { st.dsp -= nd; k += U.bonus; } }
     return k;
   }
-  function sawRate() { // штук в минуту от всех работающих лесопилок
-    var o = { boards: 0, dsp: 0 };
-    working('saw').forEach(function (b) { var p = G.sawmill[b.size]; o.boards += p.boards; o.dsp += p.dsp; });
+  function sawRate() { // штук в минуту от всех работающих лесопилок; use — сколько брёвен в минуту им нужно
+    var o = { boards: 0, dsp: 0, use: 0 };
+    working('saw').forEach(function (b) { var p = G.sawmill[b.size]; o.boards += p.boards; o.dsp += p.dsp; o.use += p.use; });
     return o;
   }
   var stockDirty = true, sawCache = null, sawT = 0, stoneCache = null, stoneT = 0;
@@ -2429,19 +2470,30 @@
     if (R.use) { var k = Math.min(1, st.stone / (R.use * dt / 60)); if (k > 0) { st.stone -= R.use * dt / 60 * k; st.gravel += R.gravel * dt / 60 * k; } }
     stockDirty = true;
   }
+  // Лесопилка (с 0.23.0) берёт брёвна со склада и делает из них доски и ДСП; брёвен нет — стоит.
+  // В мире без природы (нет деревьев и лесорубов) работает по-старому — без брёвен.
   function tickSawmills(dt) {
     sawT -= dt; if (!sawCache || sawT <= 0) { sawCache = sawRate(); sawT = 1; }
-    if (!sawCache.boards && !sawCache.dsp) return;
-    state.stock.boards += sawCache.boards * dt / 60; state.stock.dsp += sawCache.dsp * dt / 60; stockDirty = true;
+    var R = sawCache; if (!R.boards && !R.dsp) return;
+    var st = state.stock, k = 1;
+    if (state.env) {
+      var need = R.use * dt / 60;
+      k = need > 0 ? Math.min(1, st.logs / need) : 0;
+      if (k <= 0) return;
+      st.logs -= need * k;
+    }
+    st.boards += R.boards * dt / 60 * k; st.dsp += R.dsp * dt / 60 * k; stockDirty = true;
   }
   function stockText(n) { return Math.floor(n).toLocaleString('ru-RU'); }
   function updateStock() {
     if (!stockDirty) return; stockDirty = false; updateStone();
-    var st = state.stock, R = sawCache || sawRate(), show = st.boards >= 1 || st.dsp >= 1 || R.boards > 0 || state.buildings.some(function (b) { return b.cat === 'saw'; });
+    var st = state.stock, R = sawCache || sawRate(), hasSaw = state.buildings.some(function (b) { return b.cat === 'saw' || b.cat === 'lumber'; }),
+      show = st.boards >= 1 || st.dsp >= 1 || st.logs >= 1 || R.boards > 0 || hasSaw;
     $('stStockWrap').hidden = !show; if (!show) return;
-    $('stBoards').textContent = stockText(st.boards); $('stDsp').textContent = stockText(st.dsp);
-    $('stStockWrap').title = 'Склад: доски ' + stockText(st.boards) + ', ДСП ' + stockText(st.dsp) + '. Лесопилки дают ' + R.boards + ' досок и ' + R.dsp + ' ДСП в минуту. Стройка с досками на 25% быстрее, с досками и ДСП — на 50%.';
-    var e = $('iStock'); if (e) e.innerHTML = '🪵 ' + stockText(st.boards) + ' · 🟫 ' + stockText(st.dsp);
+    var lj = $('stLogsWrap'); if (lj) lj.hidden = !state.env && st.logs < 1;
+    $('stLogs').textContent = stockText(st.logs); $('stBoards').textContent = stockText(st.boards); $('stDsp').textContent = stockText(st.dsp);
+    $('stStockWrap').title = 'Склад: бревна ' + stockText(st.logs) + ', доски ' + stockText(st.boards) + ', ДСП ' + stockText(st.dsp) + '. Лесорубы валят деревья и несут брёвна; лесопилки берут ' + Math.round(R.use) + ' брёвен в минуту и дают ' + R.boards + ' досок и ' + R.dsp + ' ДСП. Стройка с досками на 25% быстрее, с досками и ДСП — на 50%.';
+    var e = $('iStock'); if (e) e.innerHTML = '🪵 ' + stockText(st.logs) + ' · 🪚 ' + stockText(st.boards) + ' · 🟫 ' + stockText(st.dsp);
   }
   function updateStone() {
     var w = $('stStoneWrap'); if (!w) return;
@@ -2464,8 +2516,7 @@
   }
   // Что заказывают: 'brigade' или ключ из G.vehicles
   function prodInfo(kind) {
-    if (kind === 'brigade') { var u = G.units.brigade; return { name: 'Бригада', icon: '🚚', price: u.factoryPrice, time: u.makeTime }; }
-    var v = G.vehicles[kind]; return { name: v.name, icon: v.icon, price: v.price, time: v.makeTime };
+    var u = G.units.brigade; return { name: 'Бригада', icon: '🚚', price: u.factoryPrice, time: u.makeTime };
   }
   function queued(kind) { var n = 0; state.fql.forEach(function (k) { if (k === kind) n++; }); return n; }
   var factoryTurn = 0;
@@ -2484,7 +2535,7 @@
     while (state.fql.length && state.fprog >= prodInfo(state.fql[0]).time && guard++ < 20) {
       state.fprog -= prodInfo(state.fql[0]).time;
       var kind = state.fql.shift(), fb = F[factoryTurn++ % F.length];
-      if (kind === 'brigade') spawnTruck(fb); else spawnVehicle(fb, kind);
+      spawnTruck(fb);
     }
     if (!state.fql.length) state.fprog = 0;
     return false;
@@ -2501,6 +2552,7 @@
       state.buildings.some(function (b) { return b.cat === 'factory'; }) ? '🏭 Завод ещё строится' : '🏭 Сначала постройте Механический завод: 🚚 Механизмы → 🏭 Здания';
   }
   function orderKind(kind) {
+    if (kind !== 'brigade') return; // с 0.23.0 завод собирает только «Бригады»
     var p = prodInfo(kind);
     if (!working('factory').length) { hint(noFactoryMsg(), true); return; }
     if (!canPay(p.price)) { hint('Не хватает долларов: нужно ' + usd(p.price), true); return; }
@@ -2609,33 +2661,58 @@
     }
     return null;
   }
-  // --- машины завода ---
-  function spawnVehicle(fb, kind) {
-    var g = localPos(fb, 0.6, 0.65), v = { id: state.nextVeh++, kind: kind };
+  // --- служебные машины (с 0.23.0 появляются сами вместе со зданиями) ---
+  // Сколько машин каждого вида «положено» городу: каждое работающее здание обслуживаемого вида приводит с собой долю машины (G.vehicles[..].per),
+  // доли складываются и округляются вверх. Куски карты вдали выгружены и их зданий не видно, поэтому машин автоматически становится больше, но не меньше:
+  // убавляются они только когда загружена вся карта (миры до 100×100).
+  var newVehNote = '';
+  function vehWanted() {
+    var want = {}, V = G.vehicles, ks = Object.keys(V);
+    ks.forEach(function (k) { want[k] = 0; });
+    state.buildings.forEach(function (b) {
+      if (!isWorking(b)) return;
+      ks.forEach(function (k) { if (V[k].serves === b.cat) want[k] += (V[k].per && V[k].per[b.size]) || 0; });
+    });
+    ks.forEach(function (k) { want[k] = Math.min(V[k].max || 40, Math.ceil(want[k] - 1e-9)); });
+    return want;
+  }
+  function fullyLoaded() { return Object.keys(loaded).length >= nChunks() * nChunks(); }
+  function syncVehicles() {
+    if (!state) return;
+    var want = vehWanted(), changed = false, canDrop = fullyLoaded();
+    Object.keys(G.vehicles).forEach(function (k) {
+      var have = vehCount(k);
+      while (have < want[k]) { spawnService(k); have++; changed = true; var v = G.vehicles[k]; newVehNote += (newVehNote ? ', ' : '') + v.icon + ' ' + v.name; }
+      while (canDrop && have > want[k]) { removeService(k); have--; changed = true; }
+    });
+    if (changed) { save(); renderMech(); dirty(); }
+  }
+  function spawnService(kind) {
+    var info = G.vehicles[kind], b = randomOf(working(info.serves)), v = { id: state.nextVeh++, kind: kind };
     state.vehicles.push(v);
-    var a = makeAgent(v, g.x, g.z, g.yaw);
-    var S = curbSpots(fb); if (S.length) a.cell = S[0].k;
-    a.t = 0.3; saveNow(); renderMech(); dirty();
-    var info = G.vehicles[kind], has = working(info.serves).length;
-    hint('🏭 Завод выпустил ' + info.icon + ' «' + info.name + '»' + (has ? ' — машина поехала по делам' : ' — машина ждёт: нет работающих зданий «' + G.cats[info.serves].label + '»'));
+    var x, z, yaw = 0, cell = null, sp = b && spotAt(b, vehCount(kind), 0.08);
+    if (sp) { x = sp.x; z = sp.z; yaw = sp.yaw; cell = sp.k; }
+    else if (b) { var c = siteCenter(b); x = c.x; z = c.z + 1.6; }
+    else { var pk = parkSpot(v.id); x = pk.x; z = pk.z; }
+    var a = makeAgent(v, x, z, yaw); if (cell) a.cell = cell; a.t = 0.6 + Math.random() * 3;
+    return info;
   }
-  function makeAgent(v, x, z, yaw) {
-    var a = agents[v.id] = { id: v.id, kind: v.kind, x: x, z: z, yaw: yaw || 0, cell: nearestRoad(x, z), mode: 'park', t: 0.5 + Math.random() * 2, pts: null };
-    v.x = x; v.z = z; writeAgent(a); return a;
-  }
-  function sellVehicle(kind) {
+  function removeService(kind) {
     var j = -1; for (var i = state.vehicles.length - 1; i >= 0; i--) if (state.vehicles[i].kind === kind) { j = i; break; }
     if (j < 0) return;
     var v = state.vehicles.splice(j, 1)[0], a = agents[v.id];
     if (a) { batchRemove(agentBatch(a), a.id); delete agents[v.id]; }
-    var p = G.vehicles[kind].price; state.spent -= Math.round(p / 2); updateMoney(); save(); renderMech(); dirty();
-    hint('«' + G.vehicles[kind].name + '» продана, вернули ' + usd(p / 2));
+  }
+  function makeAgent(v, x, z, yaw) {
+    var a = agents[v.id] = { id: v.id, kind: v.kind, x: x, z: z, yaw: yaw || 0, cell: nearestRoad(x, z), mode: 'park', t: 0.5 + Math.random() * 2, pts: null };
+    v.x = x; v.z = z; writeAgent(a); return a;
   }
   function vehCount(kind) { var n = 0; state.vehicles.forEach(function (v) { if (v.kind === kind) n++; }); return n; }
   function clearAgents() {
     Object.keys(agents).forEach(function (id) { batchRemove(agentBatch(agents[id]), +id); });
     Object.keys(carAgents).forEach(function (id) { batchRemove(agentBatch(carAgents[id]), +id); });
     agents = {}; carAgents = {}; carsDriving = 0;
+    clearJacks();
   }
   function rebuildAgents() {
     clearAgents();
@@ -2734,6 +2811,150 @@
     if (any) dirty();
     return any;
   }
+  // ---------- Общество лесорубов (с 0.23.0) ----------
+  // У здания 4 лесоруба. Каждый: идёт по полю 20×20 к ближайшему дереву (поиск пути в ширину, обходя здания и склоны гор),
+  // рубит его несколько секунд — дерево исчезает (как при «Удалить», срубленное запоминается в куске карты) — и несёт брёвна обратно в здание.
+  // Брёвна попадают на склад города (state.stock.logs); оттуда их берут лесопилки. Лесорубы работают только в мирах с природой
+  // и только пока здание работает (есть дорога). Сами лесорубы не сохраняются — после загрузки мира выходят заново.
+  var jacks = {}, jackSeq = 0, jackT = 0, jackBudget = 0, jackClaim = {};
+  function jackModel(K, carry) {
+    var S = Shapes(K, 0, 0);
+    function box(w, h, d, c, x, y, z) { return S.box(w, h, d, K.mat(c), x, y, z); }
+    box(0.035, 0.1, 0.04, '#3a4660', 0.025, 0.05, 0); box(0.035, 0.1, 0.04, '#3a4660', -0.025, 0.05, 0);   // ноги
+    box(0.09, 0.1, 0.055, '#b8402a', 0, 0.15, 0); box(0.092, 0.012, 0.057, '#2a2a2a', 0, 0.115, 0);          // клетчатая рубаха, пояс
+    box(0.025, 0.08, 0.03, '#b8402a', 0.06, 0.15, 0); box(0.025, 0.08, 0.03, '#b8402a', -0.06, 0.15, 0);      // руки
+    S.sph(0.034, '#e8b890', 0, 0.235, 0.005, 1); S.cyl(0.04, 0.04, 0.02, 8, '#2f3b4a', 0, 0.262, 0.005);     // голова и шапка
+    if (carry) {                                                                                               // бревно на плече
+      S.bake(S.cyl(0.032, 0.032, 0.28, 8, '#8a5a33', 0.05, 0.22, 0), Math.PI / 2, 0, 0);
+      S.bake(S.cyl(0.026, 0.026, 0.004, 8, '#d8b07a', 0.05, 0.22, 0.14), Math.PI / 2, 0, 0);
+    } else {                                                                                                   // топор на плече
+      box(0.012, 0.15, 0.012, '#5a3d28', 0.075, 0.2, 0); box(0.05, 0.04, 0.012, '#b9bec6', 0.1, 0.27, 0);
+    }
+    return S.merge();
+  }
+  function jackBatch(carry) { return getBatch('jack' + (carry ? 1 : 0), function () { return jackModel(kit, carry); }); }
+  function jackWrite(j, sy) { var q = 1.25; batchSet(jackBatch(j.carry), j.id, j.x, 0, j.z, j.yaw, q, q * (sy || 1), q); }
+  // поле деятельности: квадрат zone×zone вокруг здания (по карте обрезается); x1, z1 — не включительно
+  function jackZone(b) {
+    var f = foot(b.size, b.rot), Z = G.lumber.zone, x0 = Math.round(b.x + f.w / 2 - Z / 2), z0 = Math.round(b.z + f.d / 2 - Z / 2);
+    return { x0: Math.max(0, x0), z0: Math.max(0, z0), x1: Math.min(N, x0 + Z), z1: Math.min(N, z0 + Z) };
+  }
+  function zoneTrees(b) {
+    var Z = jackZone(b), n = 0;
+    for (var z = Z.z0; z < Z.z1; z++) for (var x = Z.x0; x < Z.x1; x++) if (treeA[idx(x, z)] > 0) n++;
+    return n;
+  }
+  function jackCountOf(bid) { var n = 0; for (var id in jacks) if (jacks[id].bid === bid) n++; return n; }
+  function jackDoor(b) { var f = foot(b.size, b.rot), p = localPos(b, 0, f.d / 2 + 0.28); return { x: p.x, z: p.z }; }
+  function jackRelease(j) { if (j.tree >= 0 && jackClaim[j.tree] === j.id) delete jackClaim[j.tree]; j.tree = -1; }
+  function addJack(b) {
+    var d = jackDoor(b), j = { id: ++jackSeq, bid: b.id, x: d.x, z: d.z, yaw: Math.random() * 6.28, mode: 'idle', carry: 0, t: 0.4 + jackCountOf(b.id) * 1.3, pts: null, pi: 0, tree: -1 };
+    jacks[j.id] = j; jackWrite(j);
+  }
+  function removeJack(j, pay) {
+    jackRelease(j);
+    if (pay && j.carry && state && state.stock) { state.stock.logs += j.carry; stockDirty = true; }
+    batchRemove(jackBatch(j.carry), j.id); delete jacks[j.id];
+  }
+  function clearJacks() { Object.keys(jacks).forEach(function (id) { removeJack(jacks[id], false); }); jacks = {}; jackClaim = {}; }
+  function syncJacks() {
+    var L = working('lumber'), want = {};
+    L.forEach(function (b) { want[b.id] = b; });
+    Object.keys(jacks).forEach(function (id) { var j = jacks[id]; if (!want[j.bid]) removeJack(j, true); });
+    L.forEach(function (b) { for (var n = jackCountOf(b.id); n < G.lumber.jacks; n++) addJack(b); });
+  }
+  // Путь от лесоруба к ближайшему «ничьему» дереву в поле. Деревья не мешают ходить (они редкие и маленькие), здания и склоны гор — мешают.
+  function jackPlan(j, b) {
+    var Z = jackZone(b), W = Z.x1 - Z.x0, H = Z.z1 - Z.z0, sx = Math.floor(j.x + N / 2), sz = Math.floor(j.z + N / 2);
+    function inZ(x, z) { return x >= Z.x0 && z >= Z.z0 && x < Z.x1 && z < Z.z1; }
+    if (!inZ(sx, sz)) return false;
+    function free(x, z) { var i = idx(x, z); return treeA[i] > 0 && !jackClaim[i] && !occ[i]; }
+    var vis = new Int32Array(W * H).fill(-2), qx = [sx], qz = [sz], hd = 0, goal = -2, si = (sz - Z.z0) * W + (sx - Z.x0);
+    vis[si] = -1;
+    if (free(sx, sz)) goal = si;
+    while (hd < qx.length && goal === -2) {
+      var cx = qx[hd], cz = qz[hd]; hd++;
+      for (var d = 0; d < 4; d++) {
+        var nx = cx + DIRS[d][0], nz = cz + DIRS[d][1];
+        if (!inZ(nx, nz)) continue;
+        var vi = (nz - Z.z0) * W + (nx - Z.x0); if (vis[vi] !== -2) continue;
+        var ni = idx(nx, nz);
+        if (!loaded[ckOf(nx, nz)] || occ[ni] || terr[ni] === 2) continue;
+        vis[vi] = (cz - Z.z0) * W + (cx - Z.x0);
+        if (free(nx, nz)) { goal = vi; break; }
+        qx.push(nx); qz.push(nz);
+      }
+    }
+    if (goal === -2) return false;
+    var cells = [], vv = goal;
+    while (vv !== -1) { cells.unshift([Z.x0 + vv % W, Z.z0 + Math.floor(vv / W)]); vv = vis[vv]; }
+    var pts = cells.map(function (c) { var cc = cellCenter(c[0], c[1]); return { x: cc.x + (Math.random() - 0.5) * 0.4, z: cc.z + (Math.random() - 0.5) * 0.4 }; });
+    var last = cells[cells.length - 1], tc = cellCenter(last[0], last[1]), pv = pts.length > 1 ? pts[pts.length - 2] : { x: j.x, z: j.z };
+    var ddx = pv.x - tc.x, ddz = pv.z - tc.z, dl = Math.hypot(ddx, ddz) || 1;
+    pts[pts.length - 1] = { x: tc.x + ddx / dl * 0.3, z: tc.z + ddz / dl * 0.3 };        // встаёт у дерева со стороны, откуда пришёл
+    var door = jackDoor(b);
+    j.back = pts.slice(0, -1).reverse(); j.back.push({ x: door.x, z: door.z });
+    j.tx = last[0]; j.tz = last[1]; j.tree = idx(last[0], last[1]); jackClaim[j.tree] = j.id;
+    j.pts = pts; j.pi = 0; j.mode = 'out';
+    return true;
+  }
+  function jackChop(j) {
+    var kind = j.tree >= 0 ? treeA[j.tree] : 0;
+    if (kind) {
+      var ul = undoLog; undoLog = null; var ok = clearTree(j.tx, j.tz); undoLog = ul;   // это не жест игрока — в журнал отмены не пишем
+      if (ok) { j.carry = G.lumber.perTree[kind] || 3; saveSoft(); }
+    }
+    jackRelease(j);
+    if (j.carry) batchRemove(jackBatch(0), j.id);
+    j.mode = 'back'; j.pts = j.back || []; j.pi = 0; j.back = null;
+    jackWrite(j);
+  }
+  function jackArrive(j) {
+    if (j.carry) { state.stock.logs += j.carry; stockDirty = true; batchRemove(jackBatch(1), j.id); j.carry = 0; }
+    j.mode = 'idle'; j.pts = null; j.t = 0.6 + Math.random() * 1.5;
+    jackWrite(j);
+  }
+  function stepJack(j, dt) {
+    var b = getB(j.bid); if (!b) return false;
+    var L = G.lumber;
+    if (j.mode === 'idle') {
+      j.t -= dt; if (j.t > 0) return false;
+      if (jackBudget <= 0) return false;
+      jackBudget--;
+      if (!jackPlan(j, b)) { j.t = 3 + Math.random() * 3; return false; }
+    }
+    if (j.mode === 'out' || j.mode === 'back') {
+      var sp = L.speed * dt;
+      while (sp > 0 && j.pi < j.pts.length) {
+        var p = j.pts[j.pi], dx = p.x - j.x, dz = p.z - j.z, d = Math.hypot(dx, dz);
+        if (d > 1e-4) j.yawT = Math.atan2(dx, dz);
+        if (d <= sp) { j.x = p.x; j.z = p.z; sp -= d; j.pi++; } else { j.x += dx / d * sp; j.z += dz / d * sp; sp = 0; }
+      }
+      if (j.yawT !== undefined) j.yaw = angTo(j.yaw, j.yawT, Math.min(1, dt * 9));
+      if (j.pi >= j.pts.length) {
+        if (j.mode === 'out') { var tc = cellCenter(j.tx, j.tz); j.mode = 'chop'; j.t = L.chop * (0.8 + Math.random() * 0.4); j.yawT = Math.atan2(tc.x - j.x, tc.z - j.z); }
+        else { jackArrive(j); return true; }
+      }
+      jackWrite(j); return true;
+    }
+    if (j.mode === 'chop') {
+      j.t -= dt; j.ph = (j.ph || 0) + dt * 15;
+      j.yaw = angTo(j.yaw, j.yawT, Math.min(1, dt * 9));
+      jackWrite(j, 1 + Math.sin(j.ph) * 0.07);          // взмахи топором — фигурка «приседает» в такт ударам
+      if (j.t <= 0) jackChop(j);
+      return true;
+    }
+    return false;
+  }
+  function tickJacks(dt) {
+    if (!state || !state.env) return;
+    jackBudget = 3; jackT -= dt;
+    if (jackT <= 0) { jackT = 1.5; syncJacks(); }
+    var any = false;
+    for (var id in jacks) if (stepJack(jacks[id], dt)) any = true;
+    if (any) dirty();
+  }
+
   // Какие машины завода обслуживают здания этого вида
   function servingText(cat) {
     var out = [];
@@ -2958,10 +3179,8 @@
     }
     set('iFq', fqText()); set('mFq', fqText('brigade')); set('mFqAll', fqText());
     ['iCancel', 'mCancel'].forEach(function (id) { var e = $(id); if (e) e.disabled = !queued('brigade'); });
-    if ($('mVq_garbage')) Object.keys(G.vehicles).forEach(function (k) {
-      set('mVq_' + k, fqText(k)); set('mVn_' + k, String(vehCount(k)));
-      var c = $('mVc_' + k); if (c) c.disabled = !queued(k);
-      var sl = $('mVs_' + k); if (sl) sl.disabled = !vehCount(k);
+    if ($('mVn_garbage')) Object.keys(G.vehicles).forEach(function (k) {
+      set('mVn_' + k, String(vehCount(k)));
       var w = working(G.vehicles[k].serves).length; set('mVw_' + k, w ? w + ' ' + plural(w, 'здание', 'здания', 'зданий') : '<span class="bad">нет работающих</span>');
     });
     if ($('mCarsN')) set('mCarsN', String(Object.keys(carAgents).length));
@@ -2969,7 +3188,7 @@
 
   function rebuildAll() {
     if (!mapNodes.length || state.size !== N) { N = state.size; occ = new Int32Array(N * N); buildMapScene(); }
-    envReset();
+    envReset(); mmReset();
     Object.keys(placed).forEach(function (id) { removeBuildingMesh(+id); });
     byId = {};
     Object.keys(chunks).forEach(function (ck) { chunks[ck].forEach(function (m) { m.dispose(); }); }); chunks = {};
@@ -2982,11 +3201,15 @@
   }
 
   // ---------- Призрак и курсор ----------
-  var ghost = null, ghostKey = '';
+  var ghost = null, ghostKey = '', ghostCat = '';
   var ghostFoot = quadsMesh('gfoot', [[0, 0, 1, 1, 0.03]], flatMat('#4cd964', { overlay: true, alpha: 0.45 }));
   var cursor = quadsMesh('cursor', [[0, 0, 1, 1, 0.035]], flatMat('#ffffff', { overlay: true, alpha: 0.4 }));
   var hl = quadsMesh('hl', [[0, 0, 1, 1, 0.025]], flatMat('#ffc94a', { overlay: true, alpha: 0.55 }));
-  [ghostFoot, cursor, hl].forEach(function (m) { m.setEnabled(false); });
+  var zoneMesh = quadsMesh('zone', [[0, 0, 1, 1, 0.022]], flatMat('#8fe06f', { overlay: true, alpha: 0.2 }));   // поле деятельности Общества лесорубов (с 0.23.0)
+  [ghostFoot, cursor, hl, zoneMesh].forEach(function (m) { m.setEnabled(false); });
+  function showZone(b) { var Z = jackZone(b); setOverlay(zoneMesh, (Z.x0 + Z.x1) / 2 - N / 2, (Z.z0 + Z.z1) / 2 - N / 2, Z.x1 - Z.x0, Z.z1 - Z.z0); }
+  function zoneOff() { if (zoneMesh.isEnabled()) { zoneMesh.setEnabled(false); dirty(); } }
+  function zoneKeep() { var ib = infoId && getB(infoId); if (ib && ib.cat === 'lumber') showZone(ib); else zoneOff(); }
   function setOverlay(m, x, z, w, d, color) {
     m.position.set(x, 0, z); m.scaling.set(w, 1, d);
     if (color) m.material.emissiveColor = hex(color);
@@ -2998,7 +3221,7 @@
     var k = tplKey(cat, size, seed, th);
     if (k === ghostKey && ghost) return;
     if (ghost) { var mm = ghost.material; ghost.dispose(); if (mm) mm.dispose(); ghost = null; }
-    ghostKey = k;
+    ghostKey = k; ghostCat = cat;
     ghost = buildModel(kit, cat, size, modelSeed(cat, variantOf(cat, seed)), th);
     ghost.visibility = 0.6; ghost.isPickable = false;
     ghost.setEnabled(false);
@@ -3007,8 +3230,9 @@
     var b = { size: size, rot: rot, x: x, z: z }, f = foot(size, rot), p = bPos(b);
     ghost.position.set(p.x, 0, p.z); ghost.rotation.y = p.yaw; ghost.setEnabled(true);
     setOverlay(ghostFoot, p.x, p.z, f.w, f.d, ok ? '#4cd964' : '#ff3b30');
+    if (ghostCat === 'lumber') showZone(b); else zoneKeep();
   }
-  function hideGhost() { if (ghost) ghost.setEnabled(false); ghostFoot.setEnabled(false); dirty(); }
+  function hideGhost() { if (ghost) ghost.setEnabled(false); ghostFoot.setEnabled(false); zoneKeep(); dirty(); }
   function showCursor(x, z, color) {
     if (!inMap(x, z)) { cursor.setEnabled(false); dirty(); return; }
     var c = cellCenter(x, z); setOverlay(cursor, c.x, c.z, 1, 1, color);
@@ -3222,6 +3446,7 @@
     tool = t;
     document.querySelectorAll('.tool').forEach(function (b) { b.classList.toggle('on', b.dataset.tool === t); });
     $('panelBuild').hidden = t !== 'build';
+    document.body.classList.toggle('sp-open', t === 'build' || t === 'road');
     $('panelRoad').hidden = t !== 'road';
     hideGhost(); cursor.setEnabled(false);
     if (moving) cancelMove();
@@ -3328,7 +3553,8 @@
   function workText(cat, size) {
     var c = G.cats[cat];
     if (cat === 'res') { var f = c.families[size]; return '👥 ' + f + ' ' + plural(f, 'семья', 'семьи', 'семей'); }
-    if (cat === 'saw') { var sp = G.sawmill[size]; return sp.dsp ? '🪵 ' + sp.boards + ' + 🟫 ' + sp.dsp + ' ДСП/мин' : '🪵 ' + sp.boards + ' досок/мин'; }
+    if (cat === 'saw') { var sp = G.sawmill[size]; return '🪵 ' + sp.use + ' → 🪚 ' + sp.boards + (sp.dsp ? ' + 🟫 ' + sp.dsp : '') + '/мин'; }
+    if (cat === 'lumber') return '🪓 ' + G.lumber.jacks + ' ' + plural(G.lumber.jacks, 'лесоруб', 'лесоруба', 'лесорубов') + ' · ' + G.lumber.zone + '×' + G.lumber.zone;
     if (cat === 'quarry') return '⛏️ ' + G.quarry[size].stone + ' 🪨 камня/мин';
     if (cat === 'stonework') { var sw = G.stonework[size]; return '🪨 ' + sw.use + ' → ⚪ ' + sw.gravel + ' щебня/мин'; }
     if (cat === 'park' || cat === 'upark') { var ps = G.parkSpots[cat][size]; return '🅿️ ' + ps + ' ' + plural(ps, 'место', 'места', 'мест') + (cat === 'upark' ? '<span class="wl"> под землёй</span>' : ''); }
@@ -3442,7 +3668,7 @@
   $('btnRotate').addEventListener('click', rotateCurrent);
   $('toolbar').addEventListener('click', function (e) {
     var b = e.target.closest('.tool'); if (!b) return;
-    if (b.dataset.tool === 'mech') openMech(); else if (b.dataset.tool === 'epochs') openEpochs(); else setTool(b.dataset.tool);
+    if (b.dataset.tool === 'mech') openMech(); else if (b.dataset.tool === 'epochs') openEpochs(); else if (b.dataset.tool === 'home') centerCam(); else setTool(b.dataset.tool);
   });
 
   // --- действия ---
@@ -3716,6 +3942,7 @@
     else if (k === 'escape') { if (sideOpen) closeSide(); else if (!$('modal').hidden) closeModal(); else if (!$('mech').hidden) closeMech(); else if (!$('epochs').hidden) closeEpochs(); else { closeInfo(); setTool('view'); } }
     else if (k === '6') openMech();
     else if (k === '7') openEpochs();
+    else if (k === '8') centerCam();
     else if ('12345'.indexOf(k) >= 0 && k) setTool(['view', 'build', 'road', 'move', 'delete'][+k - 1]);
     else if (k === '+' || k === '=') { cam.dist /= 1.2; updateCam(); }
     else if (k === '-') { cam.dist *= 1.2; updateCam(); }
@@ -3843,9 +4070,10 @@
     return card('factory') +
       '<div class="pbox"><b>🏭 Выпуск машин</b>' +
       '<div class="ukv"><span>Очередь завода</span><span id="mFqAll">—</span><span>«Бригада»</span><span class="usd">' + usd(u.factoryPrice) + '</span>' +
-      '<span>Время</span><span>' + secText(u.makeTime) + ' на грузовик; машины выходят по очереди, число заводов скорость не меняет</span></div>' +
+      '<span>Время</span><span>' + secText(u.makeTime) + ' на грузовик; грузовики выходят по очереди, число заводов скорость не меняет</span></div>' +
       '<div class="ubtns wrap"><button class="btn-buy alt" data-act="order">🚚 Заказать «Бригаду»</button><button class="btn-sell" data-act="cancel" id="mCancel">Отменить</button>' +
-      '<button class="btn-buy" data-act="cars">🚗 Ещё 7 машин</button></div></div>' +
+      '<button class="btn-buy" data-act="cars">🚗 Машины города</button></div>' +
+      '<div class="unote">Завод собирает только «Бригады». Скорая, полиция, мусоровоз и другие машины появляются сами вместе со зданиями.</div></div>' +
       card('depot') +
       '<div class="pbox"><b>🛠️ Ремонт дорог</b>' +
       '<div class="ukv"><span>Асфальт</span><span id="mRs">—</span><span>Средний износ</span><span id="mMid">0</span><span>Почти изношен</span><span id="mWorn">0</span>' +
@@ -3857,20 +4085,15 @@
       'Кнопка «Отремонтировать изношенные» отправляет в ремонт всё с износом от ' + pctText(R.manualAt) + '; автоматический ремонт сам чинит клетки с износом от ' + pctText(R.autoAt) + '. Простая дорога не изнашивается.</p>';
   }
   function carsHtml() {
-    var h = '<div class="pbox"><b>🏭 Очередь Механического завода</b><div class="ukv"><span>В очереди</span><span id="mFqAll">—</span></div>' +
-      '<div class="unote" style="margin-top:6px">' + (working('factory').length ? 'Машины собираются по одной, по очереди. Число заводов скорость не меняет — ворота заводов чередуются.' : esc(noFactoryMsg())) + '</div></div>';
+    var h = '<div class="pbox"><b>🚗 Машины города</b>' +
+      '<div class="unote">Машины разных профессий <b>появляются сами вместе со зданиями</b>: достроили больницу — приехала скорая, построили депо — появился самосвал. Купить их нельзя — покупается только «Бригада» (🚚 «Строительство»).</div></div>';
     Object.keys(G.vehicles).forEach(function (k) {
-      var v = G.vehicles[k];
+      var v = G.vehicles[k], per = Object.keys(v.per).map(function (sz) { return G.sizes[sz].label + ' — ' + String(v.per[sz]).replace('.', ','); }).join(', ');
       h += '<div class="unit">' + thumbImg('uimg', 'veh_' + k, vehicleThumb(k)) +
         '<div class="uinfo"><h3>' + v.icon + ' ' + esc(v.name) + '</h3><p>' + esc(v.about) + '</p>' +
-        '<div class="ukv"><span>Обслуживает</span><span>' + esc(G.cats[v.serves].label) + ' · <span id="mVw_' + k + '">—</span></span>' +
-        '<span>Цена</span><span class="usd">' + usd(v.price) + '</span>' +
-        '<span>Сборка</span><span>' + secText(v.makeTime) + '</span>' +
-        '<span>В городе</span><span><b id="mVn_' + k + '">0</b></span>' +
-        '<span>Заказано</span><span id="mVq_' + k + '">—</span></div></div></div>' +
-        '<div class="ubtns wrap"><button class="btn-buy alt" data-act="vorder" data-kind="' + k + '">🏭 Заказать · ' + usd(v.price) + '</button>' +
-        '<button class="btn-sell" data-act="vcancel" data-kind="' + k + '" id="mVc_' + k + '">Отменить</button>' +
-        '<button class="btn-sell" data-act="vsell" data-kind="' + k + '" id="mVs_' + k + '">Продать</button></div>';
+        '<div class="ukv"><span>Обслуживает</span><span>' + esc(G.cats[v.serves].one) + ' · <span id="mVw_' + k + '">—</span></span>' +
+        '<span>Приходит с работающим зданием</span><span>' + per + '</span>' +
+        '<span>В городе</span><span><b id="mVn_' + k + '">0</b></span></div></div></div>';
     });
     h += '<h4>🚗 Легковые машины жителей</h4>';
     G.cars.models.forEach(function (m) {
@@ -3879,8 +4102,8 @@
     });
     var P = G.cars.perHouse;
     h += '<p class="note">Сейчас легковых машин в городе: <b id="mCarsN">0</b>. У частного дома и дома на две семьи — ' + P['1x1'] + ' машина, у многоквартирного — ' + P['2x2'] +
-      ', у жилого комплекса — ' + P['4x4'] + '. Машины ездят только по дорогам, по правой полосе. Машина завода ездит между работающими зданиями своего вида; если таких нет — стоит и ждёт. ' +
-      'Продажа возвращает половину цены, отмена заказа — всю.</p>';
+      ', у жилого комплекса — ' + P['4x4'] + '. Машины ездят только по дорогам, по правой полосе. Служебная машина ездит между работающими зданиями своего вида; если таких нет — стоит и ждёт. ' +
+      'Доли машин складываются и округляются вверх: у первого работающего здания вида машина есть всегда.</p>';
     return h;
   }
   function closeMech() { $('mech').hidden = true; document.querySelector('.tool.mech').classList.remove('open'); }
@@ -3927,7 +4150,6 @@
     else if (a === 'place') startPlace(el.dataset.cat);
     else if (a === 'repair') repairAllAct(); else if (a === 'auto') toggleAuto();
     else if (a === 'fixone' && infoRoad) repairOneAct(infoRoad);
-    else if (a === 'vorder') orderKind(el.dataset.kind); else if (a === 'vcancel') cancelKind(el.dataset.kind); else if (a === 'vsell') sellVehicle(el.dataset.kind);
     else if (a === 'cars') { openMech('cars'); return; }
     else if (a === 'style') { var sb = getB(infoId); if (sb) setBuildingTheme(sb, +el.dataset.th); return; }
     renderMech();
@@ -4084,16 +4306,30 @@
       if (b.cat === 'factory') {
         var u = G.units.brigade;
         h += '<div class="pbox"><b>🏭 Выпуск машин</b><div class="kv"><span>Очередь</span><span id="iFq">' + fqText() + '</span>' +
-          '<span>«Бригада»</span><span>' + usd(u.factoryPrice) + ', ' + secText(u.makeTime) + '</span><span>Другие машины</span><span>7 моделей, от ' + secText(3) + '</span></div>' +
+          '<span>«Бригада»</span><span>' + usd(u.factoryPrice) + ', ' + secText(u.makeTime) + '</span></div>' +
           '<div class="ubtns wrap"><button class="btn-buy alt" data-act="order">🚚 Заказать «Бригаду»</button><button class="btn-sell" data-act="cancel" id="iCancel"' + (queued('brigade') ? '' : ' disabled') + '>Отменить</button>' +
-          '<button class="btn-buy" data-act="cars">🚗 Другие машины</button></div></div>';
+          '<button class="btn-buy" data-act="cars">🚗 Машины города</button></div></div>';
       } else if (b.cat === 'saw') {
         var sp = G.sawmill[b.size], R0 = sawRate();
-        h += '<div class="pbox"><b>🪵 Производство</b><div class="kv"><span>Доски</span><span><b>' + sp.boards + '</b> в минуту</span>' +
+        h += '<div class="pbox"><b>🪚 Производство</b><div class="kv">' +
+          (state.env ? '<span>Берёт брёвен</span><span><b>' + sp.use + '</b> в минуту</span>' : '') +
+          '<span>Доски</span><span><b>' + sp.boards + '</b> в минуту</span>' +
           (sp.dsp ? '<span>ДСП</span><span><b>' + sp.dsp + '</b> листов в минуту</span>' : '<span>ДСП</span><span>нет — делает только Большая лесопилка</span>') +
           '<span>Все лесопилки города</span><span>' + R0.boards + ' досок + ' + R0.dsp + ' ДСП / мин</span>' +
           '<span>На складе</span><span id="iStock">—</span></div>' +
+          (state.env ? (state.stock.logs < 1 ? '<div class="noroad"><b>🪵 Нет брёвен</b>Лесопилка стоит. Брёвна даёт только Общество лесорубов: 🏠 «Строить» → 🪵 «Ресурсы». Поставьте его у леса и подведите дорогу.</div>' : '') :
+            '<div class="unote">В этом мире нет деревьев, поэтому лесопилка работает без брёвен. Нажмите ☰ → «🌲 Обновить карту» — появятся деревья и лесорубы.</div>') +
           '<div class="unote">Стройка берёт материалы со склада: с досками бригады строят на 25% быстрее, с досками и ДСП — на 50%.</div></div>';
+      } else if (b.cat === 'lumber') {
+        var LJ = G.lumber, zn = jackZone(b), ztr = zoneTrees(b), nj = jackCountOf(b.id);
+        h += '<div class="pbox"><b>🪓 Лесоповал</b><div class="kv"><span>Поле деятельности</span><span><b>' + LJ.zone + '×' + LJ.zone + '</b> клеток (подсвечено на карте)</span>' +
+          '<span>Деревьев в поле</span><span><b>' + (state.env ? ztr : 0) + '</b>' + (state.env && !ztr ? ' — лес кончился' : '') + '</span>' +
+          '<span>Лесорубов</span><span><b>' + nj + '</b> из ' + LJ.jacks + '</span>' +
+          '<span>Брёвен с дерева</span><span>' + LJ.perTree[1] + ' (дуб), ' + LJ.perTree[2] + ' (сосна), ' + LJ.perTree[3] + ' (ясень)</span>' +
+          '<span>На складе</span><span id="iStock">—</span></div>' +
+          (!state.env ? '<div class="noroad"><b>🌲 В мире нет деревьев</b>Лесорубам нечего рубить. Нажмите ☰ → «🌲 Обновить карту» — свободная площадь засеется лесом.</div>' :
+            !ztr ? '<div class="noroad"><b>🌲 В поле не осталось деревьев</b>Деревья не растут. Перенесите общество к другому лесу: ✋ «Перенести».</div>' : '') +
+          '<div class="unote">Лесорубы ходят по полю, валят деревья и носят брёвна в общество. Брёвна идут на склад города, оттуда их берут лесопилки.</div></div>';
       } else if (b.cat === 'park' || b.cat === 'upark') {
         var pu = parkUse(b);
         h += '<div class="pbox"><b>🅿️ ' + (b.cat === 'upark' ? 'Подземная парковка' : 'Наземная парковка') + '</b><div class="kv"><span>Мест</span><span><b>' + pu.places + '</b>' + (b.cat === 'upark' ? ' (под землёй, сверху газон)' : '') + '</span>' +
@@ -4149,9 +4385,10 @@
   $('infoClose').addEventListener('click', closeInfo);
   function highlight(id) {
     var b = id && getB(id);
-    if (!b) { hl.setEnabled(false); dirty(); return; }
+    if (!b) { hl.setEnabled(false); zoneOff(); dirty(); return; }
     var f = foot(b.size, b.rot), p = bPos(b);
     setOverlay(hl, p.x, p.z, f.w + 0.2, f.d + 0.2);
+    if (b.cat === 'lumber') showZone(b); else zoneOff();
   }
 
   // ---------- Статистика ----------
@@ -4181,7 +4418,7 @@
     $('stBuild').textContent = built;
     $('stOff').textContent = off; $('stOffWrap').hidden = !off;
     $('stOffWrap').title = 'Без дороги: ' + off + ' ' + plural(off, 'здание', 'здания', 'зданий') + ' не работают. Подведите к ним дорогу.';
-    rebuildTraffic(); syncRollers(); syncCars(); sawCache = null; stoneCache = null; stockDirty = true; updateStock();
+    rebuildTraffic(); syncRollers(); syncCars(); syncVehicles(); sawCache = null; stoneCache = null; stockDirty = true; updateStock();
     if (infoId) { var ib = getB(infoId); if (ib) renderInfo(ib, true); }
     simRequest();
   }
@@ -4225,7 +4462,7 @@
         '<span>Булыжник</span><span>' + f(R.cobble) + ' кл.</span>' +
         '<span>Автоматический ремонт</span><span>' + (state.autoRepair ? 'включён' : 'выключен') + '</span>' +
         '<span>Очередь завода</span><span>' + state.fql.length + '</span>' +
-        '<span>Машины завода</span><span>' + f(state.vehicles.length) + '</span>' +
+        '<span>Служебные машины</span><span>' + f(state.vehicles.length) + '</span>' +
         '<span>Легковые машины жителей</span><span>' + f(Object.keys(carAgents).length) + '</span>'; })() + '</div>' +
       '<p style="font-size:13px;color:#a9b6c8">Расчёт жителей: ' + (window.SIM.threaded() ? 'в фоновом потоке' : 'на странице') + ', ' + sim.ms + ' мс. ' +
       'Отрисовка: Babylon.js ' + B.Engine.Version + ', ' + nb + ' ' + plural(nb, 'пачка', 'пачки', 'пачек') + ' одинаковых моделей.</p>';
@@ -4246,6 +4483,7 @@
       '<button class="menu-btn" data-m="news">📝 Что нового</button>' +
       '<button class="menu-btn" data-m="city">📊 Город</button>' +
       '<button class="menu-btn" data-m="mech">🚚 Механизмы</button>' +
+      '<button class="menu-btn" data-m="center">🎯 В центр карты<span class="mb-sub">камера вернётся в середину карты · клавиша 8</span></button>' +
       '<p style="font-size:13px;color:#a9b6c8">Миры сохраняются сами — на этом устройстве, а после входа в аккаунт ещё и в облаке (одни и те же миры на телефоне и компьютере). Бригады, машины и деньги у каждого мира свои.</p>';
   }
   function sideShow(html, sub, keep) { var st = $('sbBody').scrollTop; $('sbBody').innerHTML = html; $('sbBody').scrollTop = keep ? st : 0; $('sbPrev').hidden = !sub; }
@@ -4503,6 +4741,7 @@
     else if (m === 'gsec') { var d = document.getElementById('g-' + b.dataset.s); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); } }
     else if (m === 'city') { menuMode = 'city'; menuView(cityHtml(), true); }
     else if (m === 'mech') { closeModal(); closeSide(); openMech(); }
+    else if (m === 'center') { closeModal(); closeSide(); centerCam(); }
     else if (m === 'news') menuView('<h2>Что нового</h2>' + changelogHtml(), true);
     else if (m === 'worlds') { showWorlds(); WORLD.cloud.poke(); }
     else if (m === 'acct') showAcct();
@@ -4558,22 +4797,138 @@
     dirty();
   }
 
+  // ---------- Миникарта и центр карты (с 0.23.0) ----------
+  // Внизу слева: вся карта целиком (север — вверху), над ней — координаты камеры («игрока»). Белая рамка — что сейчас на экране,
+  // жёлтая точка — центр экрана, крестик — центр карты. Нажмите или проведите по миникарте — камера переедет туда.
+  // Картинка рисуется кусками по мере загрузки карты и остаётся, когда куски выгружаются; в мирах с природой лес и горы дальних кусков дорисовываются заранее.
+  var mmCv = $('miniMap'), mmCo = $('miniCo'), mmBuf = document.createElement('canvas'), mmB = mmBuf.getContext('2d'), MMR = 0;
+  var mmKnown = {}, mmDirty = {}, mmQueue = null, mmVer = 0, mmSig = '', mmCoT = '', lastMm = 0, mmDrag = false;
+  var MM_NATURE = [[127, 179, 90], [62, 125, 58], [166, 160, 148], [118, 123, 132]];           // трава, лес, каменистая земля, гора
+  var MM_ROAD = [[201, 164, 107], [176, 160, 128], [88, 94, 104]];                               // простая, булыжник, асфальт
+  var mmCatIdx = {}, mmPal = null;
+  function mmPalette() {
+    if (mmPal) return mmPal;
+    mmPal = MM_NATURE.concat(MM_ROAD);
+    Object.keys(G.cats).forEach(function (k, i) { mmCatIdx[k] = i; var c = B.Color3.FromHexString(G.cats[k].color); mmPal.push([Math.round(c.r * 255), Math.round(c.g * 255), Math.round(c.b * 255)]); });
+    return mmPal;
+  }
+  function mmReset() {
+    MMR = Math.max(16, Math.min(N, 256));
+    mmBuf.width = mmBuf.height = MMR;
+    mmB.fillStyle = 'rgb(30,42,59)'; mmB.fillRect(0, 0, MMR, MMR);
+    mmKnown = {}; mmDirty = {}; mmQueue = null; mmVer++; mmSig = '';
+  }
+  // класс клетки: 0 трава, 1 лес, 2 камень, 3 гора, 4–6 дороги, 7+ здания (чем больше номер, тем «главнее» — выигрывает в пикселе)
+  function mmClassLoaded(x, z) {
+    var i = idx(x, z), o = occ[i];
+    if (o) { var bb = byId[o]; return 7 + (bb ? mmCatIdx[bb.cat] | 0 : 0); }
+    var r = state.roads[key(x, z)]; if (r) return r === 'asphalt' ? 6 : r === 'cobble' ? 5 : 4;
+    var t = terr[i]; if (t === 2) return 3; if (t === 1 || t === 3) return 2;
+    return treeA[i] ? 1 : 0;
+  }
+  function mmPaint(cx, cz, g) { // g — природа куска из TERRAIN.cells (кусок не загружен); без g — берём загруженную карту
+    var pal = mmPalette(), s = N / MMR, x0 = cx * WC, z0 = cz * WC, x1 = Math.min(N, x0 + WC), z1 = Math.min(N, z0 + WC), gw = x1 - x0;
+    var px0 = Math.floor(x0 / s), px1 = Math.min(MMR, Math.ceil(x1 / s)), pz0 = Math.floor(z0 / s), pz1 = Math.min(MMR, Math.ceil(z1 / s));
+    var w = px1 - px0, h = pz1 - pz0; if (w <= 0 || h <= 0) return;
+    var img = mmB.createImageData(w, h), d = img.data, st = Math.max(1, Math.floor(s / 3));
+    for (var py = 0; py < h; py++) for (var px = 0; px < w; px++) {
+      var xa = Math.min(x1 - 1, Math.max(x0, Math.floor((px0 + px) * s))), xb = Math.min(x1, Math.max(xa + 1, Math.ceil((px0 + px + 1) * s)));
+      var za = Math.min(z1 - 1, Math.max(z0, Math.floor((pz0 + py) * s))), zb = Math.min(z1, Math.max(za + 1, Math.ceil((pz0 + py + 1) * s))), best = 0;
+      for (var zz = za; zz < zb; zz += st) for (var xx = xa; xx < xb; xx += st) {
+        var c;
+        if (g) { var li = (zz - z0) * gw + (xx - x0), t = g.terr[li]; c = t === 2 ? 3 : (t === 1 || t === 3) ? 2 : g.tree[li] ? 1 : 0; }
+        else c = mmClassLoaded(xx, zz);
+        if (c > best) best = c;
+      }
+      var col = pal[best] || pal[0], o = (py * w + px) * 4;
+      d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255;
+    }
+    mmB.putImageData(img, px0, pz0); mmVer++;
+  }
+  function mmTick() {
+    if (!state || !worldId || switching || !MMR) return;
+    var ck, n = 0;
+    for (ck in loaded) {
+      if (mmKnown[ck] === 2 && !mmDirty[ck]) continue;
+      if (n >= 3) break;
+      var L = loaded[ck]; mmPaint(L.x, L.z); mmKnown[ck] = 2; delete mmDirty[ck]; n++;
+    }
+    if (n || !state.env) return;
+    if (!mmQueue) {   // дальние куски: сначала ближние к камере
+      var nc = nChunks(), ccx = Math.floor((cam.tx + N / 2) / WC), ccz = Math.floor((cam.tz + N / 2) / WC), cx, cz;
+      mmQueue = [];
+      for (cz = 0; cz < nc; cz++) for (cx = 0; cx < nc; cx++) mmQueue.push([cx, cz]);
+      mmQueue.sort(function (a, b) { return Math.hypot(a[0] - ccx, a[1] - ccz) - Math.hypot(b[0] - ccx, b[1] - ccz); });
+    }
+    while (mmQueue.length) {
+      var q = mmQueue.shift(), k2 = ckey(q[0], q[1]);
+      if (mmKnown[k2]) continue;
+      var x0 = q[0] * WC, z0 = q[1] * WC, g = TERRAIN.cells(state.env, N, x0, z0, Math.min(N, x0 + WC), Math.min(N, z0 + WC));
+      mmPaint(q[0], q[1], g); mmKnown[k2] = 1; break;
+    }
+  }
+  function mmCoordsOf(tx, tz) { return { x: clamp(Math.round(tx), 1, N), z: clamp(Math.round(tz), 1, N) }; }
+  function drawMini(force) {
+    if (!MMR || !mmCv.clientWidth) return;
+    var cw = mmCv.clientWidth, dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.round(cw * dpr);
+    if (mmCv.width !== W) { mmCv.width = W; mmCv.height = W; force = true; }
+    var tx = cam.tx + N / 2, tz = cam.tz + N / 2, sig = [Math.round(tx * 2), Math.round(tz * 2), Math.round(cam.yaw * 50), Math.round(cam.dist), N, mmVer, W].join();
+    var co = mmCoordsOf(tx, tz), ct = '📍 ' + co.x + ' : ' + co.z;
+    if (ct !== mmCoT) { mmCoT = ct; mmCo.textContent = ct; mmCv.title = 'Вы здесь: клетка ' + co.x + ' : ' + co.z + '. Центр карты: ' + Math.round(N / 2) + ' : ' + Math.round(N / 2) + '. Нажмите на миникарту, чтобы перейти.'; }
+    if (!force && sig === mmSig) return; mmSig = sig;
+    var g = mmCv.getContext('2d'), k = W / N, c = W / 2, a = Math.max(4, W * 0.035);
+    g.imageSmoothingEnabled = false;
+    g.clearRect(0, 0, W, W); g.drawImage(mmBuf, 0, 0, W, W);
+    // центр карты — крестик
+    g.lineCap = 'round';
+    [['rgba(0,0,0,.65)', 3], ['rgba(255,255,255,.95)', 1.4]].forEach(function (o) {
+      g.strokeStyle = o[0]; g.lineWidth = o[1]; g.beginPath(); g.moveTo(c - a, c); g.lineTo(c + a, c); g.moveTo(c, c - a); g.lineTo(c, c + a); g.stroke();
+    });
+    // что сейчас на экране
+    var rc = canvas.getBoundingClientRect(), P = [[rc.left, rc.top], [rc.right, rc.top], [rc.right, rc.bottom], [rc.left, rc.bottom]].map(function (q) {
+      var pp = groundAt(q[0], q[1]); return pp ? [(pp.x + N / 2) * k, (pp.z + N / 2) * k] : null;
+    });
+    if (P.every(Boolean)) {
+      g.beginPath(); P.forEach(function (q, i) { if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.closePath();
+      g.fillStyle = 'rgba(255,255,255,.14)'; g.fill();
+      g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 3; g.stroke(); g.strokeStyle = '#fff'; g.lineWidth = 1.4; g.stroke();
+    }
+    // игрок (центр экрана)
+    var px = clamp(tx * k, 2, W - 2), pz = clamp(tz * k, 2, W - 2), r = Math.max(3, W * 0.03);
+    g.beginPath(); g.arc(px, pz, r, 0, 7); g.fillStyle = '#ffc94a'; g.fill(); g.lineWidth = 1.6; g.strokeStyle = '#1b2433'; g.stroke();
+  }
+  function mmGo(e) {
+    var r = mmCv.getBoundingClientRect(), u = clamp((e.clientX - r.left) / r.width, 0, 1), v = clamp((e.clientY - r.top) / r.height, 0, 1);
+    cam.tx = (u - 0.5) * N; cam.tz = (v - 0.5) * N; updateCam(); ensureView(); drawMini(true);
+  }
+  function mmEnd(e) { if (!mmDrag) return; mmDrag = false; try { mmCv.releasePointerCapture(e.pointerId); } catch (x) {} saveSoft(); }
+  mmCv.addEventListener('pointerdown', function (e) { e.preventDefault(); e.stopPropagation(); mmDrag = true; try { mmCv.setPointerCapture(e.pointerId); } catch (x) {} mmGo(e); });
+  mmCv.addEventListener('pointermove', function (e) { if (mmDrag) { e.preventDefault(); mmGo(e); } });
+  mmCv.addEventListener('pointerup', mmEnd); mmCv.addEventListener('pointercancel', mmEnd);
+  // Центр карты: кнопка 🎯 «Центр» рядом с «Эпохами», пункт меню ☰ и клавиша 8. Масштаб и поворот камеры остаются.
+  function centerCam() {
+    if (!state || switching) return;
+    cam.tx = 0; cam.tz = 0; updateCam(); ensureView(); drawMini(true); saveSoft();
+    var m = Math.round(N / 2); hint('🎯 Вернулись в центр карты · ' + m + ' : ' + m);
+  }
+
   var needRender = true, lastT = performance.now(), lastSave = 0, lastUi = 0, frames = 0, lastView = 0, camSig = '', camT = 0;
   function dirty() { needRender = true; }
   function loop() {
     var t = performance.now(), dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
     keyPan(dt); tickCam(dt);
     var active = tickBrigades(dt, t);
-    tickFactory(dt); tickWear(dt); tickTraffic(dt); tickSawmills(dt); tickStone(dt);
+    tickFactory(dt); tickWear(dt); tickTraffic(dt); tickSawmills(dt); tickStone(dt); tickJacks(dt);
     var fixingNow = tickRepair(dt, t);
     if ((active || fixingNow) && t - lastSave > 2000) { saveNow(true); lastSave = t; }
     if (t - lastView > 220) { lastView = t; ensureView(); var sg = Math.round(cam.tx) + ',' + Math.round(cam.tz) + ',' + Math.round(cam.dist); if (sg !== camSig) { camSig = sg; camT = t; } else if (camT && t - camT > 2500) { camT = 0; saveSoft(); } }
     if (t - lastUi > 400) {
       lastUi = t;
-      if (infoId) { var ib = getB(infoId); if (ib && isSite(ib)) renderInfo(ib, true); }
+      if (infoId) { var ib = getB(infoId); if (ib && (isSite(ib) || ib.cat === 'lumber')) renderInfo(ib, true); }
       renderMech(); refreshLive(); updateStock();
       if (!$('panelBuild').hidden) updateBrRow();   // «заняты N из M» меняется, когда бригады уезжают на стройки
     }
+    if (t - lastMm > 150) { lastMm = t; mmTick(); drawMini(false); }
     flushRoads(); flushBatches();
     if (needRender) {
       needRender = false;
@@ -4613,6 +4968,8 @@
     wearAll: function (w) { for (var k in state.roads) if (state.roads[k] === 'asphalt') { state.wear[k] = typeof w === 'function' ? w(k) : w; markRoadKey(k); } dirty(); },
     finishAll: function () { state.buildings.forEach(function (b) { if (isSite(b)) { b.prog = 1; finishSite(b); } }); },
     env: function () { return { terr: terr, treeA: treeA, mt: Object.keys(mtMesh).length, cleared: cleared }; }, clearArea: clearArea, canPlace: canPlace, agents: function () { return { veh: agents, cars: carAgents, driving: carsDriving }; }, orderKind: orderKind, rollers: function () { return rollers; }, roadInfo: openRoadInfo, startPlace: startPlace, order: orderTruck, repairAll: repairAllAct, toggleAuto: toggleAuto,
+    jackTick: function (n, dt) { for (var i = 0; i < n; i++) tickJacks(dt); },
+    jacks: function () { return Object.keys(jacks).map(function (k) { var j = jacks[k]; return j.mode + ' ' + j.x.toFixed(1) + ',' + j.z.toFixed(1) + ' t' + j.tree + ' c' + j.carry; }); },
     place: function (cat, size, x, z) { buildCat = cat; buildSize = size; buildRot = 0; placeBuilding({ px: x + G.sizes[size].w / 2, pz: z + G.sizes[size].d / 2 }); },
     bulk: function (n) { // тест: мгновенно застроить карту n зданиями
       var cats = Object.keys(G.cats), sz = ['1x1', '2x1', '2x2'], made = 0;

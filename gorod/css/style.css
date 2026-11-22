@@ -9,6 +9,7 @@
   --r: 14px;
   --safeb: env(safe-area-inset-bottom, 0px);
   --safet: env(safe-area-inset-top, 0px);
+  --mmw: 124px;   /* сторона миникарты (0.23.0) */
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #141b27; color: var(--fg);
@@ -41,6 +42,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   z-index: 4; pointer-events: none; transition: opacity .3s; }
 .hint.warn { color: #ffb4a8; }
 
+/* Миникарта (0.23.0): внизу слева; на телефоне стоит над нижним рядом кнопок и прячется, пока открыто меню «Строить» / «Дорога» */
+.mini { position: fixed; left: calc(8px + env(safe-area-inset-left, 0px)); bottom: calc(76px + var(--safeb)); z-index: 4; width: var(--mmw);
+  display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: var(--bg); box-shadow: 0 4px 16px rgba(0,0,0,.3); backdrop-filter: blur(8px); }
+.mini-co { padding: 4px 6px 3px; font-size: 12.5px; font-weight: 600; line-height: 1.2; text-align: center; white-space: nowrap; color: var(--fg); font-variant-numeric: tabular-nums; }
+.mini canvas { display: block; width: var(--mmw); height: var(--mmw); touch-action: none; cursor: pointer; background: #1e2a3b; border-top: 1px solid var(--line); }
+@media not all and (min-width: 700px) and (min-height: 500px) { body.sp-open .mini { display: none; } }
+@media (max-height: 420px) { :root { --mmw: 96px; } }
+
 /* Панель инструментов и меню построек. На телефоне она «растворена» — кнопки внизу экрана;
    на компьютере и планшете (см. конец файла) это одна боковая панель: сверху кнопки, ниже меню построек. */
 .dock { display: contents; }
@@ -54,6 +63,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tool.on small { color: #2a2205; font-weight: 600; }
 .tool.mech.open { background: rgba(95,191,79,.28); }
 .tool.epochs.open { background: rgba(217,176,74,.28); }
+.tool.home:active { background: rgba(95,191,79,.28); }
 
 .subpanel { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(80px + var(--safeb)); z-index: 5;
   width: min(560px, calc(100% - 16px)); padding: 8px; background: var(--bg); border-radius: var(--r); display: flex; flex-direction: column; gap: 8px; }
@@ -329,8 +339,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .topbar { left: calc(12px + env(safe-area-inset-left, 0px)); right: auto; top: calc(12px + var(--safet)); min-width: 0;
     max-width: calc(100% - var(--dockw) - 96px - env(safe-area-inset-left, 0px)); }
   .cam-btns { top: calc(12px + var(--safet)); right: calc(var(--dockw) + 24px + env(safe-area-inset-right, 0px)); }
-  .hint { left: calc(12px + env(safe-area-inset-left, 0px)); top: auto; bottom: calc(14px + var(--safeb)); transform: none; text-align: left;
-    max-width: min(560px, calc(100% - var(--dockw) - 60px)); }
+  :root { --mmw: clamp(150px, 13vw, 200px); }
+  .mini { left: calc(12px + env(safe-area-inset-left, 0px)); bottom: calc(12px + var(--safeb)); }
+  .hint { left: calc(24px + var(--mmw) + env(safe-area-inset-left, 0px)); top: auto; bottom: calc(14px + var(--safeb)); transform: none; text-align: left;
+    max-width: min(560px, calc(100% - var(--dockw) - var(--mmw) - 72px)); }
   .info { left: auto; right: calc(var(--dockw) + 24px + 56px + env(safe-area-inset-right, 0px)); top: calc(72px + var(--safet)); bottom: auto;
     width: min(360px, calc(100% - var(--dockw) - 130px)); max-height: calc(100% - 84px - var(--safet) - var(--safeb)); }
 }
@@ -404,7 +416,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .epc-btns button { flex: 1 1 170px; }
 .epc-btns button[disabled] { opacity: .5; }
 .epc-btns .arm { outline: 2px solid #ff8a7a; }
-@media (min-width: 900px) { .toolbar .tool.epochs { grid-column: 1 / -1; } }
+@media (min-width: 700px) and (min-height: 500px) { .toolbar .tool.epochs { grid-column: span 2; } }   /* «Эпохи» (шире) и рядом «Центр» — последний ряд панели */
 
 /* ---------- Миры и аккаунт (с 0.20.0) ---------- */
 .world-chip { display: flex; align-items: center; gap: 5px; max-width: 34vw; min-width: 0; border: 1px solid var(--line); background: rgba(255,255,255,.07);

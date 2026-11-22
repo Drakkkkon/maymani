@@ -20,7 +20,7 @@
     <span id="stJobsWrap" title="Рабочие места">💼 <b id="stJobs">0</b></span>
     <span title="Здания">🏢 <b id="stBuild">0</b></span>
     <span class="stock stone" id="stStoneWrap" hidden>🪨 <b id="stStone">0</b> ⚪ <b id="stGravel">0</b></span>
-    <span class="stock" id="stStockWrap" hidden>🪵 <b id="stBoards">0</b> 🟫 <b id="stDsp">0</b></span>
+    <span class="stock" id="stStockWrap" hidden><span id="stLogsWrap">🪵 <b id="stLogs">0</b> </span>🪚 <b id="stBoards">0</b> 🟫 <b id="stDsp">0</b></span>
     <span class="off" id="stOffWrap" hidden>🚫 <b id="stOff">0</b></span>
   </div>
   <button class="icon-btn" id="btnMenu" aria-label="Меню" aria-expanded="false" aria-controls="sidebar">☰</button>
@@ -31,6 +31,12 @@
   <button class="icon-btn" id="camRotR" aria-label="Повернуть камеру вправо">⟳</button>
   <button class="icon-btn" id="camIn" aria-label="Приблизить">＋</button>
   <button class="icon-btn" id="camOut" aria-label="Отдалить">－</button>
+</div>
+
+<!-- Миникарта (с 0.23.0): внизу слева; над ней — координаты камеры -->
+<div class="mini" id="mini">
+  <div class="mini-co" id="miniCo">📍 …</div>
+  <canvas id="miniMap" width="124" height="124" aria-label="Миникарта"></canvas>
 </div>
 
 <div class="hint" id="hint"></div>
@@ -47,6 +53,7 @@
     <button class="tool" data-tool="delete"><span>🗑️</span><small>Удалить</small></button>
     <button class="tool mech" data-tool="mech"><span>🚚</span><small>Механизмы</small></button>
     <button class="tool epochs" data-tool="epochs"><span>🕰️</span><small>Эпохи</small></button>
+    <button class="tool home" data-tool="home" title="Вернуться в центр карты (клавиша 8)"><span>🎯</span><small>Центр</small></button>
   </nav>
 
   <section class="subpanel" id="panelRoad" hidden>
