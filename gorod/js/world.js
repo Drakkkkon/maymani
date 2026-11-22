@@ -1,4 +1,4 @@
-// «Мое_город» — хранилище миров (с 0.20.0; в куске карты с 0.21.0 ещё и срубленные деревья).
+// «Мое_город» — хранилище миров (с 0.20.0; в куске карты с 0.21.0 ещё и срубленные деревья; с 0.22.0 в списке миров видно, есть ли в мире природа).
 // Мир = мета (имя, размер, камера, бригады, машины, склад, счёт) + куски карты по 100×100 клеток.
 // Локально всё лежит в IndexedDB «moe_gorod_worlds» (куски — отдельными записями: большая карта не грузится целиком).
 // Если вы вошли в аккаунт (js/mm-account.js, Firebase-проект money99774, как на других моих сайтах), то мир ещё и лежит в облаке:
@@ -147,7 +147,7 @@
   // ---------- миры ----------
   function visible(m) { var u = curUser(); return !m.del && (!m.uid || !u || m.uid === u.uid); }
   function stats(m) { if (m.cloudOnly && m.st) return m.st; var b = 0, p = 0, j = 0, cs = m.cs || {}; Object.keys(cs).forEach(function (k) { b += cs[k][0] | 0; p += cs[k][1] | 0; j += cs[k][2] | 0; }); return [b, p, j]; }
-  function view(m) { var s = stats(m); return { id: m.id, name: m.name, size: m.size, c: m.c, u: m.u, uid: m.uid || '', cloud: !!m.cu, cloudOnly: !!m.cloudOnly, needPull: !!m.needPull, b: s[0], p: s[1], j: s[2], dirty: worldDirty(m.id) }; }
+  function view(m) { var s = stats(m); return { id: m.id, name: m.name, size: m.size, c: m.c, u: m.u, uid: m.uid || '', cloud: !!m.cu, cloudOnly: !!m.cloudOnly, needPull: !!m.needPull, b: s[0], p: s[1], j: s[2], dirty: worldDirty(m.id), nat: m.g ? !!m.g.env : null }; } // nat (с 0.22.0): есть ли в мире природа; null — неизвестно (мир ещё не скачан)
   function worldHardDirty(id) { var k, pre = id + '|'; for (k in dirtyMap) if (k.indexOf(pre) === 0 && dirtyMap[k].hard) return true; return false; }
   function worldDirty(id) { var k, pre = id + '|'; for (k in dirtyMap) if (k.indexOf(pre) === 0) return true; return false; }
   function list() {

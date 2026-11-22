@@ -2,6 +2,8 @@
 // Всё считается по «зерну» мира (env.seed) и номеру клетки, без хранения: одна и та же клетка всегда даёт одно и то же,
 // поэтому карту можно подгружать кусками по 100×100, а в сохранении мира нужно лишь зерно и список срубленных деревьев.
 // Деревья не растут и не размножаются: после создания мира их можно только убрать (рубка при стройке или инструмент «Удалить»).
+// С 0.22.0 природу можно «досеять» в старый мир кнопкой 🌲 «Обновить»: env.keep — список прямоугольников [x0, z0, x1, z1] (конец не входит)
+// вокруг уже построенного. В них гор и каменистых площадок нет, а деревья растут на свободных клетках (занятые закрывает список срубленных).
 //
 // Виды клетки (terr): 0 — трава, 1 — каменистая площадка, 2 — гора (склон, строить нельзя), 3 — подножие горы (каменистая земля).
 // Деревья (tree): 0 — нет, 1 — дуб, 2 — сосна, 3 — ясень.
@@ -51,10 +53,12 @@
     return a;
   }
   function hitsHole(env, N, x0, z0, x1, z1) {
-    return holes(env, N).some(function (h) { return !(x1 < h[0] - 1 || x0 > h[2] + 1 || z1 < h[1] - 1 || z0 > h[3] + 1); });
+    function hit(h) { return !(x1 < h[0] - 1 || x0 > h[2] + 1 || z1 < h[1] - 1 || z0 > h[3] + 1); }
+    return holes(env, N).some(hit) || keepsOf(env).some(hit);
   }
+  function keepsOf(env) { return Array.isArray(env.keep) ? env.keep : []; }
   function mountainOf(env, N, sx, sz) {
-    var seed = env.seed, k = seed + ':' + N + ':' + (env.hole ? env.hole.join('_') : '') + ':' + sx + ',' + sz;
+    var seed = env.seed, k = seed + ':' + N + ':' + (env.hole ? env.hole.join('_') : '') + ':' + keepsOf(env).length + ':' + sx + ',' + sz;
     if (mcache[k] !== undefined) return mcache[k];
     var d = null;
     if (r01(seed, sx, sz, 101) < P_MOUNT) {
@@ -136,14 +140,17 @@
   // Область [x0, x1) × [z0, z1): terr — вид клетки, tree — дерево; массивы идут по строкам (z — строка).
   function cells(env, N, x0, z0, x1, z1) {
     var w = x1 - x0, h = z1 - z0, terr = new Uint8Array(w * h), tree = new Uint8Array(w * h), hs = holes(env, N), ms = msOf(N), x, z, i;
+    var ks = keepsOf(env).filter(function (k) { return !(k[2] <= x0 || k[0] >= x1 || k[3] <= z0 || k[1] >= z1); }); // только те «зоны построенного», что задевают эту область
     for (z = z0; z < z1; z++) {
       for (x = x0; x < x1; x++) {
         i = (z - z0) * w + (x - x0);
         var skip = false;
         for (var q = 0; q < hs.length; q++) { var hh = hs[q]; if (x >= hh[0] && x < hh[2] && z >= hh[1] && z < hh[3]) { skip = true; break; } }
         if (skip) continue;
-        var m = mountainOf(env, N, Math.floor(x / ms), Math.floor(z / ms)), t = m ? mtClass(m, x + 0.5, z + 0.5) : 0;
-        if (!t && isRock(env, x, z)) t = 1;
+        var kept = false;
+        for (q = 0; q < ks.length; q++) { var kk = ks[q]; if (x >= kk[0] && x < kk[2] && z >= kk[1] && z < kk[3]) { kept = true; break; } }
+        var m = kept ? null : mountainOf(env, N, Math.floor(x / ms), Math.floor(z / ms)), t = m ? mtClass(m, x + 0.5, z + 0.5) : 0;
+        if (!t && !kept && isRock(env, x, z)) t = 1;
         terr[i] = t;
         if (!t) tree[i] = treeAt(env, x, z);
       }

@@ -1,4 +1,4 @@
-// «Мое_город» — градостроитель на Babylon.js. С 0.21.0: природа (деревья, каменистые площадки, горы — js/terrain.js) и камень.
+// «Мое_город» — градостроитель на Babylon.js. С 0.21.0: природа (деревья, каменистые площадки, горы — js/terrain.js) и камень. С 0.22.0: кнопка «🌲 Обновить» засевает природой старые миры.
 // Один вид — качественная изометрия («ИЗО HD», с 0.12.0): полное разрешение экрана, сглаживание
 // и подробные текстуры. Свободный 3D-вид и пиксельная изометрия убраны.
 // Одинаковые здания рисуются пачками (thin instances): тысячи домов — это десятки вызовов отрисовки.
@@ -87,7 +87,8 @@
     if (!s.stock || typeof s.stock !== 'object') s.stock = {};
     s.stock.boards = +s.stock.boards || 0; s.stock.dsp = +s.stock.dsp || 0; // склад досок и ДСП (с 0.11.0)
     s.stock.stone = +s.stock.stone || 0; s.stock.gravel = +s.stock.gravel || 0; // камень и щебень (с 0.21.0)
-    if (s.env && (typeof s.env.seed !== 'number' || !isFinite(s.env.seed))) delete s.env; // природа: есть только у миров, созданных с 0.21.0
+    if (s.env && (typeof s.env.seed !== 'number' || !isFinite(s.env.seed))) delete s.env; // природа: есть у миров, созданных с 0.21.0 или обновлённых кнопкой 🌲 (с 0.22.0)
+    if (s.env && s.env.keep) s.env.keep = Array.isArray(s.env.keep) ? s.env.keep.filter(function (k) { return Array.isArray(k) && k.length === 4 && k.every(isFinite); }) : []; // зоны построенного (с 0.22.0)
     return s;
   }
   function catSizes(ck) { return G.cats[ck].sizes || ['1x1', '2x1', '2x2', '4x4']; }
@@ -4239,6 +4240,7 @@
     var u = WORLD.cloud.status().user;
     return '<h2>Мое_город ' + G.version + '</h2>' +
       '<button class="menu-btn" data-m="worlds">🌍 Миры<span class="mb-sub">' + esc(worldName) + ' · ' + N + '×' + N + '</span></button>' +
+      (worldId && state && !state.env && !stale ? '<button class="menu-btn nat" data-m="wnat" data-id="' + worldId + '">🌲 Обновить карту<span class="mb-sub">засеять свободную площадь деревьями и горами</span></button>' : '') +
       '<button class="menu-btn" data-m="acct">👤 Аккаунт<span class="mb-sub">' + (u ? esc(u.email) : 'вход не выполнен') + '</span></button>' +
       '<button class="menu-btn" data-m="help">📖 Гайд по игре</button>' +
       '<button class="menu-btn" data-m="news">📝 Что нового</button>' +
@@ -4275,9 +4277,13 @@
     var btns = '';
     if (!cur) btns += '<button class="mini" data-m="wopen" data-id="' + w.id + '">Открыть</button>';
     else if (stale) btns += '<button class="mini" data-m="wopen" data-id="' + w.id + '">↻ Загрузить новую версию</button>';
+    var canNat = cur ? !!(state && !state.env && !stale) : (w.nat === false && !w.cloudOnly && !w.needPull);   // мир без природы — можно засеять (с 0.22.0)
+    if (canNat) btns += '<button class="mini nat" data-m="wnat" data-id="' + w.id + '">🌲 Обновить</button>';
     btns += '<button class="mini" data-m="wren" data-id="' + w.id + '" aria-label="Переименовать">✏️</button><button class="mini danger" data-m="wdel" data-id="' + w.id + '" aria-label="Удалить">🗑️</button>';
     return '<div class="wcard' + (cur ? ' cur' : '') + '"><div class="wc-top"><b>' + esc(w.name) + '</b>' + (cur ? '<em>▶ открыт</em>' : '') + '</div>' +
-      '<div class="wc-sub">' + tags.join(' · ') + ' · ' + nc * nc + ' ' + plural(nc * nc, 'кусок', 'куска', 'кусков') + '</div><div class="wc-btns">' + btns + '</div></div>';
+      '<div class="wc-sub">' + tags.join(' · ') + ' · ' + nc * nc + ' ' + plural(nc * nc, 'кусок', 'куска', 'кусков') + '</div>' +
+      (canNat ? '<div class="wc-note">🌲 В этом мире нет природы. «Обновить» засеет всю свободную площадь деревьями и горами; построенное останется на месте.</div>' : '') +
+      '<div class="wc-btns">' + btns + '</div></div>';
   }
   function showWorlds(keep) {
     menuMode = 'worlds';
@@ -4377,6 +4383,80 @@
       return Promise.all(Object.keys(docs).map(function (ck) { var q = ck.split(','); return WORLD.putChunk(w.id, +q[0], +q[1], docs[ck], true); })).then(function () { return w.id; });
     });
   }
+  // ---------- Обновить старый мир: засеять природой (с 0.22.0) ----------
+  // Мир без природы (создан до 0.21.0 или без галочки «Природа») получает «зерно» природы (env.seed), и вся свободная площадь покрывается деревьями,
+  // каменистыми площадками и горами — так же, как в новых мирах. Всё построенное остаётся как было:
+  //  • клетки под зданиями и дорогами записываются в куски как «убранные» (t) — деревья там не вырастут, даже если потом снести здание;
+  //  • вокруг построенного (квадраты 10×10 клеток, где что-то стоит, склеены в прямоугольники) гор и камней нет — env.keep; деревья на свободных клетках внутри есть.
+  // Вокруг центра карты — чистая лужайка (как в новых мирах). Как в новом мире, добавляется стартовый запас камня и щебня (дороги теперь из камня).
+  function natureUpgrade(id) {
+    if (switching) return Promise.resolve();
+    return (id === worldId ? Promise.resolve() : openWorld(id)).then(function () {
+      if (id !== worldId || !state || switching) return;
+      if (stale) { hint('Мир изменили на другом устройстве — сначала «🌍 Миры» → «Загрузить новую версию»', true); return; }
+      if (state.env) { hint('В этом мире уже есть природа', true); return; }
+      return natureRun(id);
+    });
+  }
+  // Квадраты bs×bs клеток, где что-то стоит (blocks: Set номеров bz×1000+bx в блоках по 10 клеток) → список прямоугольников [x0, z0, x1, z1] (конец не входит)
+  function keepRects(blocks, bsz, mapN) {
+    var per = bsz / 10, cells = {}, list = [], k;
+    blocks.forEach(function (k10) { var bz = Math.floor(k10 / 1000), bx = k10 % 1000; cells[Math.floor(bz / per) * 1000 + Math.floor(bx / per)] = 1; });
+    var ks = Object.keys(cells).map(Number).sort(function (a, b) { return a - b; }), open = {};
+    ks.forEach(function (c) {
+      var bz = Math.floor(c / 1000), bx = c % 1000, last = list[list.length - 1];
+      if (last && last.bz === bz && last.bx1 === bx - 1) { last.bx1 = bx; return; }   // продолжение ряда
+      list.push({ bz: bz, bx0: bx, bx1: bx, bz0: bz });
+    });
+    var out = [], byRange = {};
+    list.forEach(function (r) {                                                        // одинаковые ряды друг под другом — в один прямоугольник
+      var key = r.bx0 + ':' + r.bx1, o = byRange[key];
+      if (o && o.bz1 === r.bz - 1) { o.bz1 = r.bz; return; }
+      o = { bx0: r.bx0, bx1: r.bx1, bz0: r.bz, bz1: r.bz }; byRange[key] = o; out.push(o);
+    });
+    return out.map(function (o) { return [o.bx0 * bsz, o.bz0 * bsz, Math.min(mapN, (o.bx1 + 1) * bsz), Math.min(mapN, (o.bz1 + 1) * bsz)]; });
+  }
+  function natureRun(id) {
+    saveNow(false);                                   // всё, что уже построено, — в хранилище
+    switching = true; showLoading('🌲 Засеваем карту деревьями и горами…');
+    var n = nChunks(), todo = [], blocks = new Set(), busy = 0, cx, cz;
+    for (cz = 0; cz < n; cz++) for (cx = 0; cx < n; cx++) todo.push([cx, cz]);
+    function one(c) {
+      return WORLD.getChunk(id, c[0], c[1]).then(function (doc) {
+        if (!doc) return;
+        var d = WORLD.codec.decode(doc, c[0], c[1]), x0 = c[0] * WC, z0 = c[1] * WC, x1 = Math.min(N, x0 + WC), z1 = Math.min(N, z0 + WC), occupied = {}, any = false;
+        function mark(x, z) {
+          if (x < x0 || z < z0 || x >= x1 || z >= z1) return;
+          occupied[(z - z0) * WC + (x - x0)] = 1; any = true;
+          blocks.add(Math.floor(z / 10) * 1000 + Math.floor(x / 10));
+        }
+        d.b.forEach(function (b) { if (!validB(b)) return; var f = foot(b.size, b.rot); for (var z = b.z; z < b.z + f.d; z++) for (var x = b.x; x < b.x + f.w; x++) mark(x, z); });
+        d.roads.forEach(function (r) { mark(r[0], r[1]); });
+        if (!any) return;
+        (doc.t || []).forEach(function (k) { occupied[k] = 1; });
+        return WORLD.putChunk(id, c[0], c[1], Object.assign({}, doc, { t: Object.keys(occupied).map(Number) }), true);
+      });
+    }
+    function worker() { // до четырёх кусков одновременно
+      var c = todo.shift(); if (!c) return Promise.resolve();
+      return one(c).then(worker);
+    }
+    var ws = []; for (busy = 0; busy < 4; busy++) ws.push(worker());
+    return Promise.all(ws).then(function () {
+      var keep = [], bsz = 10;
+      if (blocks.size) { do { keep = keepRects(blocks, bsz, N); bsz *= (bsz === 10 ? 2 : bsz === 20 ? 2.5 : 2); } while (keep.length > 400 && bsz <= 100); }   // квадраты 10, 20, 50, 100 клеток — чтобы прямоугольников было немного
+      state.env = { seed: newSeed() }; if (keep.length) state.env.keep = keep;
+      state.stock.stone = (+state.stock.stone || 0) + G.startStock.stone; state.stock.gravel = (+state.stock.gravel || 0) + G.startStock.gravel;
+      dirtyCk = {}; switching = false;                // устаревшие куски из памяти не должны затереть записанные выше
+      saveNow(false);                                 // запись «природа есть» в мир
+      return openWorld(id);                           // открыть мир заново: деревья и горы появятся вместе с кусками карты
+    }).then(function () {
+      if (state && state.env) hint('🌲 Готово! Свободная площадь засеяна деревьями и горами. Добавили ' + G.startStock.stone + ' 🪨 камня и ' + G.startStock.gravel + ' ⚪ щебня — теперь дороги строятся из камня', true);
+    }).catch(function (e) {
+      switching = false; hideLoading();
+      hint('Не удалось обновить карту: ' + ((e && e.message) || e), true);
+    });
+  }
   function migrateLegacy() { // прежнее сохранение (одна карта в браузере) становится первым миром
     var done = false; try { done = !!localStorage.getItem('moe_gorod_migrated'); } catch (e) {}
     var old = done ? null : legacyLoad();
@@ -4437,6 +4517,11 @@
       var did = b.dataset.id, tag = 'wdel' + did;
       if (confirmArm !== tag) { confirmArm = tag; b.textContent = 'Точно? Мир исчезнет навсегда'; return; }
       confirmArm = ''; deleteWorld(did);
+    }
+    else if (m === 'wnat') {
+      var nid = b.dataset.id, ntag = 'wnat' + nid;
+      if (confirmArm !== ntag) { confirmArm = ntag; b.textContent = 'Точно? Деревья и горы займут всю свободную площадь — это не отменить'; return; }
+      confirmArm = ''; closeModal(); closeSide(); natureUpgrade(nid);
     }
     else if (m === 'wmake') {
       var nmv = (($('wName') || {}).value || '').trim() || 'Новый мир', demo = !!($('wDemo') || {}).checked; newNature = !!($('wNature') || {}).checked;
@@ -4521,7 +4606,7 @@
     }
   } catch (e) {}
   window.__gorod = {
-    state: function () { return state; }, size: function () { return N; }, world: function () { return worldId; }, loaded: function () { return Object.keys(loaded); }, loading: function () { return Object.keys(loading); }, ensureView: ensureView, beginLog: function () { undoLog = []; }, undo: function () { var l = undoLog; undoLog = null; if (l) undoOps(l); }, delAt: function (x, z) { deleteAt(0, 0, { x: x, z: z }); }, openWorld: openWorld, createWorld: createWorld, saveNow: saveNow, metaCs: function () { return metaCs; }, ready4: ready4, WC: WC, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam,
+    state: function () { return state; }, size: function () { return N; }, world: function () { return worldId; }, loaded: function () { return Object.keys(loaded); }, loading: function () { return Object.keys(loading); }, ensureView: ensureView, beginLog: function () { undoLog = []; }, undo: function () { var l = undoLog; undoLog = null; if (l) undoOps(l); }, delAt: function (x, z) { deleteAt(0, 0, { x: x, z: z }); }, openWorld: openWorld, createWorld: createWorld, natureUpgrade: natureUpgrade, saveNow: saveNow, metaCs: function () { return metaCs; }, ready4: ready4, WC: WC, cam: cam, setTool: setTool, openInfo: function (id) { openInfo(getB(id)); }, updateCam: updateCam,
     road: function (x, z, t) { setRoad(x, z, t); }, stats: updateStats, setTheme: function (id, th) { var b = getB(id); if (b) setBuildingTheme(b, th); }, allTheme: function (th) { state.buildings.forEach(function (b) { setBuildingTheme(b, th); }); },
     scene: scene, buy: buyBrigade, siteAt: function (id, p) { var b = getB(id); b.prog = p; writeBuilding(b); updateSite(b, 0.016); }, openMech: openMech, sim: function () { return sim; }, frames: function () { return frames; },
     batches: function () { return Object.keys(batches).map(function (k) { return k + ':' + batches[k].ids.length; }); },
