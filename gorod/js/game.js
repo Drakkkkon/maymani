@@ -2370,7 +2370,7 @@
     var u = G.units.brigade;
     if (state.brigades.length >= u.importMax) { hint('Привезти можно только ' + u.importMax + ' бригады. Дальше — заказывайте на Механическом заводе (🏭 Здания)', true); return; }
     if (!canPay(u.price)) { hint('Не хватает долларов на бригаду', true); return; }
-    pay(u.price);
+    pay(u.price); snd('buy');
     var i = state.brigades.length, p = parkSpot(i);
     var br = { id: state.nextBr++, x: p.x, z: Math.min(N / 2 - 0.2, p.z + 3), yaw: Math.PI, park: p, site: 0 };
     state.brigades.push(br); writeTruck(br); dirty();
@@ -2381,7 +2381,7 @@
     if (!state.brigades.length) return;
     var j = state.brigades.length - 1;
     for (var i = state.brigades.length - 1; i >= 0; i--) if (!state.brigades[i].site) { j = i; break; } // сначала свободную
-    var br = state.brigades.splice(j, 1)[0];
+    var br = state.brigades.splice(j, 1)[0]; snd('sell');
     batchRemove(truckBatch(), br.id);
     state.spent -= Math.round(G.units.brigade.price / 2); updateMoney();
     assignBrigades(); save(); refreshNeed(); renderMech(); dirty();
@@ -2431,6 +2431,7 @@
     delete b.prog; touchB(b, true);
     removeBuildingMesh(b.id); addBuildingMesh(b);
     newVehNote = '';
+    snd('done');
     assignBrigades(); updateStats(); saveNow();
     var vnote = newVehNote ? ' · с ним появилась машина: ' + newVehNote : ''; newVehNote = '';
     if (infoId === b.id) renderInfo(b, true);
@@ -2899,6 +2900,7 @@
     return true;
   }
   function jackChop(j) {
+    snd('chop');
     var kind = j.tree >= 0 ? treeA[j.tree] : 0;
     if (kind) {
       var ul = undoLog; undoLog = null; var ok = clearTree(j.tx, j.tz); undoLog = ul;   // это не жест игрока — в журнал отмены не пишем
@@ -3435,7 +3437,9 @@
   };
   var NO_BRIGADE = 'Сначала купите бригаду — кнопка «Купить» вверху меню «Строить»';
   var hintTimer = 0;
+  function snd(name) { if (window.MoeAudio) window.MoeAudio.sfx(name); }   // звуки действий — js/audio.js (с 0.24.0)
   function hint(text, warn) {
+    if (warn && text && text.charAt(0) !== '✅') snd('error');
     var h = $('hint'); h.textContent = text || HINTS[tool]; h.className = 'hint' + (warn ? ' warn' : ''); h.style.opacity = 1;
     clearTimeout(hintTimer);
     hintTimer = warn ? setTimeout(function () { hint(); }, 2200) : setTimeout(function () { h.style.opacity = 0; }, 6000);
@@ -3691,7 +3695,7 @@
     pay(cost); clearArea(o.x, o.z, f0.w, f0.d);
     var b = { id: state.nextId++, cat: buildCat, size: buildSize, x: o.x, z: o.z, rot: buildRot, seed: buildSeed, th: buildTheme, prog: 0 };
     state.buildings.push(b); markOcc(b, b.id); touchB(b, true); addBuildingMesh(b);
-    assignBrigades();
+    assignBrigades(); snd('place');
     buildSeed = newSeed(); setGhost(buildCat, buildSize, buildSeed);
     save(); updateStats(); renderMech(); dirty();
     var crew = siteCrew(b.id).all;
@@ -3710,7 +3714,7 @@
   function deleteBuilding(b) {
     if (!allLoaded(b)) { hint('Эта часть карты ещё подгружается — подождите секунду', true); return; }
     if (undoLog) undoLog.push(['b', JSON.parse(JSON.stringify(b))]);
-    touchB(b, true); markOcc(b, 0); removeBuildingMesh(b.id); delete byId[b.id];
+    touchB(b, true); markOcc(b, 0); removeBuildingMesh(b.id); delete byId[b.id]; snd('del');
     state.buildings.splice(state.buildings.indexOf(b), 1);
     if (infoId === b.id) closeInfo();
     if (isSite(b)) { assignBrigades(); renderMech(); }
@@ -3737,6 +3741,7 @@
     }
     else { if (!pt) return; delete state.roads[k]; delete state.wear[k]; }
     if (undoLog) undoLog.push(['r', k, pt, pw, paid]);
+    snd(t ? 'road' : 'roadx');
     touchCell(x, z, true); refreshRoadAround(x, z); save(); statsSoon(); dirty();
   }
   function lineCells(a, b, fn) { // Брезенхэм
@@ -3778,7 +3783,7 @@
     if (canPlace(b.size, mv.rot, mv.x, mv.z, b.id, b.cat)) {
       var fm = foot(b.size, mv.rot); clearArea(mv.x, mv.z, fm.w, fm.d);
       touchB(b, true); markOcc(b, 0); b.x = mv.x; b.z = mv.z; b.rot = mv.rot; markOcc(b, b.id); touchB(b, true);
-      save(); updateStats();
+      save(); updateStats(); snd('drop');
       if (!isSite(b) && !hasRoad(b)) hint('🛣️ Здесь нет дороги — здание не работает, пока её не подведёте', true);
     } else hint('Сюда нельзя — здание вернулось на место', true);
     writeBuilding(b);
@@ -4490,14 +4495,14 @@
   function menuView(html, sub, keep) { if (sideOpen) sideShow(html, sub, keep); else openModal(html); }
   function openSide() {
     if (sideOpen) return;
-    sideOpen = true; confirmArm = ''; menuMode = '';
+    sideOpen = true; confirmArm = ''; menuMode = ''; snd('open');
     sideShow(menuRootHtml(), false);
     $('sidebar').classList.add('open'); $('sidebar').setAttribute('aria-hidden', 'false'); $('sbScrim').classList.add('open');
     $('btnMenu').setAttribute('aria-expanded', 'true');
   }
   function closeSide() {
     if (!sideOpen) return;
-    sideOpen = false;
+    sideOpen = false; snd('close');
     $('sidebar').classList.remove('open'); $('sidebar').setAttribute('aria-hidden', 'true'); $('sbScrim').classList.remove('open');
     $('btnMenu').setAttribute('aria-expanded', 'false');
   }
@@ -4953,6 +4958,8 @@
   if (window.MMAccount) MMAccount.setup({ app: 'gorod', title: 'Мое_город', toast: function (t) { hint(t); }, ls: ['moe_gorod_prefs'], onRemoteApplied: function () {},
     note: 'Сами миры (карты) хранятся в облаке отдельно — они в разделе «🌍 Миры».' });
   startWorlds();
+  // Стук на стройке (с 0.24.0): пока хотя бы одна бригада работает на стройплощадке — изредка слышны удары молотка
+  setInterval(function () { if (document.visibilityState === 'visible' && state && state.brigades && state.brigades.some(function (br) { return br.site; })) snd('work'); }, 1400);
   try {
     var seen = localStorage.getItem(SEEN_KEY);
     if (seen !== G.version) {

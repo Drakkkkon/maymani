@@ -449,3 +449,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .chk { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: 14px; }
 .chk input { width: 18px; height: 18px; }
 .cloudrow { display: flex; gap: 8px; align-items: center; margin: 10px 0; font-size: 13px; color: var(--mut); }
+
+
+/* ---------- 0.24.0: плеер в левом меню ☰ (название трека над кнопками) ---------- */
+.sb-player { flex: none; margin: 10px 14px 0; padding: 10px 12px 12px; border-radius: 14px; background: rgba(255,255,255,.07); border: 1px solid var(--line); }
+.pl-title { font-weight: 700; font-size: 15px; line-height: 1.3; color: var(--acc); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.pl-sub { font-size: 12px; color: var(--mut); margin: 2px 0 6px; min-height: 16px; }
+.pl-seek, .pl-vols input { width: 100%; accent-color: var(--acc); margin: 0; height: 22px; }
+.pl-btns { display: flex; gap: 8px; justify-content: center; margin: 4px 0 6px; }
+.pl-btn { width: 46px; height: 42px; border: 0; border-radius: 12px; background: rgba(255,255,255,.1); color: var(--fg, #fff); font-size: 18px; line-height: 1; cursor: pointer; }
+.pl-btn:hover { background: rgba(255,255,255,.18); }
+.pl-btn:active { transform: scale(.94); }
+.pl-play { width: 64px; background: var(--acc); color: #2a2205; font-size: 20px; }
+.pl-play:hover { background: #ffd467; }
+.pl-sfx[aria-pressed="false"] { opacity: .55; }
+.pl-vols { display: grid; gap: 2px; }
+.pl-vols label { display: grid; grid-template-columns: 84px 1fr; align-items: center; font-size: 12px; color: var(--mut); gap: 6px; }
+.sb-player.playing .pl-title::after { content: ' ♪'; }
+@media (max-height: 560px) { .pl-vols { display: none; } .pl-sub { margin-bottom: 2px; } }

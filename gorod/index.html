@@ -23,7 +23,7 @@
     <span class="stock" id="stStockWrap" hidden><span id="stLogsWrap">🪵 <b id="stLogs">0</b> </span>🪚 <b id="stBoards">0</b> 🟫 <b id="stDsp">0</b></span>
     <span class="off" id="stOffWrap" hidden>🚫 <b id="stOff">0</b></span>
   </div>
-  <button class="icon-btn" id="btnMenu" aria-label="Меню" aria-expanded="false" aria-controls="sidebar">☰</button>
+  <button class="icon-btn" id="btnMenu" data-nosnd aria-label="Меню" aria-expanded="false" aria-controls="sidebar">☰</button>
 </header>
 
 <div class="cam-btns">
@@ -115,7 +115,23 @@
   <div class="sb-head">
     <button class="icon-btn sb-prev" id="sbPrev" aria-label="Назад" hidden>←</button>
     <span class="sb-sp"></span>
-    <button class="icon-btn" id="sbClose" aria-label="Закрыть меню">✕</button>
+    <button class="icon-btn" id="sbClose" data-nosnd aria-label="Закрыть меню">✕</button>
+  </div>
+  <!-- Плеер (с 0.24.0): название трека над кнопками; музыка — папка music/, звуки действий рисуются в js/audio.js -->
+  <div class="sb-player" id="plPlayer">
+    <div class="pl-title" id="plTitle">🎵 …</div>
+    <div class="pl-sub" id="plSub"></div>
+    <input class="pl-seek" id="plSeek" type="range" min="0" max="1000" value="0" aria-label="Перемотка трека">
+    <div class="pl-btns">
+      <button class="pl-btn" id="plPrev" type="button" aria-label="Предыдущий трек" title="Предыдущий трек">⏮</button>
+      <button class="pl-btn pl-play" id="plPlay" type="button" aria-label="Играть" title="Играть / пауза">▶</button>
+      <button class="pl-btn" id="plNext" type="button" aria-label="Следующий трек" title="Следующий трек">⏭</button>
+      <button class="pl-btn pl-sfx" id="plSfx" type="button" aria-pressed="true" title="Звуки игры">🔊</button>
+    </div>
+    <div class="pl-vols">
+      <label><span>🎵 Музыка</span><input id="plVol" type="range" min="0" max="100" value="50" aria-label="Громкость музыки"></label>
+      <label><span>🔨 Звуки</span><input id="plSfxVol" type="range" min="0" max="100" value="70" aria-label="Громкость звуков игры"></label>
+    </div>
   </div>
   <div class="sb-body" id="sbBody"></div>
 </aside>
@@ -133,6 +149,7 @@
 <script src="js/data.js"></script>
 <script src="js/guide.js"></script>
 <script src="js/sim.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/mm-account.js"></script>
 <script src="js/world.js"></script>
 <script src="js/terrain.js"></script>
