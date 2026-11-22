@@ -485,12 +485,12 @@ window.__gorodMain = function () {
       line(cx, 0.3, cx - 0.09, 0.3 - 0.07, '#26282c', 0.016); line(cx, 0.3, cx + 0.03, 0.3 - 0.15, '#26282c', 0.012);
       g.fillStyle = '#26282c'; g.beginPath(); g.ellipse(cx * kx, 0.3 * ky, 0.012 * kx, 0.012 * ky, 0, 0, 7); g.fill();
     } else if (style === 'deco') { // ар-деко: белая штукатурка, ленточное окно, золотая полоса
-      R(0, 0, tw, th, wl); grain(1500, 0.05); R(0, 0, tw, 0.012, shade(wl, 0.3));
+      R(0, 0, tw, th, wl); photo('plaster', 0.7) || grain(1500, 0.05); R(0, 0, tw, 0.012, shade(wl, 0.3));
       R(0, 0.07, tw, 0.175, '#2f3a40'); glassRect(0, 0.082, tw, 0.15, GL0, GL1);
       line(0, 0.082, 0, 0.232, '#2f3a40', 0.014); line(cx, 0.082, cx, 0.232, '#2f3a40', 0.01); line(0, 0.157, tw, 0.157, '#2f3a40', 0.006);
       R(0, 0.245, tw, 0.02, shade(wl, -0.14)); R(0, 0.288, tw, 0.008, '#c9a24a');
     } else if (style === 'decot') { // ар-деко: узкие высокие окна и пилястры
-      R(0, 0, tw, th, wl); grain(1300, 0.05); R(0, 0, tw, 0.012, shade(wl, 0.3));
+      R(0, 0, tw, th, wl); photo('plaster', 0.7) || grain(1300, 0.05); R(0, 0, tw, 0.012, shade(wl, 0.3));
       [0.15, 0.45].forEach(function (x) {
         R(x - 0.075, 0.03, 0.15, 0.25, shade(wl, -0.1)); glassRect(x - 0.06, 0.045, 0.12, 0.22, GL0, GL1);
         line(x, 0.045, x, 0.265, '#2f3a40', 0.008); line(x - 0.06, 0.12, x + 0.06, 0.12, '#2f3a40', 0.006);
@@ -498,7 +498,7 @@ window.__gorodMain = function () {
       });
       R(0.3 - 0.012, 0, 0.024, th, shade(wl, 0.28)); R(0, 0, 0.012, th, shade(wl, 0.28)); R(tw - 0.012, 0, 0.012, th, shade(wl, 0.28));
     } else if (style === 'nouv') { // модерн: охристая штукатурка, арочное окно с лепной рамой, волнистый пояс
-      R(0, 0, tw, th, wl); grain(1500, 0.05);
+      R(0, 0, tw, th, wl); photo('plaster', 0.85) || grain(1500, 0.05);
       g.strokeStyle = shade(wl, 0.4); g.lineWidth = Math.max(1, 0.012 * ky); g.beginPath();
       for (i = 0; i <= 24; i++) { var wx0 = i * tw / 24, wy0 = 0.022 + Math.sin(i * 1.05) * 0.008; if (i) g.lineTo(wx0 * kx, wy0 * ky); else g.moveTo(wx0 * kx, wy0 * ky); }
       g.stroke(); R(0, 0.04, tw, 0.006, shade(wl, -0.16));
@@ -506,18 +506,18 @@ window.__gorodMain = function () {
       g.strokeStyle = shade(wl, 0.32); g.lineWidth = Math.max(1, 0.01 * kx);
       [-1, 1].forEach(function (sd) { g.beginPath(); g.moveTo((cx + sd * 0.16) * kx, 0.27 * ky); g.bezierCurveTo((cx + sd * 0.2) * kx, 0.17 * ky, (cx + sd * 0.12) * kx, 0.1 * ky, (cx + sd * 0.05) * kx, 0.075 * ky); g.stroke(); });
     } else if (style === 'bauh') { // баухаус: гладкая белая стена, ленточное окно с тонкими стальными переплётами
-      R(0, 0, tw, th, wl); grain(900, 0.04);
+      R(0, 0, tw, th, wl); photo('plaster', 0.55) || grain(900, 0.04);
       R(0, 0.064, tw, 0.19, '#2a3238'); glassRect(0, 0.072, tw, 0.174, GL0, GL1);
       for (i = 0; i <= 4; i++) line(i * tw / 4, 0.072, i * tw / 4, 0.246, '#2a3238', 0.008);
       line(0, 0.2, tw, 0.2, '#2a3238', 0.005);
       R(0, 0.262, tw, 0.012, shade(wl, -0.12)); R(0, 0, tw, 0.008, shade(wl, 0.2));
     } else if (style === 'bauhbase') { // баухаус: цоколь-витрина, стекло в тёмной раме
-      R(0, 0, tw, th, shade(wl, -0.05)); grain(700, 0.04);
+      R(0, 0, tw, th, shade(wl, -0.05)); photo('plaster', 0.55) || grain(700, 0.04);
       R(0.03, 0.05, tw - 0.06, 0.22, '#2a3238'); glassRect(0.045, 0.062, tw - 0.09, 0.196, '#cfe2ee', '#476b8a');
       for (i = 1; i < 5; i++) line(0.045 + i * (tw - 0.09) / 5, 0.062, 0.045 + i * (tw - 0.09) / 5, 0.258, '#2a3238', 0.008);
       R(0, 0, tw, 0.008, shade(wl, 0.2));
     } else if (style === 'decobase') { // ар-деко: тёмный каменный цоколь с золотыми окнами
-      R(0, 0, tw, th, shade(wl, -0.3)); grain(1000, 0.06); R(0, 0, tw, 0.01, '#c9a24a');
+      R(0, 0, tw, th, shade(wl, -0.3)); photo('stone', 0.6) || grain(1000, 0.06); R(0, 0, tw, 0.01, '#c9a24a');
       for (i = 1; i < 6; i++) R(0, i * th / 6, tw, 0.003, 'rgba(0,0,0,.2)');
       [0.12, 0.3, 0.48].forEach(function (x) { R(x - 0.055, 0.065, 0.11, 0.17, '#c9a24a'); glassRect(x - 0.045, 0.075, 0.09, 0.15, '#6a7e88', '#1f2a31'); line(x, 0.075, x, 0.225, '#c9a24a', 0.006); });
     } else if (style === 'indb') { // закопчённый кирпич, арочное окно со стальным переплётом
@@ -536,7 +536,7 @@ window.__gorodMain = function () {
       for (i = 1; i < 5; i++) line(cx - 0.11 + i * 0.044, 0.18, cx - 0.11 + i * 0.044, 0.3, '#1a1f23', 0.004);
     } else if (style === 'panel' || style === 'panelw' || style === 'panelbase') { // бетонные панели со швами
       var pb = style === 'panelbase';
-      R(0, 0, tw, th, pb ? shade(wl, -0.12) : wl); grain(1800, 0.06);
+      R(0, 0, tw, th, pb ? shade(wl, -0.12) : wl); photo('plaster', 0.6) || grain(1800, 0.06);
       R(0, 0, tw, 0.007, 'rgba(45,45,42,.5)'); R(0, 0, 0.006, th, 'rgba(45,45,42,.5)');
       if (style === 'panel') {
         R(cx - 0.12, 0.065, 0.24, 0.18, '#46586c'); glassRect(cx - 0.105, 0.08, 0.1, 0.15, GL0, GL1);
@@ -569,10 +569,10 @@ window.__gorodMain = function () {
     { euro: 'bauh', brick: 'bauh', archb: 'bauh', gov: 'bauh', arcade: 'bauhbase', iron: 'bauh' }];
   function hashStr(t) { var h = 7; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0; return h; }
   function themeWall(style, col, th) {
-    if (!th || !TH_WALL[th]) return th ? [style, col] : [style, col, 1];   // третье значение — эпоха «Бель-эпок»: стена с фотографической текстурой (с 1.2.0)
+    if (!th || !TH_WALL[th]) return [style, col, 1];   // третье значение — эпоха «Бель-эпок»: стена с фотографической текстурой (с 1.2.0)
     var st = TH_STYLE[th][style] || style;
-    if (style === 'shop' || style === 'dorm' || style === 'clock') return [st, style === 'shop' ? col : TH_WALL[th][hashStr(col) % TH_WALL[th].length]];
-    return [st, TH_WALL[th][hashStr(col) % TH_WALL[th].length]];
+    if (style === 'shop' || style === 'dorm' || style === 'clock') return [st, style === 'shop' ? col : TH_WALL[th][hashStr(col) % TH_WALL[th].length], 1];
+    return [st, TH_WALL[th][hashStr(col) % TH_WALL[th].length], 1];
   }
   function isRedRoof(col) { var n = parseInt(col.slice(1), 16), r = n >> 16, g2 = (n >> 8) & 255, b = n & 255; return r > b * 1.25 && r > g2 * 1.2; }
   function themeRoof(col, th) { return !th || !TH_ROOF[th] ? col : TH_ROOF[th][hashStr(col) % TH_ROOF[th].length]; }
