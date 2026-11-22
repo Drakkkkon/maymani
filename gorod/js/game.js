@@ -2,8 +2,23 @@
 // Один вид — качественная изометрия («ИЗО HD», с 0.12.0): полное разрешение экрана, сглаживание
 // и подробные текстуры. Свободный 3D-вид и пиксельная изометрия убраны.
 // Одинаковые здания рисуются пачками (thin instances): тысячи домов — это десятки вызовов отрисовки.
+// Защита от устаревшей страницы (с 1.1.1). Если браузер оставил в кэше старый index.html, а скрипты подгрузились новые, игра падала при старте
+// и «Загрузка мира…» висела вечно. Теперь версия страницы (data-v у <html>) сверяется с версией скриптов; при расхождении страница один раз
+// перезагружается с новым адресом (обходит кэш), а если и это не помогло — на экране написано, что делать.
+(function () {
+  var want = window.GAME && window.GAME.version, have = document.documentElement.getAttribute('data-v');
+  if (!want || have === want) return;
+  window.__gorodStale = true;
+  try {
+    var k = 'moe_gorod_fresh';
+    if (sessionStorage.getItem(k) !== want) { sessionStorage.setItem(k, want); location.replace(location.pathname + '?v=' + want + '&t=' + Date.now()); return; }
+  } catch (e) {}
+  var el = document.getElementById('loading');
+  if (el) el.innerHTML = '<div style="text-align:center;max-width:320px;padding:16px">Страница игры устарела в кэше браузера.<br><small style="opacity:.75">Нажмите Ctrl+F5 (на телефоне — обновите страницу и, если не помогло, очистите кэш браузера).</small></div>';
+})();
 (function () {
   'use strict';
+  if (window.__gorodStale) return;
   var G = window.GAME, N = G.mapSize, B = window.BABYLON, WORLD = window.WORLD, WC = 100; // WC — сторона куска карты (с 0.20.0)
   var SAVE_KEY = 'moe_gorod_save_v1', SEEN_KEY = 'moe_gorod_seen';
   var $ = function (id) { return document.getElementById(id); };
@@ -4380,7 +4395,7 @@
     else if (a === 'repair') repairAllAct(); else if (a === 'auto') toggleAuto();
     else if (a === 'fixone' && infoRoad) repairOneAct(infoRoad);
     else if (a === 'cars') { openMech('cars'); return; }
-    else if (/^(tax|fund|sell|army|tbuy|tsell|trucks)$/.test(a)) { actEco(a, el); return; }
+    else if (/^(tax|fund|msell|army|tbuy|tsell|trucks)$/.test(a)) { actEco(a, el); return; }
     renderMech();
   }
   $('panelMech').addEventListener('click', function (e) {
@@ -4982,7 +4997,7 @@
   function marketHtml(b) {
     var D = G.eco, h = '<div class="pbox"><b>🛒 Что продаёт рынок</b><div class="unote">Выберите, какую часть выпуска товаров рынок продаёт за деньги (0 — не продаёт). Лимит ' + D.market[b.size] + ' единиц каждого товара в минуту при 100%.</div>';
     b.sell = b.sell || {};
-    Object.keys(D.goods).forEach(function (g) { h += stepRow(G.stock[g].icon + ' ' + G.stock[g].name + ' · ' + D.goods[g] + '$', 'mk_' + g, (b.sell[g] | 0) + '%', 'sell', 'data-g="' + g + '"', 10); });
+    Object.keys(D.goods).forEach(function (g) { h += stepRow(G.stock[g].icon + ' ' + G.stock[g].name + ' · ' + D.goods[g] + '$', 'mk_' + g, (b.sell[g] | 0) + '%', 'msell', 'data-g="' + g + '"', 10); });
     h += '<div class="unote">Здесь же город автоматически покупает воду и уголь, а еду привозят универсальные грузовики с мельниц.</div></div>';
     return h;
   }
@@ -5022,7 +5037,7 @@
     var e = state.eco, D = G.eco, d = +el.dataset.d || 0;
     if (a === 'tax') e.tax = clamp(e.tax + d, 0, D.taxMax);
     else if (a === 'fund') e.fund[el.dataset.s] = clamp(e.fund[el.dataset.s] + d, 0, 100);
-    else if (a === 'sell') { var mb = getB(infoId); if (mb) { mb.sell = mb.sell || {}; mb.sell[el.dataset.g] = clamp((mb.sell[el.dataset.g] | 0) + d, 0, 100); touchB(mb, false); } }
+    else if (a === 'msell') { var mb = getB(infoId); if (mb) { mb.sell = mb.sell || {}; mb.sell[el.dataset.g] = clamp((mb.sell[el.dataset.g] | 0) + d, 0, 100); touchB(mb, false); } }
     else if (a === 'army') { callArmy(); return; }
     else if (a === 'tbuy') { buyTruck(el.dataset.k); return; }
     else if (a === 'tsell') { sellTruck(el.dataset.k); return; }
