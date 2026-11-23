@@ -610,7 +610,7 @@ window.__gorodMain = function () {
   function windowCanvas(style, wall, ph) { return paintWall(style, wall, 64, ph); }
   function windowCanvasHD(style, wall, ph) { return paintWall(style, wall, ph && /^(brick|archb|gov|arcade)$/.test(style) ? 512 : 256, ph); }   // кирпич и камень с фото — 512 px: видны швы
   function makeKit(sc) {
-    var mats = {}, wallM = {}, wallInfo = [], kitHD = false, roofM = {}, roofT = {};
+    var mats = {}, wallM = {}, wallInfo = [], kitHD = false, roofM = {}, roofT = {}, partM = {};
     function base(name) { var m = new B.StandardMaterial(name, sc); m.specularColor = B.Color3.Black(); return m; }
     return {
       scene: sc,
@@ -634,6 +634,15 @@ window.__gorodMain = function () {
         var kind = th === 0 && PH.img.tile && PH.img.slate ? (isRedRoof(color) ? 'tile' : 'slate') : '', tk = th + kind;   // красные крыши — черепица, серые и тёмные — шифер
         if (!roofT[tk]) { roofT[tk] = new B.DynamicTexture('rt' + tk, paintRoof(th, kind), sc, true); roofT[tk].update(); roofT[tk].wrapU = roofT[tk].wrapV = B.Texture.WRAP_ADDRESSMODE; roofT[tk].anisotropicFilteringLevel = 4; }
         m.diffuseTexture = roofT[tk]; return (roofM[k] = m);
+      },
+      // материал для модели из js/models3d.js (с 1.4.0): 'dorm' — окно-люкарна, 'balcS' — камень балкона, 'balcI' — кованая решётка (вырезная картинка)
+      partMat: function (key) {
+        if (partM[key]) return partM[key];
+        var M = window.MODELS3D, iron = key === 'balcI', m = base('pm' + key);
+        var t = new B.Texture(key === 'dorm' ? M.dorm.tex : iron ? M.balc.iron.tex : M.balc.stone.tex, sc, false, false);   // false: картинка glTF не переворачивается
+        t.anisotropicFilteringLevel = 4; m.diffuseTexture = t; m.diffuseColor = B.Color3.White();
+        if (iron) { t.hasAlpha = true; m.useAlphaFromDiffuseTexture = true; m.transparencyMode = B.Material.MATERIAL_ALPHATEST; m.alphaCutOff = 0.45; }
+        return (partM[key] = m);
       },
       // переключить окна всех домов между обычными (64 px) и HD (256 px)
       setHD: function (hd) { kitHD = hd; wallInfo.forEach(function (i) { wallTex(i, hd); }); }
@@ -663,7 +672,22 @@ window.__gorodMain = function () {
     PAT = '#5aa593', IRON = '#2b2f35', GOLD = '#d9b04a', BRK = '#a2503a', RED = '#c8342c', WOODC = '#6e4a2e';
 
   function Shapes(K, ox, oz, th) {
-    var sc = K.scene, parts = [];
+    var sc = K.scene, parts = [], acc = {};
+    // Готовая модель (js/models3d.js): копируется в здание с поворотом (dir*90°), масштабом s, растяжением вглубь zs и сдвигом.
+    // Вершины копятся по материалам и превращаются в сетки при merge(). Порядок вершин переворачивается под правостороннюю сцену.
+    function part(M, matKey, x, y, z, dir, s, zs, zo) {
+      var a = acc[matKey] || (acc[matKey] = { pos: [], nor: [], uv: [], idx: [] }), o = a.pos.length / 3, n = M.pos.length / 3, i,
+        c = [1, 0, -1, 0][dir & 3], sn = [0, 1, 0, -1][dir & 3];
+      zs = zs || 1; zo = zo || 0;
+      for (i = 0; i < n; i++) {
+        var px = M.pos[i * 3] * s, py = M.pos[i * 3 + 1] * s, pz = (M.pos[i * 3 + 2] - zo) * s * zs;
+        a.pos.push(px * c + pz * sn + x - ox, py + y, -px * sn + pz * c + z - oz);
+        var nx = M.nor[i * 3], ny = M.nor[i * 3 + 1], nz = M.nor[i * 3 + 2] / zs, l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+        a.nor.push(nx * c + nz * sn, ny, -nx * sn + nz * c);
+        a.uv.push(M.uv[i * 2], M.uv[i * 2 + 1]);
+      }
+      for (i = 0; i < M.idx.length; i += 3) a.idx.push(o + M.idx[i], o + M.idx[i + 2], o + M.idx[i + 1]);
+    }
     function put(m, material, x, y, z) { m.position.set(x - ox, y, z - oz); m.material = material; parts.push(m); return m; }
     // Произвольная грань-многоугольник: faces — списки точек [x,y,z] в координатах здания, ins — точка внутри тела (чтобы повернуть нормали наружу).
     function solid(faces, color, ins, roof) {
@@ -750,7 +774,14 @@ window.__gorodMain = function () {
         frust(x0, z0, x1, z1, y0, i1, hl, c1, true);
         return frust(x0 + i1, z0 + i1, x1 - i1, z1 - i1, y0 + hl, i2, hu, c2 || c1, false);
       },
+      part: part,
       merge: function () {
+        for (var k in acc) {
+          var vd = new B.VertexData(), pm = new B.Mesh('part' + k, sc);
+          vd.positions = acc[k].pos; vd.normals = acc[k].nor; vd.uvs = acc[k].uv; vd.indices = acc[k].idx; vd.applyToMesh(pm);
+          pm.material = K.partMat(k); parts.push(pm);
+        }
+        acc = {};
         var m = B.Mesh.MergeMeshes(parts, true, true, undefined, false, true);
         m.refreshBoundingInfo();
         return m;
@@ -821,6 +852,8 @@ window.__gorodMain = function () {
     var r = rng(seed), S = Shapes(K, W / 2, D / 2, th), cube = S.cube;
     function kwall(style, col) { var q = K.wm(style, col, th); return K.wall(q[0], q[1], q[2]); } // стена в выбранном оформлении
     var F = [m, m, W - m, D - m], bw = { a: 0, top: 0 };
+    // с 1.4.0: у доходного дома 2×2 эпохи «Бель-эпок» окна мансарды и балконы — готовые модели (js/models3d.js); при «лёгкой» графике — прежние фигуры
+    var P3 = th === 0 && cat === 'res' && size === '2x2' && !!window.MODELS3D && (!GFX || GFX.q > 0);
     function V4(a, b, c, d) { return new B.Vector4(a, b, c, d); }
     var CAP = V4(0.02, 0.02, 0.03, 0.03);
     // ---- общие детали ----
@@ -845,7 +878,23 @@ window.__gorodMain = function () {
     function cornice(x0, z0, x1, z1, y, col) { if (th === 3) return; cube(x0 - 0.035, z0 - 0.035, x1 + 0.035, z1 + 0.035, y, 0.04, th === 2 ? '#d6ccb4' : col || STONE); }
     function sband(x0, z0, x1, z1, y, col) { if (th === 3) return; cube(x0 - 0.015, z0 - 0.015, x1 + 0.015, z1 + 0.015, y, 0.018, th === 2 ? GOLD : col || STONE); }
     // чугунные балконы по сторонам: f — перед (+z), b — зад, l — слева, r — справа
+    function balc3(x0, z0, x1, z1, y, sides) { // кованые балконы-модели: по одному у каждого окна (шаг окон 0.5 стены), x0.. — края плиты, стена снаружи на 0.04
+      var M = window.MODELS3D.balc, ax = x0 - 0.04, bx = x1 + 0.04, az = z0 - 0.04, bz = z1 + 0.04, sy = y + 0.022, sc3 = 0.26, zo = 0.012 / sc3;
+      function row(a0, a1, fixed, dir, alongX) {
+        var n = Math.max(1, Math.round((a1 - a0) / 0.5)), k, a;
+        for (k = 0; k < n; k++) {
+          a = a0 + (k + 0.5) * (a1 - a0) / n;
+          var gx = alongX ? a : fixed, gz = alongX ? fixed : a;
+          S.part(M.stone, 'balcS', gx, sy, gz, dir, sc3, 1, zo); S.part(M.iron, 'balcI', gx, sy, gz, dir, sc3, 1, zo);
+        }
+      }
+      if (sides.indexOf('f') >= 0) row(ax, bx, bz, 0, true);
+      if (sides.indexOf('b') >= 0) row(ax, bx, az, 2, true);
+      if (sides.indexOf('l') >= 0) row(az, bz, ax, 3, false);
+      if (sides.indexOf('r') >= 0) row(az, bz, bx, 1, false);
+    }
     function balc(x0, z0, x1, z1, y, sides) {
+      if (P3) return balc3(x0, z0, x1, z1, y, sides);
       var BS = th === 3 ? '#f1eee6' : th === 2 ? '#2a2d32' : '#383c42', IRON = th === 3 ? '#4c525a' : th === 2 ? GOLD : '#2b2f35', e = 0.06;
       if (sides.indexOf('f') >= 0) { cube(x0, z1, x1, z1 + e, y, 0.022, BS); cube(x0, z1 + e - 0.008, x1, z1 + e, y + 0.022, 0.045, IRON); }
       if (sides.indexOf('b') >= 0) { cube(x0, z0 - e, x1, z0, y, 0.022, BS); cube(x0, z0 - e, x1, z0 - e + 0.008, y + 0.022, 0.045, IRON); }
@@ -861,6 +910,7 @@ window.__gorodMain = function () {
     // слуховое окно с двускатной крышей; (fx,fz) — центр лицевой стенки на скате, dir: 0 +z, 1 +x, 2 -z, 3 -x
     function dorm(fx, fz, yb, dir, wc, rc) {
       if (th >= 2) return;
+      if (P3) { S.part(window.MODELS3D.dorm, 'dorm', fx, yb - 0.008, fz, dir, 0.21, 1.17, 0.09); return; }   // окно-люкарна из модели: лицо на скате в точке (fx,fz), задняя стенка уходит в скат
       var w = 0.13, h = 0.14, dp = 0.1, dx = [0, 1, 0, -1][dir], dz = [1, 0, -1, 0][dir];
       var cx = fx - dx * dp / 2, cz = fz - dz * dp / 2, bw = dir % 2 ? dp : w, bd = dir % 2 ? w : dp, fu = [0, 2, 1, 3][dir], uv = [CAP, CAP, CAP, CAP, CAP, CAP];
       uv[fu] = V4(0, 0, 1, 1);
@@ -2099,6 +2149,7 @@ window.__gorodMain = function () {
   function syncMat(s, d) {
     d.diffuseColor = s.diffuseColor.clone(); d.diffuseTexture = s.diffuseTexture || null;
     d.specularColor = s.specularColor.clone(); d.specularPower = s.specularPower;
+    d.useAlphaFromDiffuseTexture = s.useAlphaFromDiffuseTexture; d.transparencyMode = s.transparencyMode; d.alphaCutOff = s.alphaCutOff;   // вырезная решётка балкона
   }
   function syncSiteMats() { for (var id in sites) if (sites[id].model) sites[id].model.pairs.forEach(function (p) { syncMat(p.s, p.d); }); }
 
