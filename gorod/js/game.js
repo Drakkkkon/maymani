@@ -635,11 +635,11 @@ window.__gorodMain = function () {
         if (!roofT[tk]) { roofT[tk] = new B.DynamicTexture('rt' + tk, paintRoof(th, kind), sc, true); roofT[tk].update(); roofT[tk].wrapU = roofT[tk].wrapV = B.Texture.WRAP_ADDRESSMODE; roofT[tk].anisotropicFilteringLevel = 4; }
         m.diffuseTexture = roofT[tk]; return (roofM[k] = m);
       },
-      // материал для модели из js/models3d.js (с 1.4.0): 'dorm' — окно-люкарна, 'balcS' — камень балкона, 'balcI' — кованая решётка (вырезная картинка)
+      // материал для модели из js/models3d.js: 'dorm' — окно-люкарна, 'balcS' — камень балкона, 'balcI' — кованая решётка (вырезная картинка) (с 1.4.0); 'chim' — дымовая труба, 'port' — входной портал (с 1.5.0)
       partMat: function (key) {
         if (partM[key]) return partM[key];
         var M = window.MODELS3D, iron = key === 'balcI', m = base('pm' + key);
-        var t = new B.Texture(key === 'dorm' ? M.dorm.tex : iron ? M.balc.iron.tex : M.balc.stone.tex, sc, false, false);   // false: картинка glTF не переворачивается
+        var t = new B.Texture(key === 'balcI' ? M.balc.iron.tex : key === 'balcS' ? M.balc.stone.tex : M[key].tex, sc, false, false);   // false: картинка glTF не переворачивается
         t.anisotropicFilteringLevel = 4; m.diffuseTexture = t; m.diffuseColor = B.Color3.White();
         if (iron) { t.hasAlpha = true; m.useAlphaFromDiffuseTexture = true; m.transparencyMode = B.Material.MATERIAL_ALPHATEST; m.alphaCutOff = 0.45; }
         return (partM[key] = m);
@@ -868,6 +868,7 @@ window.__gorodMain = function () {
     }
     function chim(x, z, y0, h) {
       if (th >= 2) return;   // ар-деко и баухаус: без печных труб
+      if (P3) { S.part(window.MODELS3D.chim, 'chim', x, y0, z, 0, 0.23); return; }   // труба из модели: кирпичный ствол, каменная шапка, четыре горшка
       cube(x - 0.035, z - 0.03, x + 0.035, z + 0.03, y0, h, '#9a4b35'); cube(x - 0.047, z - 0.042, x + 0.047, z + 0.042, y0 + h, 0.025, '#d9d2c2'); cube(x - 0.03, z - 0.025, x + 0.03, z + 0.025, y0 + h + 0.025, 0.012, '#2b2b2b');
     }
     function flag(x, y, z, color) {
@@ -975,7 +976,8 @@ window.__gorodMain = function () {
         balc(a + 0.04, a + 0.04, b - 0.04, b - 0.04, y2, 'fblr'); balc(a + 0.04, a + 0.04, b - 0.04, b - 0.04, y3 - 0.3, 'fb');
         var yt = mans(a, a, b, b, y3 + 0.035, 0.26, 0.07, 0.14, 0.2, ZINC, ZINC2, '#cfc6b2', 'fbrl');
         [[0.62, 0.62], [1.38, 0.62], [0.62, 1.38], [1.38, 1.38]].forEach(function (c) { chim(c[0], c[1], yt - 0.03, 0.2); });
-        door(0.86, 1.14, b + 0.001, 0.26, '#2c241c'); cube(0.8, b, 1.2, b + 0.05, 0.28, 0.03, STONE);
+        if (P3) S.part(window.MODELS3D.port, 'port', W / 2, 0, b, 0, 0.36, 1, -0.04);   // входной портал из модели: каменная арка, дверь с коваными решётками, ступени (с 1.5.0)
+        else { door(0.86, 1.14, b + 0.001, 0.26, '#2c241c'); cube(0.8, b, 1.2, b + 0.05, 0.28, 0.03, STONE); }
       } else { // жилой комплекс: квартал с внутренним двором, сквозная арка, угловые башенки
         var CORN = [[m, m, 1.0, 1.0], [3.0, m, W - m, 1.0], [m, 3.0, 1.0, D - m], [3.0, 3.0, W - m, D - m]];
         var WING = [[1.0, m, 3.0, 1.0, 'z'], [1.0, 3.0, 3.0, D - m, 'z'], [m, 1.0, 1.0, 3.0, 'x'], [3.0, 1.0, W - m, 3.0, 'x']];
