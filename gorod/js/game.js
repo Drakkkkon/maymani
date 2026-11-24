@@ -353,7 +353,7 @@ window.__gorodMain = function () {
   // gov — камень с классическими окнами, arcade — рустованный цоколь с арками, shop — витрина лавки,
   // iron — большие окна в чугунном переплёте, dorm — слуховое окно мансарды, clock — башенные часы.
   var FH = 0.3; // высота одного этажа
-  var TILE = { euro: [0.5, 0.3], brick: [0.5, 0.3], archb: [0.6, 0.3], gov: [0.6, 0.3], arcade: [0.6, 0.3], shop: [0.7, 0.3], iron: [0.5, 0.3], dorm: [0.3, 0.3], clock: [0.6, 0.6],
+  var TILE = { euro: [0.5, 0.3], euroP: [0.5, 0.3], brick: [0.5, 0.3], brickP: [0.5, 0.3], archb: [0.6, 0.3], gov: [0.6, 0.3], arcade: [0.6, 0.3], arcadeP: [0.6, 0.3], shop: [0.7, 0.3], iron: [0.5, 0.3], dorm: [0.3, 0.3], clock: [0.6, 0.6],
     deco: [0.5, 0.3], decot: [0.6, 0.3], decobase: [0.6, 0.3], indb: [0.5, 0.3], indw: [0.6, 0.3], indbase: [0.6, 0.3], panel: [0.6, 0.3], panelw: [0.6, 0.3], panelbase: [0.6, 0.3],
     nouv: [0.5, 0.3], bauh: [0.5, 0.3], bauhbase: [0.6, 0.3] };
   function shade(c, k) { // осветлить (k>0) или затемнить (k<0) цвет #rrggbb
@@ -431,7 +431,9 @@ window.__gorodMain = function () {
     }
     function band(col) { R(0, 0, tw, 0.018, shade(col, 0.2)); R(0, 0.018, tw, 0.008, 'rgba(0,0,0,.14)'); }
     var wl = wall, GL0 = '#bcd6ea', GL1 = '#4f7497', cx = tw / 2, i;
-    if (style === 'euro') { // оштукатуренный дом: высокое окно, каменное обрамление, чугунная решётка балкона
+    if (style === 'euroP') { R(0, 0, tw, th, wl); photo('plaster', 0.8) || grain(1500, 0.05); band(wl); }   // с 1.7.0: гладкая штукатурка без окон — окна ставятся моделями (js/models3d.js)
+    else if (style === 'brickP') { bricks(wl); R(0, 0, tw, 0.014, 'rgba(235,228,210,.7)'); }   // то же для кирпичного дома
+    else if (style === 'euro') { // оштукатуренный дом: высокое окно, каменное обрамление, чугунная решётка балкона
       R(0, 0, tw, th, wl); photo('plaster', 0.8) || grain(1500, 0.05); band(wl);
       var wy = 0.055, wh = 0.2, ww = 0.19;
       R(cx - ww / 2 - 0.024, wy - 0.034, ww + 0.048, wh + 0.04, shade(wl, 0.3));
@@ -453,7 +455,8 @@ window.__gorodMain = function () {
       rectWin(cx, 0.1, 0.16, 0.16, shade(wl, 0.28), '#f6f2e6', GL0, GL1, { t: 0.018 });
       g.fillStyle = shade(wl, 0.34); g.beginPath(); g.moveTo((cx - 0.12) * kx, 0.075 * ky); g.lineTo(cx * kx, 0.026 * ky); g.lineTo((cx + 0.12) * kx, 0.075 * ky); g.closePath(); g.fill();
       g.fillStyle = 'rgba(0,0,0,.14)'; g.beginPath(); g.moveTo((cx - 0.08) * kx, 0.072 * ky); g.lineTo(cx * kx, 0.04 * ky); g.lineTo((cx + 0.08) * kx, 0.072 * ky); g.closePath(); g.fill();
-    } else if (style === 'arcade') { // рустованный цоколь с арками
+    } else if (style === 'arcadeP') { ashlar(shade(wl, -0.06)); }   // с 1.7.0: рустованный цоколь без нарисованных арок — арки ставятся моделями
+    else if (style === 'arcade') { // рустованный цоколь с арками
       ashlar(shade(wl, -0.06));
       archWin(cx, 0.3, 0.22, 0.26, shade(wl, 0.18), '#3a424a', '#161a1f', '#25282d', null);
       if (hi) for (i = 1; i < 5; i++) line(cx - 0.11 + i * 0.044, 0.18, cx - 0.11 + i * 0.044, 0.3, '#25282d', 0.004);
@@ -608,7 +611,7 @@ window.__gorodMain = function () {
     return c;
   }
   function windowCanvas(style, wall, ph) { return paintWall(style, wall, 64, ph); }
-  function windowCanvasHD(style, wall, ph) { return paintWall(style, wall, ph && /^(brick|archb|gov|arcade)$/.test(style) ? 512 : 256, ph); }   // кирпич и камень с фото — 512 px: видны швы
+  function windowCanvasHD(style, wall, ph) { return paintWall(style, wall, ph && /^(brick|brickP|archb|gov|arcade|arcadeP)$/.test(style) ? 512 : 256, ph); }   // кирпич и камень с фото — 512 px: видны швы
   function makeKit(sc) {
     var mats = {}, wallM = {}, wallInfo = [], kitHD = false, roofM = {}, roofT = {}, partM = {};
     function base(name) { var m = new B.StandardMaterial(name, sc); m.specularColor = B.Color3.Black(); return m; }
@@ -635,13 +638,17 @@ window.__gorodMain = function () {
         if (!roofT[tk]) { roofT[tk] = new B.DynamicTexture('rt' + tk, paintRoof(th, kind), sc, true); roofT[tk].update(); roofT[tk].wrapU = roofT[tk].wrapV = B.Texture.WRAP_ADDRESSMODE; roofT[tk].anisotropicFilteringLevel = 4; }
         m.diffuseTexture = roofT[tk]; return (roofM[k] = m);
       },
-      // материал для модели из js/models3d.js: 'dorm' — окно-люкарна, 'balcS' — камень балкона, 'balcI' — кованая решётка (вырезная картинка) (с 1.4.0); 'chim' — дымовая труба, 'port' — входной портал (с 1.5.0)
+      // материал для модели из js/models3d.js: 'dorm' — окно-люкарна, 'balcS' — камень балкона, 'balcI' — кованая решётка (вырезная картинка) (с 1.4.0); 'chim' — дымовая труба, 'port' — входной портал (с 1.5.0); 'win' — обычное окно, 'winN' — парадное окно с фронтоном, 'arch' — арочное окно цоколя, 'cornice' — карниз (с 1.7.0)
       partMat: function (key) {
         if (partM[key]) return partM[key];
         var M = window.MODELS3D, iron = key === 'balcI', m = base('pm' + key);
         var t = new B.Texture(key === 'balcI' ? M.balc.iron.tex : key === 'balcS' ? M.balc.stone.tex : M[key].tex, sc, false, false);   // false: картинка glTF не переворачивается
         t.anisotropicFilteringLevel = 4; m.diffuseTexture = t; m.diffuseColor = B.Color3.White();
         if (iron) { t.hasAlpha = true; m.useAlphaFromDiffuseTexture = true; m.transparencyMode = B.Material.MATERIAL_ALPHATEST; m.alphaCutOff = 0.45; }
+        if (!iron && M[key] && M[key].mask) {   // с 1.7.0: у арочного окна вне камня — прозрачность из отдельной чёрно-белой картинки (маска)
+          var mt = new B.Texture(M[key].mask, sc, false, false); mt.getAlphaFromRGB = true; m.opacityTexture = mt;
+          m.transparencyMode = B.Material.MATERIAL_ALPHATEST; m.alphaCutOff = 0.5;
+        }
         return (partM[key] = m);
       },
       // переключить окна всех домов между обычными (64 px) и HD (256 px)
@@ -675,14 +682,14 @@ window.__gorodMain = function () {
     var sc = K.scene, parts = [], acc = {};
     // Готовая модель (js/models3d.js): копируется в здание с поворотом (dir*90°), масштабом s, растяжением вглубь zs и сдвигом.
     // Вершины копятся по материалам и превращаются в сетки при merge(). Порядок вершин переворачивается под правостороннюю сцену.
-    function part(M, matKey, x, y, z, dir, s, zs, zo) {
+    function part(M, matKey, x, y, z, dir, s, zs, zo, xs) {
       var a = acc[matKey] || (acc[matKey] = { pos: [], nor: [], uv: [], idx: [] }), o = a.pos.length / 3, n = M.pos.length / 3, i,
         c = [1, 0, -1, 0][dir & 3], sn = [0, 1, 0, -1][dir & 3];
-      zs = zs || 1; zo = zo || 0;
+      zs = zs || 1; zo = zo || 0; xs = xs || 1;
       for (i = 0; i < n; i++) {
-        var px = M.pos[i * 3] * s, py = M.pos[i * 3 + 1] * s, pz = (M.pos[i * 3 + 2] - zo) * s * zs;
+        var px = M.pos[i * 3] * s * xs, py = M.pos[i * 3 + 1] * s, pz = (M.pos[i * 3 + 2] - zo) * s * zs;
         a.pos.push(px * c + pz * sn + x - ox, py + y, -px * sn + pz * c + z - oz);
-        var nx = M.nor[i * 3], ny = M.nor[i * 3 + 1], nz = M.nor[i * 3 + 2] / zs, l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+        var nx = M.nor[i * 3] / xs, ny = M.nor[i * 3 + 1], nz = M.nor[i * 3 + 2] / zs, l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
         a.nor.push(nx * c + nz * sn, ny, -nx * sn + nz * c);
         a.uv.push(M.uv[i * 2], M.uv[i * 2 + 1]);
       }
@@ -854,6 +861,8 @@ window.__gorodMain = function () {
     var F = [m, m, W - m, D - m], bw = { a: 0, top: 0 };
     // с 1.4.0: у доходного дома 2×2 эпохи «Бель-эпок» окна мансарды и балконы — готовые модели (js/models3d.js); при «лёгкой» графике — прежние фигуры
     var P3 = th === 0 && cat === 'res' && size === '2x2' && !!window.MODELS3D && (!GFX || GFX.q > 0);
+    // с 1.7.0: при высоком качестве окна дома 2×2 тоже модели (рамы, наличники, подоконники), стены без нарисованных окон; при среднем и лёгком — прежние нарисованные окна
+    var P4 = P3 && !!window.MODELS3D.win && !!window.MODELS3D.winN && (!GFX || GFX.q > 1), P5 = P4 && !!window.MODELS3D.arch, P6 = P4 && !!window.MODELS3D.cornice;   // P5: и арки рустованного цоколя — модели; P6: карниз с кронштейнами и зубчиками — модель
     function V4(a, b, c, d) { return new B.Vector4(a, b, c, d); }
     var CAP = V4(0.02, 0.02, 0.03, 0.03);
     // ---- общие детали ----
@@ -893,6 +902,38 @@ window.__gorodMain = function () {
       if (sides.indexOf('b') >= 0) row(ax, bx, az, 2, true);
       if (sides.indexOf('l') >= 0) row(az, bz, ax, 3, false);
       if (sides.indexOf('r') >= 0) row(az, bz, bx, 1, false);
+    }
+    function wins3(x0, z0, x1, z1, y0, fl, noble) { // окна-модели: по одному на пролёт стены (шаг 0.5) на каждом этаже; noble(этаж, сторона) — парадное французское окно (там, где балкон)
+      var sc4 = 0.25, xs = 1.3, zo = 0.02 / sc4, Mw = window.MODELS3D.win, Mn = window.MODELS3D.winN;
+      function row(a0, a1, fixed, dir, alongX, side) {
+        var n = Math.max(1, Math.round((a1 - a0) / 0.5)), k, f, a;
+        for (k = 0; k < n; k++) {
+          a = a0 + (k + 0.5) * (a1 - a0) / n;
+          var gx = alongX ? a : fixed, gz = alongX ? fixed : a;
+          for (f = 0; f < fl; f++) { var nb = noble(f, side); S.part(nb ? Mn : Mw, nb ? 'winN' : 'win', gx, y0 + f * FH + 0.022, gz, dir, sc4, 1, zo, xs); }
+        }
+      }
+      row(x0, x1, z1, 0, true, 'f'); row(x0, x1, z0, 2, true, 'b'); row(z0, z1, x0, 3, false, 'l'); row(z0, z1, x1, 1, false, 'r');
+    }
+    function cornice3(x0, z0, x1, z1, y) { // карниз-модель по периметру: звенья по 0.23, выступ 0.035 (как у прежнего карниза); фасад и зад — на всю длину с углами, боковые — между ними
+      var M = window.MODELS3D.cornice, hc = 0.06, zs = 1.79, zo = 0.01 / (hc * zs), e = 0.035;
+      function row(a0, a1, fixed, dir, alongX) {
+        var n = Math.max(2, Math.round((a1 - a0) / 0.23)), k, a, wp = (a1 - a0) / n, xs = wp / (3.84 * hc);
+        for (k = 0; k < n; k++) { a = a0 + (k + 0.5) * wp; S.part(M, 'cornice', alongX ? a : fixed, y, alongX ? fixed : a, dir, hc, zs, zo, xs); }
+      }
+      row(x0 - e, x1 + e, z1, 0, true); row(x0 - e, x1 + e, z0, 2, true); row(z0, z1, x0, 3, false); row(z0, z1, x1, 1, false);
+    }
+    function arch3(x0, z0, x1, z1, y0, skipFront) { // арочные окна цоколя-моделей: по одному на пролёт стены (шаг 0.6); на фасаде средний пролёт занят порталом
+      var sc5 = 0.31, xs = 1.1, zo = 0.02 / sc5, M = window.MODELS3D.arch;
+      function row(a0, a1, fixed, dir, alongX, skipMid) {
+        var n = Math.max(1, Math.round((a1 - a0) / 0.6)), k, a;
+        for (k = 0; k < n; k++) {
+          if (skipMid && n % 2 === 1 && k === (n - 1) / 2) continue;
+          a = a0 + (k + 0.5) * (a1 - a0) / n;
+          S.part(M, 'arch', alongX ? a : fixed, y0 + 0.01, alongX ? fixed : a, dir, sc5, 1, zo, xs);
+        }
+      }
+      row(x0, x1, z1, 0, true, skipFront); row(x0, x1, z0, 2, true, false); row(z0, z1, x0, 3, false, false); row(z0, z1, x1, 1, false, false);
     }
     function balc(x0, z0, x1, z1, y, sides) {
       if (P3) return balc3(x0, z0, x1, z1, y, sides);
@@ -971,9 +1012,11 @@ window.__gorodMain = function () {
         chim(1.0, 0.5, yy, 0.4); chim(0.4, 0.4, yy + 0.05, 0.28); chim(1.6, 0.4, yy + 0.05, 0.28);
         tree(0.2, 0.93, 0.5); tree(1.8, 0.93, 0.5);
       } else if (size === '2x2') { // доходный дом в духе османовского Парижа: рустованный цоколь, балконы, мансарда с окнами, трубы
-        var a = m, b = W - m, y2 = wallBox(a, a, b, b, 0, 1, 'arcade', '#ddd2bb', 0.34), y3 = wallBox(a, a, b, b, y2, 4, st, wc);
-        sband(a, a, b, b, y2 - 0.012, STONE); cornice(a, a, b, b, y3 - 0.005, STONE);
+        var a = m, b = W - m, y2 = wallBox(a, a, b, b, 0, 1, P5 ? 'arcadeP' : 'arcade', '#ddd2bb', 0.34), y3 = wallBox(a, a, b, b, y2, 4, P4 ? (br ? 'brickP' : 'euroP') : st, wc);
+        sband(a, a, b, b, y2 - 0.012, STONE); if (P6) cornice3(a, a, b, b, y3 - 0.015); else cornice(a, a, b, b, y3 - 0.005, STONE);
         balc(a + 0.04, a + 0.04, b - 0.04, b - 0.04, y2, 'fblr'); balc(a + 0.04, a + 0.04, b - 0.04, b - 0.04, y3 - 0.3, 'fb');
+        if (P5) arch3(a, a, b, b, 0, true);
+        if (P4) wins3(a, a, b, b, y2, 4, function (f, side) { return f === 0 || (f === 3 && (side === 'f' || side === 'b')); });   // парадные окна — этажи с балконами, остальные обычные
         var yt = mans(a, a, b, b, y3 + 0.035, 0.26, 0.07, 0.14, 0.2, ZINC, ZINC2, '#cfc6b2', 'fbrl');
         [[0.62, 0.62], [1.38, 0.62], [0.62, 1.38], [1.38, 1.38]].forEach(function (c) { chim(c[0], c[1], yt - 0.03, 0.2); });
         if (P3) S.part(window.MODELS3D.port, 'port', W / 2, 0, b, 0, 0.36, 1, -0.04);   // входной портал из модели: каменная арка, дверь с коваными решётками, ступени (с 1.5.0)
