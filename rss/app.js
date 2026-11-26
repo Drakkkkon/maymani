@@ -1,11 +1,11 @@
 'use strict';
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const gnews = q => 'https://news.google.com/rss/search?q=' + encodeURIComponent(q) + '&hl=ru&gl=KZ&ceid=KZ:ru';
 const gh = r => 'https://api.github.com/repos/' + r + '/releases?per_page=20';
 
-const CATS = ['Новости','Блоги','YouTube','Подкасты','Программы','Комиксы','Скидки','Бизнес','Другое'];
+const CATS = ['Новости','Блоги','YouTube','Подкасты','Программы','Комиксы','Скидки','Бизнес','Мои сайты','Другое'];
 const PRESETS = [
  ['Новости','Новости Казахстана',gnews('Казахстан')],['Новости','Новости Алматы',gnews('Алматы')],
  ['Новости','BBC — Русская служба','https://feeds.bbci.co.uk/russian/rss.xml'],['Новости','DW — Русский','https://rss.dw.com/rdf/rss-ru-top'],
@@ -18,7 +18,7 @@ const PRESETS = [
 ];
 
 function load(k, d) { try { return JSON.parse(localStorage.getItem('ml_' + k)) ?? d; } catch { return d; } }
-function save(k, v) { try { localStorage.setItem('ml_' + k, JSON.stringify(v)); return true; } catch { toast('Память браузера заполнена'); return false; } }
+function save(k, v) { if (['feeds','set','mine'].includes(k)) window.MMAccount?.changed(); try { localStorage.setItem('ml_' + k, JSON.stringify(v)); return true; } catch { toast('Память браузера заполнена'); return false; } }
 let feeds = load('feeds', []), items = load('items', []), mine = load('mine', {title:'',link:'',desc:'',entries:[]});
 let set = Object.assign({theme:'auto',words:'',proxy:'',every:30,tgToken:'',tgChat:'',tgOn:false}, load('set', {}));
 let page = 'feed', cat = 'Все', mode = 'all', query = '', limit = 50, busy = false;
@@ -112,13 +112,14 @@ async function resolve(input) {
   return found;
 }
 
+const hostOf = u => { try { return new URL(u).hostname || 'Мои сайты'; } catch { return ''; } };
 const words = () => set.words.toLowerCase().split(',').map(w => w.trim()).filter(Boolean);
 const isHit = it => { const t = (it.title + ' ' + plain(it.html)).toLowerCase(); return words().some(w => t.includes(w)); };
 
 async function loadFeed(f) {
   try {
-    const text = await fetchText(f.url, f.url.startsWith('https://api.github.com/') ? t => t.trim().startsWith('[') : looksFeed);
-    const data = parseFeed(text, f.url);
+    const data = f.url === HUB_FEED ? await hubFeed()
+      : parseFeed(await fetchText(f.url, f.url.startsWith('https://api.github.com/') ? t => t.trim().startsWith('[') : looksFeed), f.url);
     if (!feeds.includes(f)) return [];
     const known = new Map(items.filter(i => i.feed === f.url).map(i => [i.id, i]));
     const fresh = [];
@@ -206,13 +207,13 @@ function pageFeed() {
   const chip = (key, val, cur, label) => `<button data-${key}="${val}" class="${val === cur ? 'on' : ''}">${label}</button>`;
   let h = '<div class="chips">' + chip('mode','all',mode,'Все') + chip('mode','new',mode,'Непрочитанные') + chip('mode','fav',mode,'★ Избранное') + chip('mode','hit',mode,'🔔 Мои слова') + '</div>';
   h += '<div class="chips">' + ['Все', ...CATS.filter(c => feeds.some(f => f.cat === c))].map(c => chip('cat', c, cat, c)).join('') + '</div>';
-  if (!feeds.length && mode !== 'fav') return h + '<div class="card"><b>Лента пока пустая.</b><p>Добавьте свои сайты или начните с готового набора.</p><div class="row"><button class="main" data-act="starter">Добавить стартовый набор</button><button data-page="subs">Выбрать самому</button></div></div>';
+  if (!feeds.some(f => f.url !== HUB_FEED) && cat === 'Все' && mode !== 'fav') h += '<div class="card"><b>Лента пока пустая.</b><p>Добавьте свои сайты или начните с готового набора.</p><div class="row"><button class="main" data-act="starter">Добавить стартовый набор</button><button data-page="subs">Выбрать самому</button></div></div>';
   if (shown.length) h += '<div class="row acts"><button data-act="readall">✓ Прочитать всё показанное</button></div>';
   h += shown.slice(0, limit).map((i, n) => {
     const f = byUrl.get(i.feed), isOpen = open.has(i), yt = i.link.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/);
     const showImg = i.img && !isOpen && (yt || f?.cat === 'Комиксы');
     return `<article class="card ${i.read ? 'read' : ''} ${isHit(i) ? 'hit' : ''}" data-n="${n}">
-<div class="meta">${esc(f?.title || new URL(i.feed).hostname)} · ${new Date(i.date).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+<div class="meta">${esc(f?.title || hostOf(i.feed))} · ${new Date(i.date).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
 <button class="title" data-act="open" aria-expanded="${isOpen}">${mark(i.title)}</button>
 ${showImg ? `<img class="thumb" src="${esc(i.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
 ${isOpen ? `<div class="body">${i.img && !/<img/i.test(i.html) ? `<img src="${esc(i.img)}" alt="" referrerpolicy="no-referrer">` : ''}${clean(i.html, i.link || i.feed)}</div>` : ''}
@@ -220,13 +221,13 @@ ${isOpen ? `<div class="body">${i.img && !/<img/i.test(i.html) ? `<img src="${es
 ${i.link ? `<a class="btn" data-act="visit" href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">${yt ? 'Смотреть' : 'Открыть'} ↗</a>` : ''}
 <button data-act="fav" aria-label="В избранное">${i.fav ? '★' : '☆'}</button><button data-act="share">Поделиться</button></div></article>`;
   }).join('');
-  if (!shown.length) h += '<p class="meta">' + (busy ? 'Загружаю…' : mode === 'hit' && !words().length ? 'Впишите слова для отслеживания в «Настройках».' : 'Здесь пока ничего нет.') + '</p>';
+  if (!shown.length && feeds.length) h += '<p class="meta">' + (busy ? 'Загружаю…' : mode === 'hit' && !words().length ? 'Впишите слова для отслеживания в «Настройках».' : 'Здесь пока ничего нет.') + '</p>';
   if (shown.length > limit) h += '<button data-act="more">Показать ещё</button>';
   return h;
 }
 const options = sel => CATS.map(c => `<option ${c === sel ? 'selected' : ''}>${c}</option>`).join('');
 function pageSubs() {
-  return `<h2>Добавить</h2><form id="add"><label for="url">Адрес сайта, ленты, канала YouTube, репозитория GitHub или слова для поиска новостей</label><input id="url" required>
+  return searchBlock() + `<h2>Добавить по ссылке</h2><form id="add"><label for="url">Адрес сайта, ленты, канала YouTube, репозитория GitHub или слова для поиска новостей</label><input id="url" required>
 <div class="row"><select id="acat" aria-label="Раздел">${options('Блоги')}</select><button class="main">Подписаться</button></div></form>
 <h2>Мои подписки (${feeds.length})</h2>` +
   (feeds.map((f, n) => `<div class="card" data-f="${n}"><b>${esc(f.title || f.url)}</b><div class="meta">${esc(f.url)}</div>${f.error ? `<div class="err">Ошибка: ${esc(f.error)}</div>` : ''}
@@ -244,7 +245,8 @@ ${mine.entries.map((e, n) => `<div class="card" data-e="${n}"><b>${esc(e.title)}
 }
 function pageSettings() {
   const inp = (k, label, type = 'text', extra = '') => `<label>${label}<input type="${type}" data-set="${k}" value="${esc(set[k])}" ${extra}></label>`;
-  return `<h2>Вид и обновление</h2><label>Тема<select data-set="theme"><option value="auto">Как в системе</option><option value="light">Светлая</option><option value="dark">Тёмная</option></select></label>
+  return `<h2>Общий аккаунт</h2><div id="account" class="card"></div>
+<h2>Вид и обновление</h2><label>Тема<select data-set="theme"><option value="auto">Как в системе</option><option value="light">Светлая</option><option value="dark">Тёмная</option></select></label>
 <label>Обновлять, пока сайт открыт<select data-set="every"><option value="0">Только вручную</option><option value="15">Каждые 15 минут</option><option value="30">Каждые 30 минут</option><option value="60">Каждый час</option></select></label>
 <h2>Мои слова</h2>${inp('words','Через запятую: записи с этими словами подсвечиваются (скидка, тираж, издательство)')}
 <h2>Автоматизация: Telegram</h2>${inp('tgToken','Токен бота','password','autocomplete="off"')}${inp('tgChat','ID чата')}
@@ -256,6 +258,7 @@ function pageSettings() {
 <h2>Инструкции</h2>
 <details><summary>Как пользоваться: 10 идей</summary><ol>
 <li><b>Личная газета:</b> «Лента» — всё по времени, разделы сверху.</li><li><b>Блоги:</b> вставьте адрес сайта в «Подписках».</li><li><b>YouTube:</b> вставьте ссылку на канал.</li><li><b>Подкасты:</b> кнопка «Слушать», место прослушивания запоминается.</li><li><b>Программы:</b> вставьте ссылку на репозиторий GitHub.</li><li><b>Комиксы:</b> раздел «Комиксы» показывает картинки сразу.</li><li><b>Скидки:</b> впишите «мои слова».</li><li><b>Бизнес:</b> введите слова вместо адреса — получится лента новостей по запросу.</li><li><b>Автоматизация:</b> отправка в Telegram.</li><li><b>Своя лента:</b> вкладка «Своя RSS».</li></ol>
+<p><b>Поиск источников:</b> «Подписки» → «Найти источник». <b>Мои сайты:</b> версии и список изменений на отдельной вкладке. <b>Аккаунт:</b> вверху «Настроек», переносит подписки и избранное между устройствами.</p>
 <p>На телефоне: меню браузера → «Добавить на главный экран».</p></details>
 <details id="help-tg"><summary>Telegram: где взять токен и ID чата</summary><ol><li>Откройте <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>, отправьте /newbot и скопируйте токен.</li><li>Напишите своему новому боту любое сообщение.</li><li>Откройте <a href="https://t.me/userinfobot" target="_blank" rel="noopener">@userinfobot</a> — он покажет ваш ID.</li></ol><p>Токен хранится только в этом браузере и не попадает в резервную копию.</p></details>
 <details id="help-proxy"><summary>Если ленты не загружаются</summary><p>Многие сайты не дают браузеру читать ленту напрямую, поэтому сайт использует бесплатных посредников (allorigins, codetabs, corsproxy.io). Они видят адреса ваших лент и иногда не работают. Не добавляйте сюда личные ссылки с ключами.</p><p>Надёжнее свой посредник, например на <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a>. Впишите его адрес в виде https://…workers.dev/?url={url}</p></details>
@@ -263,9 +266,10 @@ function pageSettings() {
 }
 function render() {
   const y = scrollY;
-  $('#main').innerHTML = {feed: pageFeed, subs: pageSubs, mine: pageMine, settings: pageSettings}[page]();
+  $('#main').innerHTML = {feed: pageFeed, subs: pageSubs, sites: pageSites, mine: pageMine, settings: pageSettings}[page]();
   document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.page === page));
   document.querySelectorAll('select[data-set]').forEach(s => s.value = String(set[s.dataset.set]));
+  if (page === 'settings') window.MMAccount?.mount('#account');
   scrollTo(0, y);
 }
 function theme() {
@@ -285,7 +289,7 @@ function buildRss() {
 }
 function buildOpml() {
   return '<?xml version="1.0" encoding="UTF-8"?>\n<opml version="2.0"><head><title>Мое_лента</title></head><body>\n' +
-    feeds.map(f => `<outline type="rss" text="${xml(f.title || f.url)}" category="${xml(f.cat)}" xmlUrl="${xml(f.url)}"/>\n`).join('') + '</body></opml>\n';
+    feeds.filter(f => f.url !== HUB_FEED).map(f => `<outline type="rss" text="${xml(f.title || f.url)}" category="${xml(f.cat)}" xmlUrl="${xml(f.url)}"/>\n`).join('') + '</body></opml>\n';
 }
 
 /* ---------- события ---------- */
@@ -302,7 +306,7 @@ document.addEventListener('click', async e => {
     case 'starter': PRESETS.filter((p, n) => [0,1,5,7,8].includes(n)).forEach(p => addFeed(p[2], p[0], p[1])); render(); refresh(); break;
     case 'open': open.has(it) ? open.delete(it) : (open.add(it), it.read = true); store(); render(); break;
     case 'visit': it.read = true; card.classList.add('read'); store(); break;
-    case 'fav': it.fav = !it.fav; store(); render(); break;
+    case 'fav': it.fav = !it.fav; store(); window.MMAccount?.changed(); render(); break;
     case 'share':
       if (navigator.share) navigator.share({title: it.title, url: it.link || undefined}).catch(() => {});
       else navigator.clipboard.writeText(it.title + '\n' + it.link).then(() => toast('Скопировано'), () => toast('Не удалось скопировать'));
@@ -313,6 +317,13 @@ document.addEventListener('click', async e => {
       a.playbackRate = a.defaultPlaybackRate = +$('#speed').value; a.play().catch(() => toast('Нажмите ▶ в плеере'));
       it.read = true; store(); break;
     }
+    case 'addfound': {
+      const r = found.list[t.closest('[data-r]').dataset.r], nf = addFeed(r.url, r.cat, r.title);
+      if (nf) { render(); await loadFeed(nf); store(); toast(nf.error ? 'Добавлено, но не загрузилось: ' + nf.error : 'Добавлено в ленту'); if (page === 'subs') render(); }
+      break;
+    }
+    case 'followhub': followHub(); render(); break;
+    case 'hubretry': hubError = ''; render(); break;
     case 'readall': shown.forEach(i => i.read = true); store(); render(); break;
     case 'more': limit += 50; render(); break;
     case 'del': if (confirm('Удалить подписку «' + (f.title || f.url) + '»?')) { feeds.splice(feeds.indexOf(f), 1); items = items.filter(i => i.fav || i.feed !== f.url); cat = 'Все'; store(); render(); } break;
@@ -327,6 +338,7 @@ document.addEventListener('click', async e => {
 });
 document.addEventListener('submit', async e => {
   e.preventDefault();
+  if (e.target.id === 'find') return findSources($('#fq').value.trim(), $('#fkind').value);
   if (e.target.id === 'add') {
     const btn = e.target.querySelector('button'), input = $('#url').value, category = $('#acat').value;
     btn.disabled = true; btn.textContent = 'Ищу ленту…';
@@ -367,11 +379,11 @@ document.addEventListener('change', async e => {
     if (t.id === 'restore') {
       const b = JSON.parse(text);
       if (!Array.isArray(b.feeds)) throw new Error('не тот файл');
-      feeds = b.feeds.filter(f => safeUrl(f.url)).map(f => ({url: f.url, title: String(f.title || ''), cat: CATS.includes(f.cat) ? f.cat : 'Другое'}));
+      feeds = b.feeds.filter(f => f.url === HUB_FEED || safeUrl(f.url)).map(f => ({url: f.url, title: String(f.title || ''), cat: CATS.includes(f.cat) ? f.cat : 'Другое'}));
       mine = b.mine && Array.isArray(b.mine.entries) ? b.mine : mine;
       // токен, чат, посредник и отправку из файла не берём: они остаются как были
       for (const k of ['theme', 'words', 'every']) if (b.set && k in b.set) set[k] = b.set[k];
-      items = (b.fav || []).filter(i => safeUrl(i.feed)).map(i => ({...i, link: safeUrl(i.link), img: safeUrl(i.img), audio: safeUrl(i.audio), title: String(i.title), html: String(i.html || ''), date: +i.date || 0, fav: true}));
+      items = (b.fav || []).filter(i => i.feed === HUB_FEED || safeUrl(i.feed)).map(i => ({...i, link: safeUrl(i.link), img: safeUrl(i.img), audio: safeUrl(i.audio), title: String(i.title), html: String(i.html || ''), date: +i.date || 0, fav: true}));
       store(); save('mine', mine); save('set', set); theme(); toast('Восстановлено'); render(); refresh();
     }
   } catch (err) { toast('Не удалось прочитать файл: ' + err.message); }
@@ -384,5 +396,9 @@ $('#pclose').addEventListener('click', () => { $('#audio').pause(); $('#player')
 
 let lastAuto = Date.now();
 setInterval(() => { if (set.every && Date.now() - lastAuto >= set.every * 60000) { lastAuto = Date.now(); refresh(); } }, 60000);
-theme(); render(); refresh();
+// extra.js подключён после этого файла, поэтому запуск — когда загружены оба
+addEventListener('DOMContentLoaded', () => {
+  if (!load('hubAdded', false)) { addFeed(HUB_FEED, 'Мои сайты', 'Мои сайты — обновления'); save('hubAdded', true); }
+  theme(); render(); refresh();
+});
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

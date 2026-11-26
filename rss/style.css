@@ -9,7 +9,7 @@ input,select,textarea{background:var(--card);border:1px solid var(--line);border
 a{color:var(--acc)}
 header{position:sticky;top:0;z-index:3;display:flex;gap:8px;align-items:center;padding:10px 12px;background:var(--bg);border-bottom:1px solid var(--line)}
 h1{font-size:18px;margin:0;white-space:nowrap}h2{font-size:17px;margin:20px 0 8px}
-nav{position:fixed;bottom:0;left:0;right:0;z-index:3;display:grid;grid-template-columns:repeat(4,1fr);background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:3;display:grid;grid-template-columns:repeat(5,1fr);background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
 nav button{border:0;border-radius:0;font-size:20px;padding:8px 2px}nav span{display:block;font-size:12px;color:var(--mut)}
 nav button.on span{color:var(--acc);font-weight:700}
 main{max-width:760px;margin:0 auto;padding:10px 12px}
@@ -35,3 +35,4 @@ details{background:var(--card);border:1px solid var(--line);border-radius:12px;p
  header{padding-left:20px}header input{max-width:420px;margin-left:auto}
  #player{left:200px;bottom:0}
 }
+.badge{background:var(--acc);color:#fff;border-radius:8px;padding:1px 7px;font-size:12px}.card details{margin:8px 0}.card ul{padding-left:20px}

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Мое_лента</title>
 <meta name="theme-color" content="#e8641b">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src https: data:; media-src https:; connect-src 'self' https:; base-uri 'none'; object-src 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://*.firebaseio.com https://*.firebasedatabase.app; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; media-src https:; connect-src 'self' https: wss://*.firebaseio.com wss://*.firebasedatabase.app; frame-src https://*.firebaseapp.com https://*.firebaseio.com; base-uri 'none'; object-src 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="style.css">
@@ -19,6 +19,7 @@
 <nav id="nav">
   <button data-page="feed">📰<span>Лента</span></button>
   <button data-page="subs">➕<span>Подписки</span></button>
+  <button data-page="sites">🗂️<span>Мое_сайты</span></button>
   <button data-page="mine">📡<span>Своя RSS</span></button>
   <button data-page="settings">⚙️<span>Настройки</span></button>
 </nav>
@@ -30,6 +31,8 @@
   <button id="pclose" aria-label="Закрыть плеер">✕</button>
 </div>
 <div id="toast" role="status" hidden></div>
+<script src="mm-account.js"></script>
 <script src="app.js"></script>
+<script src="extra.js"></script>
 </body>
 </html>
