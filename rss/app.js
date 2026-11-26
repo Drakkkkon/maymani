@@ -1,5 +1,5 @@
 'use strict';
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const gnews = q => 'https://news.google.com/rss/search?q=' + encodeURIComponent(q) + '&hl=ru&gl=KZ&ceid=KZ:ru';
@@ -29,19 +29,33 @@ function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = fals
 function safeUrl(u, base) { try { const x = new URL(String(u || '').trim(), base); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch { return ''; } }
 
 /* ---------- загрузка ---------- */
-async function get(url) {
-  const r = await fetch(url, {signal: AbortSignal.timeout(15000)});
+async function get(url, headers, ms = 15000) {
+  const r = await fetch(url, {headers, signal: AbortSignal.timeout(ms)});
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.text();
+}
+// r.jina.ai без ключа принимает не больше 20 запросов в минуту: лишние ждут своей очереди.
+const jinaLog = [];
+async function jina(url) {
+  for (;;) {
+    while (jinaLog.length && Date.now() - jinaLog[0] > 60000) jinaLog.shift();
+    if (jinaLog.length < 20) break;
+    await new Promise(ok => setTimeout(ok, 60000 - (Date.now() - jinaLog[0]) + 100));
+  }
+  jinaLog.push(Date.now());
+  const text = await get('https://r.jina.ai/' + url, {'x-respond-with': 'html'}, 30000);
+  // ответы JSON и простой текст приходят обёрнутыми в страницу с <pre>
+  if (!/^\s*<html[\s>]/i.test(text) || !text.slice(0, 600).includes('<pre')) return text;
+  return new DOMParser().parseFromString(text, 'text/html').querySelector('body > pre')?.textContent ?? text;
 }
 // Большинство сайтов не разрешают браузеру читать их напрямую, поэтому пробуем по очереди посредников.
 async function fetchText(url, valid) {
   const e = encodeURIComponent(url);
-  const own = set.proxy ? [set.proxy.includes('{url}') ? set.proxy.replace('{url}', e) : set.proxy + e] : [];
-  const tries = url.startsWith('https://api.github.com/') ? [url] : [...own, url,
-    'https://api.allorigins.win/raw?url=' + e, 'https://api.codetabs.com/v1/proxy/?quest=' + e, 'https://corsproxy.io/?url=' + e];
+  const own = set.proxy ? [() => get(set.proxy.includes('{url}') ? set.proxy.replace('{url}', e) : set.proxy + e)] : [];
+  const tries = url.startsWith('https://api.github.com/') ? [() => get(url)] : [...own, () => get(url), () => jina(url),
+    () => get('https://api.allorigins.win/raw?url=' + e), () => get('https://api.codetabs.com/v1/proxy/?quest=' + e)];
   for (const t of tries) {
-    try { const text = await get(t); if (valid(text)) return text; } catch { /* следующий способ */ }
+    try { const text = await t(); if (valid(text)) return text; } catch { /* следующий способ */ }
   }
   throw new Error('не удалось загрузить');
 }
@@ -261,7 +275,7 @@ function pageSettings() {
 <p><b>Поиск источников:</b> «Подписки» → «Найти источник». <b>Мои сайты:</b> версии и список изменений на отдельной вкладке. <b>Аккаунт:</b> вверху «Настроек», переносит подписки и избранное между устройствами.</p>
 <p>На телефоне: меню браузера → «Добавить на главный экран».</p></details>
 <details id="help-tg"><summary>Telegram: где взять токен и ID чата</summary><ol><li>Откройте <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>, отправьте /newbot и скопируйте токен.</li><li>Напишите своему новому боту любое сообщение.</li><li>Откройте <a href="https://t.me/userinfobot" target="_blank" rel="noopener">@userinfobot</a> — он покажет ваш ID.</li></ol><p>Токен хранится только в этом браузере и не попадает в резервную копию.</p></details>
-<details id="help-proxy"><summary>Если ленты не загружаются</summary><p>Многие сайты не дают браузеру читать ленту напрямую, поэтому сайт использует бесплатных посредников (allorigins, codetabs, corsproxy.io). Они видят адреса ваших лент и иногда не работают. Не добавляйте сюда личные ссылки с ключами.</p><p>Надёжнее свой посредник, например на <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a>. Впишите его адрес в виде https://…workers.dev/?url={url}</p></details>
+<details id="help-proxy"><summary>Если ленты не загружаются</summary><p>Многие сайты не дают браузеру читать ленту напрямую, поэтому сайт использует бесплатных посредников (r.jina.ai, allorigins, codetabs). Они видят адреса ваших лент и иногда не работают. Не добавляйте сюда личные ссылки с ключами.</p><p>Надёжнее свой посредник, например на <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a>. Впишите его адрес в виде https://…workers.dev/?url={url}</p></details>
 <p class="meta">Мое_лента ${VERSION}. Данные хранятся только в этом браузере.</p>`;
 }
 function render() {

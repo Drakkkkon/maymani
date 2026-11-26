@@ -11,17 +11,28 @@ let found = {q: '', kind: 'all', list: [], note: '', busy: false};
 async function searchJson(url) {
   return JSON.parse(await fetchText(url, t => t.trim().startsWith('{')));
 }
+// YouTube отдаёт страницу поиска в двух разных видах — разбираем оба.
+function ytChannels(html) {
+  const out = [], str = '("(?:[^"\\\\]|\\\\.)*")';
+  for (const m of html.matchAll(new RegExp('"channelRenderer":\\{"channelId":"(UC[\\w-]{22})","title":\\{"simpleText":' + str, 'g'))) out.push([m[1], JSON.parse(m[2])]);
+  if (out.length) return out;
+  const name = new RegExp('"lockupMetadataViewModel":\\{"title":\\{"content":' + str);
+  let from = 0;
+  for (const m of html.matchAll(/"contentId":"(UC[\w-]{22})","contentType":"LOCKUP_CONTENT_TYPE_CHANNEL"/g)) {
+    const t = html.slice(from, m.index).match(name);
+    if (t) out.push([m[1], JSON.parse(t[1])]);
+    from = m.index + m[0].length;
+  }
+  return out;
+}
 const SEARCH = {
+  async youtube(q) {
+    const html = await fetchText('https://www.youtube.com/results?sp=EgIQAg%253D%253D&search_query=' + encodeURIComponent(q), t => ytChannels(t).length > 0);
+    return ytChannels(html).slice(0, 12).map(([id, title]) => ({url: 'https://www.youtube.com/feeds/videos.xml?channel_id=' + id, title, info: 'Канал YouTube', site: 'https://www.youtube.com/channel/' + id, cat: 'YouTube', kind: 'YouTube'}));
+  },
   async sites(q) {
     const d = await searchJson('https://cloud.feedly.com/v3/search/feeds?count=15&query=' + encodeURIComponent(q));
     return (d.results || []).map(r => ({url: safeUrl(String(r.feedId || '').replace(/^feed\//, '')), title: r.title, info: r.description || r.website || '', site: r.website, cat: 'Блоги', kind: 'Сайт'}));
-  },
-  async youtube(q) {
-    const html = await fetchText('https://www.youtube.com/results?sp=EgIQAg%253D%253D&search_query=' + encodeURIComponent(q), t => t.includes('channelRenderer'));
-    const out = [], re = /"channelRenderer":\{"channelId":"(UC[\w-]{22})","title":\{"simpleText":("(?:[^"\\]|\\.)*")/g;
-    let m;
-    while ((m = re.exec(html)) && out.length < 12) out.push({url: 'https://www.youtube.com/feeds/videos.xml?channel_id=' + m[1], title: JSON.parse(m[2]), info: 'Канал YouTube', site: 'https://www.youtube.com/channel/' + m[1], cat: 'YouTube', kind: 'YouTube'});
-    return out;
   },
   async podcasts(q) {
     const d = await searchJson('https://itunes.apple.com/search?media=podcast&limit=12&term=' + encodeURIComponent(q));
@@ -44,7 +55,10 @@ async function findSources(q, kind) {
   if (found !== mine) return;
   const bad = keys.filter((k, i) => res[i].status === 'rejected').map(k => KINDS[k]);
   // при поиске «Везде» берём понемногу из каждого вида
-  found.list = res.flatMap(r => r.status === 'fulfilled' ? r.value.filter(x => x.url).slice(0, kind === 'all' ? 5 : 15) : []);
+  const seen = new Set();
+  // одинаковые источники из разных каталогов показываем один раз
+  const once = x => { const keys = [x.url, x.kind + '|' + x.title + '|' + x.info]; if (!x.url || keys.some(k => seen.has(k))) return false; keys.forEach(k => seen.add(k)); return true; };
+  found.list = res.flatMap(r => r.status === 'fulfilled' ? r.value.filter(once).slice(0, kind === 'all' ? 5 : 15) : []);
   found.note = bad.length ? 'Сейчас не отвечает: ' + bad.join(', ') + '.' : '';
   found.busy = false;
   if (page === 'subs') render();
