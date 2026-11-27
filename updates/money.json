@@ -1,7 +1,7 @@
 {
-  "versionCode": 42000,
-  "version": "4.20.0",
-  "url": "https://raw.githubusercontent.com/Drakkkkon/maymani/archives/money/MyMoney_Android_v4.20.0.apk",
-  "sha256": "3bac1cf40324e729b830273f2f8b0a69dbdee6e7988f6df321a94ce6a03adc25",
-  "notes": "Первая версия приложения My Money."
+  "versionCode": 42100,
+  "version": "4.21.0",
+  "url": "https://raw.githubusercontent.com/Drakkkkon/maymani/archives/money/MyMoney_Android_v4.21.0.apk",
+  "sha256": "d60f2c751ee1988b21ef81853efd34ad631639d91672d1ad8fa4d584784e5eff",
+  "notes": "Вход через Google, отпечаток и голос в приложении, виджет, ярлыки, новый главный экран."
 }
