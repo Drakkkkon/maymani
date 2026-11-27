@@ -1,17 +1,18 @@
 {
  "app": "Мое_город",
- "version": "1.12.0",
- "date": "24 ноября 2026",
+ "version": "1.13.0",
+ "date": "27 ноября 2026",
  "shellMin": "1.0.0",
  "shell": "1.0.0",
  "notes": [
-  "🧱 Угловые камни на выпуклых углах дома — модель из Hunyuan3D (геометрия без текстуры, цвет задаёт игра); на низкой графике остаются простые блоки.",
-  "🏠 Крыша и стены из Hunyuan3D пока не интегрированы: крыша игры переменной ширины, а модели имеют фиксированную форму."
+  "🏢 Этажность дома — от 2 до 8; работает с растягиванием «змейкой» и угловыми домами.",
+  "🏗️ В «Строительстве» — кнопки «− этаж» / «+ этаж» с плавной анимацией.",
+  "🧱 У готового дома этажи достраивает и разбирает бригада — с лесами и краном."
  ],
  "game_zip": {
-  "url": "https://github.com/Drakkkkon/maymani/raw/archives/gorod/Moe_gorod_game_v1.12.0.zip",
-  "size": 2785959,
-  "sha256": "01007961cd9db5ad95b96757ed69f5d1dc9f7a4e08a9037da724a070aa1a2208"
+  "url": "https://github.com/Drakkkkon/maymani/raw/archives/gorod/Moe_gorod_game_v1.13.0.zip",
+  "size": 2797013,
+  "sha256": "99eb5139a68eedda5670ba87055bc756e15fa5b902c17ab3c8a9db4dbcad624a"
  },
  "setup": {
   "url": "https://github.com/Drakkkkon/maymani/raw/archives/gorod/Moe_gorod_Setup_1.7.0.exe",
