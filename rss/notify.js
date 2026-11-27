@@ -97,7 +97,7 @@ ${ntf.mode === 'push' ? `<div class="row"><button class="main" data-ntf="copy">�
 /* внутри приложения Android ленты проверяет само приложение */
 function appNotifyBlock() {
   const head = '<h2>Уведомления на телефоне</h2>';
-  if (!MLApp.notifyConfig) return head + '<p class="meta">Для уведомлений установите новое приложение: «Мое_сайты» → «Мое_лента» → «Все версии и скачивание».</p>';
+  if (!MLApp.notifyConfig) return head + '<p class="meta">Для уведомлений установите новое приложение: «Мое_Сайты» → «Мое_лента» → «Все версии и скачивание».</p>';
   const st = JSON.parse(MLApp.notifyStatus()), on = ntf.mode === 'app';
   return head + `<div class="card"><div>Сейчас: <b>${!on ? 'выключены' : st.allowed ? 'включены' : 'запрещены в настройках телефона'}</b></div>
 <div class="row">${on ? '<button data-app="off">Выключить</button><button data-app="check">Проверить сейчас</button>' : '<button class="main" data-app="on">Включить</button>'}<button data-app="settings">Настройки телефона</button></div>

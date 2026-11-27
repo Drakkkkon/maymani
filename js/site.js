@@ -1,4 +1,4 @@
-/* Мое_сайты: показ программ и версий + подключение Google Диска (вход Google, список и скачивание архивов). */
+/* Мое_Сайты: показ программ и версий + подключение Google Диска (вход Google, список и скачивание архивов). */
 (function () {
   'use strict';
   var H = window.HUB, $ = function (s, r) { return (r || document).querySelector(s); };
@@ -64,8 +64,8 @@
       return '<li><img src="' + esc(p.icon) + '" alt="" width="40" height="40"><div><a href="' + esc(p.site) + '" target="_blank" rel="noopener">' + esc(p.name) + ' ↗</a><p>' + esc(p.siteBlurb) + '</p></div></li>';
     }).join('');
     $('#app').innerHTML = '<header class="top"><h1>' + esc(H.title) + '</h1><p class="lead">Все версии моих программ: журнал изменений и кнопка «Скачать» в одной карточке. Архивы лежат на GitHub, кнопка «Скачать» работает сразу.</p></header>' +
-      '<section><h2>Программы</h2><ul class="progs">' + list + '</ul></section>' +
-      '<aside class="sites" aria-label="Мои сайты"><h2>Мои сайты</h2><ul>' + sites + '</ul></aside>' +
+      '<div class="cols"><aside class="sites" aria-label="Мои сайты"><h2>Мои сайты</h2><ul>' + sites + '</ul></aside>' +
+      '<section><h2>Архив программ</h2><ul class="progs">' + list + '</ul></section></div>' +
       '<footer>Страница «' + esc(H.title) + '» ' + esc(H.version) + ' · ' + esc(fmtDate(H.date)) + ' Архивы версий лежат на GitHub (<a href="' + esc(H.archives.tree) + '" target="_blank" rel="noopener">ветка archives</a>).</footer>';
   }
   function renderProgram(id) {

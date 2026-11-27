@@ -1,5 +1,5 @@
 'use strict';
-/* Поиск источников, страница «Мое_сайты» и общий аккаунт (с 1.1.0). */
+/* Поиск источников, страница «Мое_Сайты» и общий аккаунт (с 1.1.0). */
 const HUB_URL = 'https://drakkkkon.github.io/maymani/';
 const HUB_FEED = 'hub:sites';
 const REPOS = ['maymani','my-money','ilife','geometriya-polki','topsecret','Moe_korovy','Moe_nakleyki','My-memes','MiniRSS'];
@@ -74,7 +74,7 @@ ${safeUrl(r.site) ? `<a class="btn" href="${esc(safeUrl(r.site))}" target="_blan
     (!found.busy && found.q && !found.list.length ? `<p class="meta">Ничего не нашлось. ${yt}</p>` : '');
 }
 
-/* ---------- Мое_сайты ---------- */
+/* ---------- Мое_Сайты ---------- */
 let hubPromise = null;
 function loadHub(force) {
   if (hubPromise && !force) return hubPromise;
@@ -100,13 +100,13 @@ let hubData = null, hubError = '', hubSeen = load('seen', null);
 function pageSites() {
   if (!hubData) {
     if (!hubError) loadHub().then(h => { hubData = h; if (page === 'sites') render(); }, e => { hubError = e.message; if (page === 'sites') render(); });
-    return '<h2>Мое_сайты</h2>' + (hubError ? `<p class="err">${esc(hubError)}</p><button data-act="hubretry">Повторить</button>` : '<p class="meta">Загружаю версии…</p>');
+    return '<h2>Мое_Сайты</h2>' + (hubError ? `<p class="err">${esc(hubError)}</p><button data-act="hubretry">Повторить</button>` : '<p class="meta">Загружаю версии…</p>');
   }
   const seen = hubSeen || {};
   const day = d => new Date(d + 'T12:00:00').toLocaleDateString('ru-RU', {day: 'numeric', month: 'long'});
   const log = v => '<ul>' + (v.items || []).map(t => `<li>${esc(t)}</li>`).join('') + '</ul>';
   const progs = [...hubData.programs].filter(p => p.versions.length).sort((a, b) => b.versions[0].date.localeCompare(a.versions[0].date));
-  let h = '<h2>Мое_сайты</h2>' + (feeds.some(f => f.url === HUB_FEED) ? '<p class="meta">Новые версии приходят и в «Ленту», раздел «Мои сайты».</p>' : '<button data-act="followhub">Следить за обновлениями в «Ленте»</button>');
+  let h = '<h2>Мое_Сайты</h2>' + (feeds.some(f => f.url === HUB_FEED) ? '<p class="meta">Новые версии приходят и в «Ленту», раздел «Мои сайты».</p>' : '<button data-act="followhub">Следить за обновлениями в «Ленте»</button>');
   h += progs.map(p => {
     const v = p.versions[0], fresh = hubSeen && seen[p.id] !== v.v;
     return `<div class="card"><b>${esc(p.name)}</b> ${fresh ? '<span class="badge">новое</span>' : ''}<div class="meta">Версия ${esc(v.v)} · ${day(v.date)}</div>
@@ -115,7 +115,7 @@ ${p.versions.length > 1 ? `<details><summary>Прежние версии (${p.ve
 <div class="row acts">${safeUrl(p.site) ? `<a class="btn" href="${esc(safeUrl(p.site))}" target="_blank" rel="noopener">Открыть сайт ↗</a>` : ''}<a class="btn" href="${esc(HUB_URL + p.page)}" target="_blank" rel="noopener">Все версии и скачивание ↗</a></div></div>`;
   }).join('');
   const link = (u, t) => `<li><a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a></li>`;
-  h += '<h2>Ссылки</h2><div class="card"><b>Сайты</b><ul>' + link(HUB_URL, 'МайМани (все версии)') + progs.filter(p => safeUrl(p.site)).map(p => link(safeUrl(p.site), p.name)).join('') +
+  h += '<h2>Ссылки</h2><div class="card"><b>Сайты</b><ul>' + link(HUB_URL, 'Мое_Сайты (все версии)') + progs.filter(p => safeUrl(p.site)).map(p => link(safeUrl(p.site), p.name)).join('') +
     '</ul><b>GitHub</b><ul>' + REPOS.map(r => link('https://github.com/Drakkkkon/' + r, r)).join('') + '</ul></div>';
   // отметки «новое» держатся до перезагрузки; при первом открытии всё считается виденным
   save('seen', Object.fromEntries(progs.map(p => [p.id, p.versions[0].v])));
