@@ -1,7 +1,7 @@
 {
-  "versionCode": 42200,
-  "version": "4.22.0",
-  "url": "https://raw.githubusercontent.com/Drakkkkon/maymani/archives/money/MyMoney_Android_v4.22.0.apk",
-  "sha256": "51dcabc05239bd40d75b0b142b7d2ca6880760ae6c58030f08b45f364b284fa5",
-  "notes": "Убраны лишние разделы, три группы тем, только русский, новое окно записи."
+  "versionCode": 42300,
+  "version": "4.23.0",
+  "url": "https://raw.githubusercontent.com/Drakkkkon/maymani/archives/money/MyMoney_Android_v4.23.0.apk",
+  "sha256": "0e6a3773baef1dd1e32cb98e87535c2fd31714b6fd76162ade06698347ce0a33",
+  "notes": "Только страницы, кнопка «Скрыть», без Google Диска, котировок, покупок и экрана приветствия."
 }
