@@ -1,5 +1,5 @@
 'use strict';
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const gnews = q => 'https://news.google.com/rss/search?q=' + encodeURIComponent(q) + '&hl=ru&gl=KZ&ceid=KZ:ru';
@@ -21,7 +21,7 @@ const PRESETS = [
 function load(k, d) { try { return JSON.parse(localStorage.getItem('ml_' + k)) ?? d; } catch { return d; } }
 function save(k, v) { if (['feeds','set','mine'].includes(k)) window.MMAccount?.changed(); try { localStorage.setItem('ml_' + k, JSON.stringify(v)); return true; } catch { toast('Память браузера заполнена'); return false; } }
 let feeds = load('feeds', []), items = load('items', []), mine = load('mine', {title:'',link:'',desc:'',entries:[]});
-let set = Object.assign({theme:'auto',words:'',proxy:'',every:30,tgToken:'',tgChat:'',tgOn:false}, load('set', {}));
+let set = Object.assign({theme:'auto',words:'',proxy:'',every:30,tgToken:'',tgChat:'',tgOn:false,stop:'',font:1,dedup:true,swipe:true}, load('set', {}));
 let page = 'feed', cat = 'Все', mode = 'all', query = '', limit = 50, busy = false;
 const open = new Set();
 // до 1.3.0 пустая картинка или звук подменялись адресом самой ленты
@@ -173,7 +173,7 @@ async function refresh(list = feeds) {
   const failed = list.filter(f => f.error).length;
   if (failed) toast('Не загрузились ленты: ' + failed + '. Подробности в «Подписках».');
   else if (fresh.length) toast('Новых записей: ' + fresh.length);
-  if (set.tgOn) for (const it of fresh.filter(i => !words().length || isHit(i)).slice(0, 10)) await sendTg(it.title + '\n' + it.link);
+  if (set.tgOn) for (const it of fresh.filter(i => !isStopped(i) && (!words().length || isHit(i))).slice(0, 10)) await sendTg(it.title + '\n' + it.link);
   await window.notifyFresh?.(fresh)?.catch(() => {});
   // пока шла загрузка, могли добавить новые подписки
   const waiting = feeds.filter(f => !f.loaded && !f.error);
@@ -225,10 +225,13 @@ function pageFeed() {
     if (cat !== 'Все' && f?.cat !== cat) return false;
     if (mode === 'new' && i.read && !open.has(i)) return false;
     if (mode === 'hit' && !isHit(i)) return false;
+    if (mode !== 'fav' && isStopped(i)) return false;
     return !query || (i.title + ' ' + plain(i.html)).toLowerCase().includes(query);
   });
+  shown = groupStories(shown);
+  if (mode === 'top') shown = topStories(shown);
   const chip = (key, val, cur, label) => `<button data-${key}="${val}" class="${val === cur ? 'on' : ''}">${label}</button>`;
-  let h = '<div class="chips">' + chip('mode','all',mode,'Все') + chip('mode','new',mode,'Непрочитанные') + chip('mode','fav',mode,'★ Избранное') + chip('mode','hit',mode,'🔔 Мои слова') + '</div>';
+  let h = '<div class="chips">' + chip('mode','all',mode,'Все') + chip('mode','top',mode,'⭐ Главное') + chip('mode','new',mode,'Непрочитанные') + chip('mode','fav',mode,'★ Избранное') + chip('mode','hit',mode,'🔔 Мои слова') + '</div>';
   h += '<div class="chips">' + ['Все', ...CATS.filter(c => feeds.some(f => f.cat === c))].map(c => chip('cat', c, cat, c)).join('') + '</div>';
   if (!feeds.some(f => f.url !== HUB_FEED) && cat === 'Все' && mode !== 'fav') h += '<div class="card"><b>Лента пока пустая.</b><p>Добавьте свои сайты или начните с готового набора.</p><div class="row"><button class="main" data-act="starter">Добавить стартовый набор</button><button data-page="subs">Выбрать самому</button></div></div>';
   if (shown.length) h += '<div class="row acts"><button data-act="readall">✓ Прочитать всё показанное</button><button data-act="speakall">🔊 Озвучить подряд</button></div>';
@@ -238,12 +241,14 @@ function pageFeed() {
     return `<article class="card ${i.read ? 'read' : ''} ${isHit(i) ? 'hit' : ''}" data-n="${n}">
 <div class="meta">${esc(f?.title || hostOf(i.feed))} · ${new Date(i.date).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
 ${cover}<button class="title" data-act="open" aria-expanded="${isOpen}">${mark(i.title)}</button>
-${isOpen ? `<div class="body">${i.img && !/<img/i.test(i.html) ? `<img src="${esc(i.img)}" alt="" referrerpolicy="no-referrer">` : ''}${clean(i.html, i.link || i.feed)}</div>` : ''}
+${isOpen ? `<div class="body">${i.img && !/<img/i.test(i.html) ? `<img src="${esc(i.img)}" alt="" referrerpolicy="no-referrer">` : ''}${clean(i.html, i.link || i.feed)}${translations.has(i) ? trHtml(translations.get(i)) : ''}</div>` : ''}
 <div class="row acts">${i.audio ? '<button class="main" data-act="play">▶ Слушать</button>' : ''}
+${i.link && i.feed !== HUB_FEED && !yt && !i.audio ? '<button class="main" data-act="read">📖 Читать</button>' : ''}
+${isForeign(i.title) && !translations.has(i) ? '<button data-act="translate">🌐 Перевести</button>' : ''}
 ${i.link ? `<a class="btn" data-act="visit" href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">${yt ? 'Смотреть' : 'Открыть'} ↗</a>` : ''}
-<button data-act="speak">🔊 Озвучить</button><button data-act="fav" aria-label="В избранное">${i.fav ? '★' : '☆'}</button><button data-act="share">Поделиться</button></div></article>`;
+<button data-act="speak">🔊 Озвучить</button><button data-act="fav" aria-label="В избранное">${i.fav ? '★' : '☆'}</button><button data-act="share">Поделиться</button></div>${dupsHtml(i)}</article>`;
   }).join('');
-  if (!shown.length && feeds.length) h += '<p class="meta">' + (busy ? 'Загружаю…' : mode === 'hit' && !words().length ? 'Впишите слова для отслеживания в «Настройках».' : 'Здесь пока ничего нет.') + '</p>';
+  if (!shown.length && feeds.length) h += '<p class="meta">' + (busy ? 'Загружаю…' : mode === 'hit' && !words().length ? 'Впишите слова для отслеживания в «Настройках».' : mode === 'top' ? 'За последние сутки непрочитанного нет.' : 'Здесь пока ничего нет.') + '</p>';
   if (shown.length > limit) h += '<button data-act="more">Показать ещё</button>';
   return h;
 }
@@ -271,6 +276,10 @@ function pageSettings() {
 <h2>Вид и обновление</h2><label>Тема<select data-set="theme"><option value="auto">Как в системе</option><option value="light">Светлая</option><option value="dark">Тёмная</option></select></label>
 <label>Обновлять, пока сайт открыт<select data-set="every"><option value="0">Только вручную</option><option value="15">Каждые 15 минут</option><option value="30">Каждые 30 минут</option><option value="60">Каждый час</option></select></label>
 ${notifyBlock()}
+<h2>Чтение</h2><label>Размер шрифта<select data-set="font"><option value="0.9">Мелкий</option><option value="1">Обычный</option><option value="1.15">Крупный</option><option value="1.3">Очень крупный</option></select></label>
+<label>Одинаковые новости<select data-set="dedup"><option value="true">Склеивать в одну</option><option value="false">Показывать все</option></select></label>
+<label>Свайпы по записи<select data-set="swipe"><option value="true">Вправо — в избранное, влево — прочитано</option><option value="false">Выключены</option></select></label>
+<h2>Стоп-слова</h2>${inp('stop','Через запятую: записи с этими словами скрываются (гороскоп, футбол)')}
 <h2>Мои слова</h2>${inp('words','Через запятую: записи с этими словами подсвечиваются (скидка, тираж, издательство)')}
 <h2>Автоматизация: Telegram</h2>${inp('tgToken','Токен бота','password','autocomplete="off"')}${inp('tgChat','ID чата')}
 <label><select data-set="tgOn"><option value="false">Не отправлять</option><option value="true">Отправлять новые записи (с «моими словами», если они заданы)</option></select></label>
@@ -279,12 +288,13 @@ ${notifyBlock()}
 <h2>Свой посредник</h2>${inp('proxy','Необязательно: адрес с {url}')}<a href="#help-proxy" data-act="help">Инструкция</a>
 <h2>Резервная копия</h2><div class="row"><button data-act="backup">Сохранить</button><label class="btn">Восстановить<input type="file" id="restore" accept=".json" hidden></label></div>
 <h2>Инструкции</h2>
-<details><summary>Как пользоваться: 10 идей</summary><ol>
-<li><b>Личная газета:</b> «Лента» — всё по времени, разделы сверху.</li><li><b>Блоги:</b> вставьте адрес сайта в «Подписках».</li><li><b>YouTube:</b> вставьте ссылку на канал.</li><li><b>Подкасты:</b> кнопка «Слушать», место прослушивания запоминается.</li><li><b>Программы:</b> вставьте ссылку на репозиторий GitHub.</li><li><b>Комиксы:</b> раздел «Комиксы» показывает картинки сразу.</li><li><b>Озвучка:</b> «🔊 Озвучить» под записью или «Озвучить подряд» сверху.</li><li><b>Скидки:</b> впишите «мои слова».</li><li><b>Бизнес:</b> введите слова вместо адреса — получится лента новостей по запросу.</li><li><b>Автоматизация:</b> отправка в Telegram.</li><li><b>Своя лента:</b> вкладка «Своя RSS».</li></ol>
+<details><summary>Как пользоваться: подсказки</summary><ol>
+<li><b>Читать целиком:</b> «📖 Читать» открывает статью внутри приложения; получается не на всех сайтах.</li><li><b>Главное:</b> до 15 непрочитанных за сутки, сначала с «моими словами» и те, о которых пишут несколько источников.</li><li><b>Стоп-слова и повторы:</b> настраиваются выше.</li><li><b>Перевод:</b> «🌐 Перевести» у записей на английском. Текст уходит в Google Переводчик или MyMemory.</li><li><b>Свайпы:</b> вправо — в избранное, влево — прочитано.</li><li><b>Личная газета:</b> «Лента» — всё по времени, разделы сверху.</li><li><b>Блоги:</b> вставьте адрес сайта в «Подписках».</li><li><b>YouTube:</b> вставьте ссылку на канал.</li><li><b>Подкасты:</b> кнопка «Слушать», место прослушивания запоминается.</li><li><b>Программы:</b> вставьте ссылку на репозиторий GitHub.</li><li><b>Комиксы:</b> раздел «Комиксы» показывает картинки сразу.</li><li><b>Озвучка:</b> «🔊 Озвучить» под записью или «Озвучить подряд» сверху.</li><li><b>Скидки:</b> впишите «мои слова».</li><li><b>Бизнес:</b> введите слова вместо адреса — получится лента новостей по запросу.</li><li><b>Автоматизация:</b> отправка в Telegram.</li><li><b>Своя лента:</b> вкладка «Своя RSS».</li></ol>
 <p><b>Поиск источников:</b> «Подписки» → «Найти источник». <b>Мои сайты:</b> версии и список изменений на отдельной вкладке. <b>Аккаунт:</b> вверху «Настроек», переносит подписки и избранное между устройствами.</p>
 <p>На телефоне: меню браузера → «Добавить на главный экран».</p></details>
 <details id="help-tg"><summary>Telegram: где взять токен и ID чата</summary><ol><li>Откройте <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>, отправьте /newbot и скопируйте токен.</li><li>Напишите своему новому боту любое сообщение.</li><li>Откройте <a href="https://t.me/userinfobot" target="_blank" rel="noopener">@userinfobot</a> — он покажет ваш ID.</li></ol><p>Токен хранится только в этом браузере и не попадает в резервную копию.</p></details>
 <details id="help-tts"><summary>Если не слышно озвучку</summary><ol><li>Прибавьте громкость мультимедиа.</li><li>Откройте сайт в Chrome, а не во встроенном браузере мессенджера.</li><li>В настройках Android найдите «Синтез речи», выберите «Речевые службы Google» и скачайте русский голос.</li></ol><p>Читается заголовок и тот текст, который есть в ленте. У Google Новостей — только заголовок.</p></details>
+<details><summary>Приложение для Android</summary><ol><li><a href="https://drakkkkon.github.io/maymani/lenta.html" target="_blank" rel="noopener">Откройте страницу «Мое_лента»</a> и скачайте архив с пометкой Android.</li><li>Распакуйте и откройте файл .apk, разрешите установку из этого источника.</li></ol><p>Подписки переносятся через общий аккаунт. Уведомления в приложении не работают: для них оставьте сайт, установленный на главный экран.</p></details>
 <details id="help-proxy"><summary>Если ленты не загружаются</summary><p>Многие сайты не дают браузеру читать ленту напрямую, поэтому сайт использует бесплатных посредников (r.jina.ai, allorigins, codetabs). Они видят адреса ваших лент и иногда не работают. Не добавляйте сюда личные ссылки с ключами.</p><p>Надёжнее свой посредник, например на <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a>. Впишите его адрес в виде https://…workers.dev/?url={url}</p></details>
 <p class="meta">Мое_лента ${VERSION}. Данные хранятся только в этом браузере.</p>`;
 }
@@ -329,8 +339,8 @@ document.addEventListener('click', async e => {
   const fcard = t.closest('[data-f]'), f = fcard && feeds[fcard.dataset.f];
   switch (d.act) {
     case 'starter': PRESETS.filter((p, n) => [0,1,2,7,9,10].includes(n)).forEach(p => addFeed(p[2], p[0], p[1])); render(); refresh(); break;
-    case 'open': open.has(it) ? open.delete(it) : (open.add(it), it.read = true); store(); render(); break;
-    case 'visit': it.read = true; card.classList.add('read'); store(); break;
+    case 'open': open.has(it) ? open.delete(it) : (open.add(it), markRead(it)); store(); render(); break;
+    case 'visit': markRead(it); card.classList.add('read'); store(); break;
     case 'fav': it.fav = !it.fav; store(); window.MMAccount?.changed(); render(); break;
     case 'share':
       if (navigator.share) navigator.share({title: it.title, url: it.link || undefined}).catch(() => {});
@@ -349,7 +359,7 @@ document.addEventListener('click', async e => {
     }
     case 'followhub': followHub(); render(); break;
     case 'hubretry': hubError = ''; render(); break;
-    case 'readall': shown.forEach(i => i.read = true); store(); render(); break;
+    case 'readall': shown.forEach(i => markRead(i)); store(); render(); break;
     case 'more': limit += 50; render(); break;
     case 'del': if (confirm('Удалить подписку «' + (f.title || f.url) + '»?')) { feeds.splice(feeds.indexOf(f), 1); items = items.filter(i => i.fav || i.feed !== f.url); cat = 'Все'; store(); render(); } break;
     case 'retry': await refresh([f]); break;
@@ -382,7 +392,7 @@ document.addEventListener('submit', async e => {
 document.addEventListener('change', async e => {
   const t = e.target, d = t.dataset;
   if (d.set) {
-    set[d.set] = d.set === 'every' ? +t.value : d.set === 'tgOn' ? t.value === 'true' : t.value.trim(); save('set', set); theme(); window.syncNotify?.().catch(() => {}); return;
+    set[d.set] = ['every','font'].includes(d.set) ? +t.value : ['tgOn','dedup','swipe'].includes(d.set) ? t.value === 'true' : t.value.trim(); save('set', set); theme(); applyFont(); window.syncNotify?.().catch(() => {}); return;
   }
   if (d.mine) { mine[d.mine] = t.value.trim(); save('mine', mine); return; }
   if (d.chg === 'cat') { feeds[t.closest('[data-f]').dataset.f].cat = t.value; save('feeds', feeds); return; }
@@ -407,9 +417,9 @@ document.addEventListener('change', async e => {
       feeds = b.feeds.filter(f => f.url === HUB_FEED || safeUrl(f.url)).map(f => ({url: f.url, title: String(f.title || ''), cat: CATS.includes(f.cat) ? f.cat : 'Другое'}));
       mine = b.mine && Array.isArray(b.mine.entries) ? b.mine : mine;
       // токен, чат, посредник и отправку из файла не берём: они остаются как были
-      for (const k of ['theme', 'words', 'every']) if (b.set && k in b.set) set[k] = b.set[k];
+      for (const k of ['theme', 'words', 'every', 'stop', 'font', 'dedup', 'swipe']) if (b.set && k in b.set) set[k] = b.set[k];
       items = (b.fav || []).filter(i => i.feed === HUB_FEED || safeUrl(i.feed)).map(i => ({...i, link: safeUrl(i.link), img: safeUrl(i.img), audio: safeUrl(i.audio), title: String(i.title), html: String(i.html || ''), date: +i.date || 0, fav: true}));
-      store(); save('mine', mine); save('set', set); theme(); toast('Восстановлено'); render(); refresh();
+      store(); save('mine', mine); save('set', set); theme(); applyFont(); toast('Восстановлено'); render(); refresh();
     }
   } catch (err) { toast('Не удалось прочитать файл: ' + err.message); }
 });
@@ -424,6 +434,6 @@ setInterval(() => { if (set.every && Date.now() - lastAuto >= set.every * 60000)
 // extra.js подключён после этого файла, поэтому запуск — когда загружены оба
 addEventListener('DOMContentLoaded', () => {
   if (!load('hubAdded', false)) { addFeed(HUB_FEED, 'Мои сайты', 'Мои сайты — обновления'); save('hubAdded', true); }
-  theme(); render(); refresh();
+  theme(); applyFont(); render(); refresh();
 });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

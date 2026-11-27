@@ -112,9 +112,8 @@ document.addEventListener('click', e => {
   if (!t) return;
   if (t.id === 'tstop') return stopSpeak();
   if (t.id === 'tnext') { talk.n++; return speakItem(); }
-  if (t.dataset.act === 'speak') { const it = shown[t.closest('[data-n]').dataset.n]; speak([it]); it.read = true; store(); }
+  if (t.dataset.act === 'speak') { const it = shown[t.closest('[data-n]').dataset.n]; speak([it]); markRead(it); store(); }
   if (t.dataset.act === 'speakall') speak(shown.slice(0, 30));
 });
 addEventListener('pagehide', () => synth?.cancel());
 watchCovers();
-if (page === 'feed') render();

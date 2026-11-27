@@ -37,15 +37,21 @@
     return !list.length || list.some(w => hay.includes(w));
   };
 
+  const stopped = (item, stop) => {
+    const list = String(stop || '').toLowerCase().split(',').map(w => w.trim()).filter(Boolean);
+    const hay = (item.title + ' ' + item.text).toLowerCase();
+    return list.some(w => hay.includes(w));
+  };
+
   // Возвращает новые записи и обновляет seen. Первая проверка ленты только запоминает то, что уже есть.
-  function pick(seen, key, list, words) {
+  function pick(seen, key, list, words, stop) {
     const old = seen[key];
     const known = new Set(old || []);
-    const fresh = old ? list.filter(i => !known.has(i.id) && matches(i, words)) : [];
+    const fresh = old ? list.filter(i => !known.has(i.id) && matches(i, words) && !stopped(i, stop)) : [];
     seen[key] = [...new Set([...list.map(i => i.id), ...known])].slice(0, 150);
     return fresh;
   }
 
-  const api = {parse, pick, matches, isGitHub};
+  const api = {parse, pick, matches, stopped, isGitHub};
   if (typeof module === 'object' && module.exports) module.exports = api; else root.FeedLite = api;
 })(typeof self === 'object' ? self : globalThis);

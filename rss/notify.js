@@ -20,13 +20,13 @@ async function syncNotify() {
     const ids = [...new Set([...items.filter(i => i.feed === f.url).map(i => i.id), ...(old?.seen?.[f.url] || [])])].slice(0, 150);
     if (ids.length) seen[f.url] = ids;
   }
-  await box.put('config', new Response(JSON.stringify({mode: ntf.mode, words: set.words, feeds: feeds.map(f => ({url: f.url, title: f.title})), seen})));
+  await box.put('config', new Response(JSON.stringify({mode: ntf.mode, words: set.words, stop: set.stop, feeds: feeds.map(f => ({url: f.url, title: f.title})), seen})));
 }
 // Пока сайт открыт, но свёрнут, новые записи показываем сразу.
 async function notifyFresh(fresh) {
   if (ntf.mode === 'simple' && document.hidden && Notification.permission === 'granted') {
     const reg = await navigator.serviceWorker.ready;
-    for (const i of fresh.filter(i => FeedLite.matches({title: i.title, text: plain(i.html)}, set.words)).slice(0, 5))
+    for (const i of fresh.filter(i => FeedLite.matches({title: i.title, text: plain(i.html)}, set.words) && !isStopped(i)).slice(0, 5))
       await reg.showNotification(feeds.find(f => f.url === i.feed)?.title || 'Мое_лента', {body: i.title, icon: 'icon-192.png', data: {url: i.link}, tag: i.link || i.title});
   }
   await syncNotify();
@@ -61,13 +61,14 @@ async function startPush() {
   save('notify', ntf); await syncNotify();
   ntfStatus = 'Телефон готов. Теперь скопируйте настройки и вставьте их в GitHub (инструкция ниже).';
 }
-const pushConfig = () => JSON.stringify({publicKey: ntf.publicKey, privateKey: ntf.privateKey, sub: ntf.sub, words: set.words, feeds: feeds.map(f => ({url: f.url, title: f.title || ''}))});
+const pushConfig = () => JSON.stringify({publicKey: ntf.publicKey, privateKey: ntf.privateKey, sub: ntf.sub, words: set.words, stop: set.stop, feeds: feeds.map(f => ({url: f.url, title: f.title || ''}))});
 
 function notifyBlock() {
+  if (window.MLApp) return '<h2>Уведомления на телефоне</h2><p class="meta">В приложении уведомления не работают. Включите их в Chrome на сайте, установленном на главный экран.</p>';
   const state = {off: 'выключены', simple: 'простые', push: 'push через GitHub'}[ntf.mode];
   return `<h2>Уведомления на телефоне</h2><div class="card"><div>Сейчас: <b>${state}</b></div>
 <div class="row"><button data-ntf="simple">Включить простые</button><button data-ntf="push">Включить push</button>${ntf.mode === 'off' ? '' : '<button data-ntf="off">Выключить</button>'}</div>
-${ntf.mode === 'push' ? `<div class="row"><button class="main" data-ntf="copy">Скопировать настройки для GitHub</button></div><p class="meta">После изменения подписок или «моих слов» скопируйте и вставьте настройки заново.</p><textarea id="ntfcfg" rows="3" readonly hidden></textarea>` : ''}
+${ntf.mode === 'push' ? `<div class="row"><button class="main" data-ntf="copy">Скопировать настройки для GitHub</button></div><p class="meta">После изменения подписок, «моих слов» или стоп-слов скопируйте и вставьте настройки заново.</p><textarea id="ntfcfg" rows="3" readonly hidden></textarea>` : ''}
 <p class="meta" role="status">${esc(ntfStatus)}</p>
 <p class="meta">Приходят новые записи; если заданы «мои слова», то только с ними.</p></div>
 <details><summary>Простые уведомления: как работают</summary><p>Без сервера. Установите сайт на главный экран (меню Chrome → «Установить приложение» или «Добавить на главный экран»), откройте оттуда и нажмите «Включить простые». Как часто проверять ленты в фоне, решает Chrome: обычно не чаще раза в 12 часов.</p></details>

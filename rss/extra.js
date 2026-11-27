@@ -135,9 +135,12 @@ function parts() {
   for (const f of feeds) out['f:' + f.url] = {title: f.title || '', cat: f.cat};
   for (const i of items) if (i.fav) out['v:' + i.feed + '|' + i.id] = {feed: i.feed, id: i.id, link: i.link, title: i.title, date: i.date, html: i.html.slice(0, 1500), img: i.img, audio: i.audio};
   out.set = {theme: set.theme, words: set.words, every: set.every};
+  // новые настройки добавляем, только если их меняли: иначе значения по умолчанию затрут облачные
+  for (const [k, d] of Object.entries(EXTRA)) if (set[k] !== d) out.set[k] = set[k];
   out.mine = mine;
   return out;
 }
+const EXTRA = {stop: '', font: 1, dedup: true, swipe: true};
 const DEFAULTS = {set: stable({theme: 'auto', words: '', every: 30}), mine: stable({title: '', link: '', desc: '', entries: []})};
 function snapshot() {
   const state = load('sync', {}), now = parts(), time = Date.now();
@@ -171,9 +174,9 @@ function applySnapshot(state) {
   for (const v of favs.values()) items.push({feed: String(v.feed), id: String(v.id), link: safeUrl(v.link), title: String(v.title), date: +v.date || 0, html: String(v.html || ''), img: safeUrl(v.img), audio: safeUrl(v.audio), fav: true, read: true});
   items = items.filter(i => i.fav || subs.has(i.feed));
   const s = state.set?.v;
-  if (s) Object.assign(set, {theme: String(s.theme), words: String(s.words), every: +s.every || 0});
+  if (s) Object.assign(set, {theme: String(s.theme), words: String(s.words), every: +s.every || 0, stop: String(s.stop || ''), font: +s.font || 1, dedup: s.dedup !== false, swipe: s.swipe !== false});
   if (Array.isArray(state.mine?.v?.entries)) mine = state.mine.v;
-  save('sync', state); save('set', set); save('mine', mine); store(); theme(); render();
+  save('sync', state); save('set', set); save('mine', mine); store(); theme(); applyFont(); render();
   const waiting = feeds.filter(f => !f.loaded);
   if (waiting.length) refresh(waiting);
 }

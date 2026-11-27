@@ -24,7 +24,7 @@ async function run(config, send, test) {
       const body = f.url === 'hub:sites' ? fs.readFileSync(__dirname + '/../../js/data.js', 'utf8') : await load(f.url);
       // в сохраняемом состоянии только отпечатки, без адресов и заголовков
       const list = FeedLite.parse(body, f.url).map(i => ({...i, id: hash(i.id)}));
-      fresh.push(...FeedLite.pick(seen, hash(f.url), list, config.words).map(i => ({...i, feed: f.title})));
+      fresh.push(...FeedLite.pick(seen, hash(f.url), list, config.words, config.stop).map(i => ({...i, feed: f.title})));
     } catch { failed++; }
   }
   const messages = fresh.slice(0, 5).map(i => ({title: String(i.feed || 'Мое_лента').slice(0, 100), body: i.title.slice(0, 300), url: String(i.link || '').slice(0, 1000)}));

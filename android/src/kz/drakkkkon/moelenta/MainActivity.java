@@ -1,0 +1,192 @@
+package kz.drakkkkon.moelenta;
+
+import android.app.Activity;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Bundle;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
+import android.view.View;
+import android.view.WindowInsets;
+import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
+import android.widget.Toast;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+
+/** Оболочка сайта Мое_лента: новые версии сайта появляются в приложении сами. */
+public class MainActivity extends Activity {
+    private static final String HOME = "https://drakkkkon.github.io/maymani/rss/";
+    private static final int PICK = 1, SAVE = 2;
+    private WebView web;
+    private TextToSpeech tts;
+    private boolean ttsReady;
+    private ValueCallback<Uri[]> picker;
+    private String saveText;
+
+    @Override
+    protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        web = new WebView(this);
+        FrameLayout root = new FrameLayout(this);
+        root.addView(web);
+        // не залезаем под строку состояния, кнопки навигации и клавиатуру
+        root.setOnApplyWindowInsetsListener((View v, WindowInsets in) -> {
+            v.setPadding(in.getSystemWindowInsetLeft(), in.getSystemWindowInsetTop(),
+                    in.getSystemWindowInsetRight(), in.getSystemWindowInsetBottom());
+            return in.consumeSystemWindowInsets();
+        });
+        setContentView(root);
+
+        WebSettings s = web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(false);
+        web.addJavascriptInterface(new Bridge(), "MLApp");
+
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                if (!request.isForMainFrame()) return false;
+                String url = request.getUrl().toString();
+                if (url.startsWith(HOME)) return false;
+                // всё чужое открываем в браузере
+                String scheme = request.getUrl().getScheme();
+                if ("https".equals(scheme) || "http".equals(scheme) || "mailto".equals(scheme)) {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, request.getUrl()));
+                    } catch (ActivityNotFoundException e) {
+                        say("Нечем открыть ссылку");
+                    }
+                }
+                return true;
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (!request.isForMainFrame()) return;
+                view.loadDataWithBaseURL(null, "<meta charset=utf-8><meta name=viewport content='width=device-width'>"
+                        + "<body style='font:18px sans-serif;text-align:center;padding:40px'>Нет связи с сайтом."
+                        + "<p><a href='" + HOME + "'>Повторить</a></p>", "text/html", "utf-8", null);
+            }
+        });
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (picker != null) picker.onReceiveValue(null);
+                picker = callback;
+                Intent i = new Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
+                try {
+                    startActivityForResult(i, PICK);
+                } catch (ActivityNotFoundException e) {
+                    picker = null;
+                    return false;
+                }
+                return true;
+            }
+        });
+
+        tts = new TextToSpeech(this, status -> ttsReady = status == TextToSpeech.SUCCESS);
+        tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+            @Override public void onStart(String id) { event(id, "start"); }
+            @Override public void onDone(String id) { event(id, "end"); }
+            @Override public void onError(String id) { event(id, "error"); }
+        });
+
+        if (state == null || web.restoreState(state) == null) web.loadUrl(HOME);
+    }
+
+    private void event(String id, String name) {
+        if (!id.matches("\\d+")) return;
+        runOnUiThread(() -> web.evaluateJavascript("window.mlTts&&mlTts('" + id + "','" + name + "')", null));
+    }
+
+    private void say(String text) {
+        Toast.makeText(this, text, Toast.LENGTH_LONG).show();
+    }
+
+    private class Bridge {
+        @JavascriptInterface
+        public void speak(String text, String lang, float rate, String id) {
+            if (!ttsReady) {
+                event(id, "error");
+                return;
+            }
+            tts.setLanguage(Locale.forLanguageTag(lang));
+            tts.setSpeechRate(rate);
+            if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) event(id, "error");
+        }
+
+        @JavascriptInterface
+        public void stopSpeak() {
+            tts.stop();
+        }
+
+        @JavascriptInterface
+        public void share(String title, String url) {
+            Intent i = new Intent(Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(Intent.EXTRA_TEXT, (title + "\n" + url).trim());
+            runOnUiThread(() -> startActivity(Intent.createChooser(i, "Поделиться")));
+        }
+
+        @JavascriptInterface
+        public void save(String name, String text, String type) {
+            runOnUiThread(() -> {
+                saveText = text;
+                Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                        .setType(type).putExtra(Intent.EXTRA_TITLE, name);
+                try {
+                    startActivityForResult(i, SAVE);
+                } catch (ActivityNotFoundException e) {
+                    say("Нечем сохранить файл");
+                }
+            });
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int request, int result, Intent data) {
+        Uri uri = result == RESULT_OK && data != null ? data.getData() : null;
+        if (request == PICK && picker != null) {
+            picker.onReceiveValue(uri == null ? null : new Uri[]{uri});
+            picker = null;
+        }
+        if (request == SAVE && uri != null && saveText != null) {
+            try (OutputStream out = getContentResolver().openOutputStream(uri)) {
+                out.write(saveText.getBytes(StandardCharsets.UTF_8));
+                say("Файл сохранён");
+            } catch (Exception e) {
+                say("Не получилось сохранить файл");
+            }
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (web.canGoBack()) web.goBack();
+        else moveTaskToBack(true);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle out) {
+        super.onSaveInstanceState(out);
+        web.saveState(out);
+    }
+
+    @Override
+    protected void onDestroy() {
+        tts.shutdown();
+        web.destroy();
+        super.onDestroy();
+    }
+}
