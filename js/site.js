@@ -46,7 +46,7 @@
     return '<li class="ver" id="v' + idx + '" data-vi="' + idx + '"><div class="vh"><span class="vb">' + esc(v.v && v.v !== '—' ? v.v : (v.name || 'Без номера')) + '</span>' + (v.name && v.v && v.v !== '—' ? '<span class="vn">«' + esc(v.name) + '»</span>' : '') + tags + '<span class="vd">' + esc(when) + '</span></div>' +
       '<ul class="items">' + li + '</ul>' + more + shots + warn + dlHtml(v) + '</li>';
   }
-  function bindVersions(prog) {
+  function bindVersions() {
     document.addEventListener('click', function (e) {
       var m = e.target.closest('[data-more]');
       if (m) { var card = m.closest('.ver'), hid = card.querySelectorAll('li[data-x]'), open = m.getAttribute('data-open') === '1'; hid.forEach(function (li) { li.hidden = open; }); m.setAttribute('data-open', open ? '' : '1'); m.textContent = open ? 'Ещё ' + hid.length + ' ▾' : 'Свернуть ▴'; return; }
@@ -54,19 +54,53 @@
   }
 
   /* ======================= Страницы ======================= */
+  /* Разделы сайта: на главной только ссылки, версии разложены по APK, веб и Windows. */
+  var TABS = [['index.html', 'Главная'], ['apk.html', 'APK'], ['sites.html', 'Сайты'], ['windows.html', 'Windows']];
+  function nav(cur) {
+    return '<nav class="tabs" aria-label="Разделы">' + TABS.map(function (t) { return '<a href="' + t[0] + '"' + (t[0] === cur ? ' aria-current="page"' : '') + '>' + t[1] + '</a>'; }).join('') + '</nav>';
+  }
+  function head(cur, title, lead) { return '<header class="top">' + nav(cur) + '<h1>' + esc(title) + '</h1><p class="lead">' + esc(lead) + '</p></header>'; }
+  function foot() { return '<footer>Страница «' + esc(H.title) + '» ' + esc(H.version) + ' · ' + esc(fmtDate(H.date)) + ' Архивы версий лежат на GitHub (<a href="' + esc(H.archives.tree) + '" target="_blank" rel="noopener">ветка archives</a>).</footer>'; }
   function renderIndex() {
     document.title = H.title;
-    var list = H.programs.map(function (p) {
-      var v0 = p.versions[0]; var vs = p.versions.length;
-      return '<li><a class="prog" href="' + esc(p.page) + '"><img src="' + esc(p.icon) + '" alt="" width="56" height="56"><span><b>' + esc(p.name) + '</b><span class="s">' + esc(vlabel(v0)) + (v0.date ? ' · ' + esc(fmtDate(v0.date)) : '') + '</span><span class="s">' + plural(vs, 'версия', 'версии', 'версий') + ' с журналом и скачиванием</span></span><span class="go" aria-hidden="true">›</span></a></li>';
-    }).join('');
     var sites = H.programs.filter(function (p) { return p.site; }).map(function (p) {
-      return '<li><img src="' + esc(p.icon) + '" alt="" width="40" height="40"><div><a href="' + esc(p.site) + '" target="_blank" rel="noopener">' + esc(p.name) + ' ↗</a><p>' + esc(p.siteBlurb) + '</p></div></li>';
+      return '<li><a class="prog" href="' + esc(p.site) + '" target="_blank" rel="noopener"><img src="' + esc(p.icon) + '" alt="" width="56" height="56"><span><b>' + esc(p.name) + '</b><span class="s">' + esc(p.siteBlurb) + '</span></span><span class="go" aria-hidden="true">↗</span></a></li>';
     }).join('');
-    $('#app').innerHTML = '<header class="top"><h1>' + esc(H.title) + '</h1><p class="lead">Все версии моих программ: журнал изменений и кнопка «Скачать» в одной карточке. Архивы лежат на GitHub, кнопка «Скачать» работает сразу.</p></header>' +
-      '<div class="cols"><aside class="sites" aria-label="Мои сайты"><h2>Мои сайты</h2><ul>' + sites + '</ul></aside>' +
-      '<section><h2>Архив программ</h2><ul class="progs">' + list + '</ul></section></div>' +
-      '<footer>Страница «' + esc(H.title) + '» ' + esc(H.version) + ' · ' + esc(fmtDate(H.date)) + ' Архивы версий лежат на GitHub (<a href="' + esc(H.archives.tree) + '" target="_blank" rel="noopener">ветка archives</a>).</footer>';
+    $('#app').innerHTML = head('index.html', H.title, 'Ссылки на все мои сайты и веб-приложения.') + '<ul class="progs links">' + sites + '</ul>' + foot();
+  }
+  /* Что показывать в разделе. APK внутри zip записан в поле apk. */
+  var SECTIONS = {
+    apk: { page: 'apk.html', title: 'APK', lead: 'Все версии приложений для Android.', has: function (v) { return v.kind === 'apk' || !!v.apk; },
+      show: function (v) { return v.apk ? Object.assign({}, v, v.apk) : v; } },
+    web: { page: 'sites.html', title: 'Сайты', lead: 'Все версии веб-сайтов.', has: function (v) { return v.kind === 'web'; } },
+    win: { page: 'windows.html', title: 'Windows', lead: 'Программы для компьютера и прочие архивы.', has: function (v) { return v.kind !== 'web' && v.kind !== 'apk' && !v.apk; } }
+  };
+  function renderSection(id) {
+    var S = SECTIONS[id], all = [];
+    document.title = S.title + ' — ' + H.title;
+    var groups = H.programs.map(function (p) {
+      var list = p.versions.filter(S.has);
+      if (!list.length) return '';
+      /* свежие сверху */
+      list.sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); });
+      var cards = list.map(function (v) { all.push(v); return verHtml(S.show ? S.show(v) : v, all.length - 1, false); }).join('');
+      return '<details class="grp"><summary><span class="gn"><img src="' + esc(p.icon) + '" alt="" width="32" height="32">' + esc(p.name) + '</span><span class="n">' + plural(list.length, 'версия', 'версии', 'версий') + '</span></summary><p class="note"><a href="' + esc(p.page) + '">Весь журнал «' + esc(p.name) + '» →</a></p><ul class="vers">' + cards + '</ul></details>';
+    }).join('');
+    $('#app').innerHTML = head(S.page, S.title, S.lead) + '<div class="tools"><input id="q" type="search" placeholder="Найти программу, версию или слово" aria-label="Поиск по версиям"></div>' + groups + '<p class="note" id="none" hidden>Ничего не найдено.</p>' + foot();
+    bindVersions();
+    bindSearch();
+  }
+  function bindSearch() {
+    $('#q').addEventListener('input', function () {
+      var q = this.value.trim().toLowerCase(), shown = 0;
+      document.querySelectorAll('details.grp').forEach(function (d) {
+        var name = d.querySelector('summary').textContent.toLowerCase(), any = false;
+        d.querySelectorAll('.ver').forEach(function (el) { var ok = !q || name.indexOf(q) >= 0 || el.textContent.toLowerCase().indexOf(q) >= 0; el.hidden = !ok; if (ok) { shown++; any = true; } });
+        d.hidden = !any;
+        d.open = q ? any : d.hasAttribute('data-def');
+      });
+      $('#none').hidden = shown > 0;
+    });
   }
   function renderProgram(id) {
     var prog = H.programs.filter(function (p) { return p.id === id; })[0];
@@ -82,13 +116,8 @@
     $('#app').innerHTML = '<header class="top"><a class="back" href="index.html">← ' + esc(H.title) + '</a><div class="phead"><img src="' + esc(prog.icon) + '" alt="" width="56" height="56"><h1>' + esc(prog.name) + '</h1></div><p class="lead">' + esc(prog.blurb) + '</p><ul class="chips">' + chips + '</ul></header>' +
       '<div class="tools"><input id="q" type="search" placeholder="Найти версию или слово в журнале" aria-label="Поиск по версиям"></div>' + groupsHtml +
       '<p class="note" id="none" hidden>Ничего не найдено.</p><footer><a href="index.html">← ' + esc(H.title) + '</a> · Архивы версий лежат на GitHub (<a href="' + esc(H.archives.tree) + '" target="_blank" rel="noopener">ветка archives</a>).</footer>';
-    bindVersions(prog);
-    $('#q').addEventListener('input', function () {
-      var q = this.value.trim().toLowerCase(), shown = 0;
-      document.querySelectorAll('.ver').forEach(function (el) { var ok = !q || el.textContent.toLowerCase().indexOf(q) >= 0; el.hidden = !ok; if (ok) shown++; });
-      document.querySelectorAll('details.grp').forEach(function (d) { d.open = q ? !!d.querySelector('.ver:not([hidden])') : d.hasAttribute('data-def'); });
-      $('#none').hidden = shown > 0;
-    });
+    bindVersions();
+    bindSearch();
   }
 
   /* ======================= Настройки приложения Android ======================= */
@@ -128,5 +157,5 @@
     });
   }
   appSettings();
-  window.Hub = { renderIndex: renderIndex, renderProgram: renderProgram };
+  window.Hub = { renderSection: renderSection, renderIndex: renderIndex, renderProgram: renderProgram };
 })();

@@ -1,7 +1,7 @@
 // Данные сайта «Мое_Сайты»: программы, версии, журналы. Архивы лежат в ветке archives этого же репозитория (кнопки «Скачать» ведут туда).
 window.HUB = {
  "title": "Мое_Сайты",
- "version": "2.16.0",
+ "version": "2.17.0",
  "date": "2026-11-27",
  "driveFolder": {
   "name": "МайМани",
@@ -1246,6 +1246,7 @@ window.HUB = {
       "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.11.zip — на Google Диске, в папке «МайМани»."
      ],
      "shots": [],
+     "apk": {"file": "My_money_2.11.apk", "path": "money/My_money_2.11.apk", "size": 1022353, "sha256": "8f56061a9b2e08b4bd9f5a029e8609f7bb8777a03e6c070da522a8fbca9f890d"},
      "file": "My_money_2.11_APK.zip",
      "size": 2156765,
      "sha256": "94050ff74ee590ec5460157381d4bb22da0edf5558da3b9c286cb87b66b7cd7f",
@@ -1299,6 +1300,7 @@ window.HUB = {
       "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.10.zip — на Google Диске, в папке «МайМани»."
      ],
      "shots": [],
+     "apk": {"file": "My_money_2.10.apk", "path": "money/My_money_2.10.apk", "size": 1011397, "sha256": "56c08295be671f06855b069105f1392ea1609b09e4a6208ffb19509659bf25f5"},
      "file": "My_money_2.10_APK.zip",
      "size": 2134375,
      "sha256": "290e78a1dca156265e82a8e3354dfbb3ae323bb77aa1d913ad1f51c489f203c0",
@@ -1333,6 +1335,7 @@ window.HUB = {
       "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.9.zip — на Google Диске, в папке «МайМани»."
      ],
      "shots": [],
+     "apk": {"file": "My_money_2.9.apk", "path": "money/My_money_2.9.apk", "size": 1009873, "sha256": "a09d1c9d4e0e1ce4ac84517e4d387d614440ae7968c9adbee734e18fa05e54e4"},
      "file": "My_money_2.9_APK.zip",
      "size": 2130649,
      "sha256": "f366a9ec7c98cc140d6bf464a6c725b92fc5407971931bd226b3f0ed369103b2",
@@ -1369,6 +1372,7 @@ window.HUB = {
       "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.8.zip — на Google Диске, в папке «МайМани»."
      ],
      "shots": [],
+     "apk": {"file": "My_money_2.8.apk", "path": "money/My_money_2.8.apk", "size": 1021046, "sha256": "c116826b0a59fff539df6ce23d02a909bcd3d1668e8a240829d82af7eba36293"},
      "file": "My_money_2.8_APK.zip",
      "size": 2152643,
      "sha256": "192eaa864849e66df7d2838e12828f995cbd0f2ece367a72b9deb29bfe5736dc",
@@ -1424,6 +1428,7 @@ window.HUB = {
       "Ключ подписи виджета (SAVE-KEY-first-run.zip: ключ в base64, пароль, SHA1) на GitHub не выкладывается — он только на Google Диске, в папке «МайМани»."
      ],
      "shots": [],
+     "apk": {"file": "MyMoneyWidget-3.apk", "path": "money/MyMoneyWidget-3.apk", "size": 2706910, "sha256": "ec0f6e7084034eccc85a943513feb1838c0b94fce5ca62854351552ae05c65c5"},
      "file": "MyMoneyWidget-apk.zip",
      "size": 2526255,
      "sha256": "bdc3c99413ef801e61ae480b1b1c0ce869a89b107a037b48225175b98343bcd4",
@@ -1620,6 +1625,7 @@ window.HUB = {
       "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.7.zip — на Google Диске, в папке «МайМани»."
      ],
      "shots": [],
+     "apk": {"file": "My_money_2.7.apk", "path": "money/My_money_2.7.apk", "size": 1004578, "sha256": "e62875de85d636f1fd3c5e6096c2109ec4f81167f5f0461f029f07a2ab3cfd45"},
      "file": "My_money_2.7_APK.zip",
      "size": 2120115,
      "sha256": "e9953c7bb5fe0635c72d68f2d72867797780130358db04eb8760023149729a9f",
@@ -1832,6 +1838,7 @@ window.HUB = {
       "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.6.zip — на Google Диске, в папке «МайМани»."
      ],
      "shots": [],
+     "apk": {"file": "My_money_2.6.apk", "path": "money/My_money_2.6.apk", "size": 998090, "sha256": "43e7cdc9122dff7a885b7b95c3526d8905759265ae13ef99e07394119c20bccd"},
      "file": "My_money_2.6_APK.zip",
      "size": 2108212,
      "sha256": "6ced97cb515e14776b5e44cf9a7825bb855ff434b315c0b51167af17689df514",
@@ -1866,6 +1873,7 @@ window.HUB = {
       "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.5.zip — на Google Диске, в папке «МайМани»."
      ],
      "shots": [],
+     "apk": {"file": "My_money_2.5.apk", "path": "money/My_money_2.5.apk", "size": 996918, "sha256": "d9a04e268a6bab61885294db162f4d799b70d2e629f5b11892ccad9770130b5b"},
      "file": "My_money_2.5_APK.zip",
      "size": 2105997,
      "sha256": "1dbc12ba1656be1c606496391ef29e6082b388d4be9e4121e495678b8e62e46c",
@@ -1901,6 +1909,7 @@ window.HUB = {
       "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.4.zip — на Google Диске, в папке «МайМани»."
      ],
      "shots": [],
+     "apk": {"file": "My_money_2.4.apk", "path": "money/My_money_2.4.apk", "size": 995454, "sha256": "8a9ee0febc868160b1cfee6e9b252b0f65e0d367695c18c323f6e534c07816bf"},
      "file": "My_money_2.4_APK.zip",
      "size": 2102586,
      "sha256": "5b545313988c28b86618b0f100affe602bf7e1547b168f7cce1401e9e81c6d06",
@@ -1988,6 +1997,7 @@ window.HUB = {
       "Ключ подписи и пароль из этого архива убраны (репозиторий публичный); полный оригинал My_money_2.2.zip — на Google Диске, в папке «МайМани»."
      ],
      "shots": [],
+     "apk": {"file": "My_money_2.2.apk", "path": "money/My_money_2.2.apk", "size": 992782, "sha256": "127b2a6f2121f898527f1ed978d7cec6f8b774effdacf8cfc74db1acd4f30473"},
      "file": "My_money_2.2_APK.zip",
      "size": 2096776,
      "sha256": "83c01a22c3f624e53c22b6c94864e8839dfa1ba95fdf77c2809c8eb8d5583baa",
@@ -2552,6 +2562,7 @@ window.HUB = {
       "Приложение само находит, скачивает и предлагает установить новую версию."
      ],
      "shots": [],
+     "apk": {"file": "iLife_v2.12.0.apk", "path": "ilife/iLife_v2.12.0.apk", "size": 62016, "sha256": "3935921abc02be5736aa7077a29cf95f63ee03ad1482a1f7908881d81dc5f890"},
      "file": "iLife_v2.12.0_Android.zip",
      "path": "ilife/iLife_v2.12.0_Android.zip",
      "size": 57876,
@@ -2597,6 +2608,7 @@ window.HUB = {
       "Вход Google и Spotify внутри приложения не работают."
      ],
      "shots": [],
+     "apk": {"file": "iLife_v2.11.0.apk", "path": "ilife/iLife_v2.11.0.apk", "size": 57920, "sha256": "0463a34a92943e5a83c91d8a6c1d3794231fd2dcb8be1f32b00b997f8038705f"},
      "file": "iLife_v2.11.0_Android.zip",
      "path": "ilife/iLife_v2.11.0_Android.zip",
      "size": 50474,
@@ -5868,6 +5880,7 @@ window.HUB = {
       "Приложение само проверяет и скачивает новую версию и предлагает обновиться.",
       "Кнопка «Проверить обновление» в «Настройках»."
      ],
+     "apk": {"file": "Moe_lenta_v1.4.2.apk", "path": "rss/Moe_lenta_v1.4.2.apk", "size": 37446, "sha256": "36b451549737d53bb0405418354a3a9dd4bf7d7ad360a96c0c043b837e69f626"},
      "file": "Moe_lenta_v1.4.2_Android.zip",
      "path": "rss/Moe_lenta_v1.4.2_Android.zip",
      "size": 32793,
@@ -5899,6 +5912,7 @@ window.HUB = {
       "Уведомления прямо из приложения: проверка лент в фоне примерно раз в 30 минут, без GitHub.",
       "Учитываются «мои слова» и стоп-слова; кнопка «Проверить сейчас»."
      ],
+     "apk": {"file": "Moe_lenta_v1.4.1.apk", "path": "rss/Moe_lenta_v1.4.1.apk", "size": 33350, "sha256": "234d7ff228b12dd3193e7d2b176fd59d0e4f0196ed74caa137879d5b9c8085d8"},
      "file": "Moe_lenta_v1.4.1_Android.zip",
      "path": "rss/Moe_lenta_v1.4.1_Android.zip",
      "size": 28051,
@@ -5935,6 +5949,7 @@ window.HUB = {
       "Озвучка голосом телефона, «Поделиться», сохранение и загрузка файлов.",
       "Уведомления в приложении не работают, они остаются в версии из Chrome."
      ],
+     "apk": {"file": "Moe_lenta_v1.4.0.apk", "path": "rss/Moe_lenta_v1.4.0.apk", "size": 25086, "sha256": "603adef5d941f88b08f77089f59de2342d8d167d94d1cd97b6912b0b00c1678f"},
      "file": "Moe_lenta_v1.4.0_Android.zip",
      "path": "rss/Moe_lenta_v1.4.0_Android.zip",
      "size": 19218,
