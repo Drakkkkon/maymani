@@ -115,3 +115,18 @@ footer { margin: 34px 0 0; padding: 0 0 40px; color: var(--muted); font-size: 12
   .dl .btn { justify-self: start; }
 }
 @media (max-width: 420px) { .dl { grid-template-columns: 1fr; } .dl .btn { width: 100%; } .prog { grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; } .prog img { width: 48px; height: 48px; } }
+
+/* Настройки внутри приложения Android */
+.in-app footer { padding-bottom: 96px; }
+.fab { position: fixed; right: 18px; bottom: 18px; z-index: 5; width: 58px; height: 58px; border: 0; border-radius: 50%; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; box-shadow: 0 6px 18px rgba(0,0,0,.3); cursor: pointer; }
+.fab svg { width: 28px; height: 28px; fill: currentColor; }
+.sheet { position: fixed; inset: 0; z-index: 10; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; }
+.sheet[hidden] { display: none; }
+.panel { width: 100%; max-width: 560px; max-height: 90vh; overflow: auto; background: var(--bg); border-radius: var(--radius) var(--radius) 0 0; padding: 18px 18px 28px; }
+.sh { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.sh h2 { margin: 0; }
+.panel h3 { margin: 20px 0 6px; font-size: 1rem; }
+.sw { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; }
+.sw input { width: 24px; height: 24px; accent-color: var(--primary); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.row [hidden] { display: none; }

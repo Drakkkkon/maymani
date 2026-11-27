@@ -90,5 +90,43 @@
       $('#none').hidden = shown > 0;
     });
   }
+
+  /* ======================= Настройки приложения Android ======================= */
+  /* Круглая кнопка справа внизу есть только внутри APK (там есть window.MSApp); в браузере сайт не меняется. */
+  function appSettings() {
+    var A = window.MSApp;
+    if (!A) return;
+    var fab = document.createElement('button'), box = document.createElement('div');
+    fab.type = 'button'; fab.className = 'fab'; fab.setAttribute('aria-label', 'Настройки');
+    fab.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.7 7.7 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.3 7.3 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.3 7.3 0 0 0-1.7 1l-2.5-1-2 3.500L6.600 11a7.7 7.7 0 0 0 0 2l-2.1 1.600 2 3.500 2.500-1a7.300 7.300 0 0 0 1.700 1l.400 2.600h4l.400-2.600a7.300 7.300 0 0 0 1.700-1l2.500 1 2-3.500zM13 15.500a3.500 3.500 0 1 1 0-7 3.500 3.500 0 0 1 0 7z"/></svg>';
+    box.className = 'sheet'; box.hidden = true;
+    box.innerHTML = '<div class="panel" role="dialog" aria-label="Настройки"><div class="sh"><h2>Настройки</h2><button type="button" class="btn is-tonal small" data-a="close">Закрыть</button></div>' +
+      '<h3>Уведомления</h3><label class="sw"><span>Сообщать о новых версиях</span><input type="checkbox" id="nOn"></label><p class="note" id="nState"></p>' +
+      '<div class="row"><button type="button" class="btn small" data-a="check">Проверить сейчас</button><button type="button" class="btn is-tonal small" data-a="test">Пробное уведомление</button><button type="button" class="btn is-line small" data-a="system">Настройки телефона</button></div>' +
+      '<h3>Обновление приложения</h3><p class="note" id="uState"></p><div class="row"><button type="button" class="btn small" data-a="ucheck">Проверить обновление</button><button type="button" class="btn small" data-a="install" id="uGo" hidden>Установить</button></div></div>';
+    document.body.appendChild(box); document.body.appendChild(fab);
+    document.body.classList.add('in-app');
+    function read(f) { try { return JSON.parse(A[f]()) || {}; } catch (e) { return {}; } }
+    window.msRefresh = function () {
+      var n = read('notifyStatus'), u = read('updateStatus');
+      $('#nOn').checked = !!n.on;
+      $('#nState').textContent = (n.allowed ? 'Разрешены в системе.' : 'Выключены в настройках телефона.') + (n.last ? ' Последняя проверка: ' + n.last + '.' : '');
+      $('#uState').textContent = 'Установлена версия ' + (u.installed || '—') + '. ' + (u.text || '');
+      $('#uGo').hidden = !u.available;
+      $('#uGo').textContent = 'Установить ' + (u.available || '');
+    };
+    fab.addEventListener('click', function () { box.hidden = false; window.msRefresh(); });
+    $('#nOn').addEventListener('change', function () { A.notifySet(this.checked); });
+    box.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-a]'), a = b && b.getAttribute('data-a');
+      if (e.target === box || a === 'close') box.hidden = true;
+      else if (a === 'check') { $('#nState').textContent = 'Проверяю…'; A.notifyCheck(); }
+      else if (a === 'test') A.notifyTest();
+      else if (a === 'system') A.notifySettings();
+      else if (a === 'ucheck') { $('#uState').textContent = 'Проверяю…'; A.updateCheck(); }
+      else if (a === 'install') A.updateInstall();
+    });
+  }
+  appSettings();
   window.Hub = { renderIndex: renderIndex, renderProgram: renderProgram };
 })();
