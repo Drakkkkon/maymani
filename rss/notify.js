@@ -64,6 +64,21 @@ async function startPush() {
 }
 const pushConfig = () => JSON.stringify({publicKey: ntf.publicKey, privateKey: ntf.privateKey, sub: ntf.sub, words: set.words, stop: set.stop, feeds: feeds.map(f => ({url: f.url, title: f.title || ''}))});
 
+function updateBlock() {
+  if (!window.MLApp) return '';
+  const head = '<h2>Обновление приложения</h2>';
+  if (!MLApp.updateStatus) return head + '<p class="meta">Эту версию обновите вручную: <a href="https://drakkkkon.github.io/maymani/lenta.html" target="_blank" rel="noopener">скачайте новый APK</a>. Дальше приложение будет обновляться само.</p>';
+  const u = JSON.parse(MLApp.updateStatus());
+  return head + `<div class="card"><div>Установлена версия <b>${esc(u.installed)}</b></div>
+<div class="row">${u.available ? `<button class="main" data-upd="install">Обновить до ${esc(u.available)}</button>` : ''}<button data-upd="check">Проверить обновление</button></div>
+<p class="meta" role="status">${esc(u.text)}</p></div>`;
+}
+window.mlUpdate = () => { if (page === 'settings') render(); };
+document.addEventListener('click', e => {
+  const act = e.target.closest('[data-upd]')?.dataset.upd; if (!act) return;
+  if (act === 'check') { e.target.closest('.card').querySelector('[role=status]').textContent = 'Проверяю…'; MLApp.updateCheck(); }
+  else MLApp.updateInstall();
+});
 function notifyBlock() {
   if (window.MLApp) return appNotifyBlock();
   const state = {off: 'выключены', simple: 'простые', push: 'push через GitHub'}[ntf.mode];

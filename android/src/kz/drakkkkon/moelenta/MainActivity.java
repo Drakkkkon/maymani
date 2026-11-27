@@ -1,6 +1,7 @@
 package kz.drakkkkon.moelenta;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -25,6 +26,7 @@ import android.widget.Toast;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import org.json.JSONObject;
 
 /** Оболочка сайта Мое_лента: новые версии сайта появляются в приложении сами. */
 public class MainActivity extends Activity {
@@ -35,6 +37,12 @@ public class MainActivity extends Activity {
     private boolean ttsReady;
     private ValueCallback<Uri[]> picker;
     private String saveText;
+    private volatile Updater.Release update;
+    private volatile String updateText = "";
+    private long lastUpdateCheck;
+    private boolean checking, waitingPermission;
+    private int offered;
+    private AlertDialog offer;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -172,6 +180,27 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public String updateStatus() {
+            try {
+                Updater.Release r = update;
+                return new JSONObject().put("installed", Updater.installedName(MainActivity.this))
+                        .put("available", r == null ? "" : r.version).put("text", updateText).toString();
+            } catch (Exception e) {
+                return "{}";
+            }
+        }
+
+        @JavascriptInterface
+        public void updateCheck() {
+            runOnUiThread(() -> checkUpdate(true));
+        }
+
+        @JavascriptInterface
+        public void updateInstall() {
+            runOnUiThread(MainActivity.this::installUpdate);
+        }
+
+        @JavascriptInterface
         public void share(String title, String url) {
             Intent i = new Intent(Intent.ACTION_SEND).setType("text/plain")
                     .putExtra(Intent.EXTRA_TEXT, (title + "\n" + url).trim());
@@ -191,6 +220,86 @@ public class MainActivity extends Activity {
                 }
             });
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (waitingPermission) {
+            // вернулись из настроек, где разрешают установку
+            waitingPermission = false;
+            if (getPackageManager().canRequestPackageInstalls()) installUpdate();
+        } else if (System.currentTimeMillis() - lastUpdateCheck > 3 * 3600_000L) {
+            checkUpdate(false);
+        }
+    }
+
+    private void checkUpdate(boolean asked) {
+        if (checking) return;
+        checking = true;
+        lastUpdateCheck = System.currentTimeMillis();
+        new Thread(() -> {
+            Updater.Release found = null;
+            String text;
+            try {
+                found = Updater.fetch(getApplicationContext());
+                text = found == null ? "Установлена последняя версия." : "Версия " + found.version + " скачана.";
+            } catch (Exception e) {
+                text = "Не получилось проверить обновление. Проверьте интернет и попробуйте ещё раз.";
+                lastUpdateCheck = 0;
+            }
+            final Updater.Release result = found;
+            final String message = text;
+            runOnUiThread(() -> {
+                checking = false;
+                if (isDestroyed()) return;
+                update = result;
+                updateText = message;
+                web.evaluateJavascript("window.mlUpdate&&mlUpdate()", null);
+                if (result != null && !isFinishing() && (asked || offered != result.code)) offerUpdate(result);
+            });
+        }).start();
+    }
+
+    private void offerUpdate(Updater.Release r) {
+        if (offer != null && offer.isShowing()) return;
+        offered = r.code;
+        offer = new AlertDialog.Builder(this)
+                .setTitle("Доступна версия " + r.version)
+                .setMessage(r.notes)
+                .setPositiveButton("Обновить", (d, w) -> installUpdate())
+                .setNegativeButton("Позже", null)
+                .show();
+    }
+
+    private void installUpdate() {
+        Updater.Release r = update;
+        if (r == null) {
+            checkUpdate(true);
+            return;
+        }
+        if (!getPackageManager().canRequestPackageInstalls()) {
+            say("Разрешите установку для «Мое_лента» и вернитесь назад");
+            waitingPermission = true;
+            try {
+                startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName())));
+            } catch (ActivityNotFoundException e) {
+                waitingPermission = false;
+                say("Откройте настройки телефона и разрешите установку из этого приложения");
+            }
+            return;
+        }
+        new Thread(() -> {
+            try {
+                Updater.install(getApplicationContext(), r.file);
+            } catch (Exception e) {
+                // файл мог пропасть из кэша: при следующей попытке скачаем заново
+                runOnUiThread(() -> {
+                    update = null;
+                    say("Не получилось начать установку. Нажмите «Проверить обновление».");
+                });
+            }
+        }).start();
     }
 
     private void allowResult() {
