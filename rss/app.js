@@ -1,5 +1,5 @@
 'use strict';
-const VERSION = '1.1.1';
+const VERSION = '1.2.0';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const gnews = q => 'https://news.google.com/rss/search?q=' + encodeURIComponent(q) + '&hl=ru&gl=KZ&ceid=KZ:ru';
@@ -147,6 +147,7 @@ async function loadFeed(f) {
   } catch (e) { f.error = e.message; return []; }
 }
 function store() {
+  setTimeout(() => window.syncNotify?.().catch(() => {}));
   items.sort((a, b) => b.date - a.date);
   const count = {};
   items = items.filter(i => i.fav || (count[i.feed] = (count[i.feed] || 0) + 1) <= 40);
@@ -166,6 +167,7 @@ async function refresh(list = feeds) {
   if (failed) toast('Не загрузились ленты: ' + failed + '. Подробности в «Подписках».');
   else if (fresh.length) toast('Новых записей: ' + fresh.length);
   if (set.tgOn) for (const it of fresh.filter(i => !words().length || isHit(i)).slice(0, 10)) await sendTg(it.title + '\n' + it.link);
+  await window.notifyFresh?.(fresh)?.catch(() => {});
   // пока шла загрузка, могли добавить новые подписки
   const waiting = feeds.filter(f => !f.loaded && !f.error);
   if (waiting.length) refresh(waiting);
@@ -262,6 +264,7 @@ function pageSettings() {
   return `<h2>Общий аккаунт</h2><div id="account" class="card"></div>
 <h2>Вид и обновление</h2><label>Тема<select data-set="theme"><option value="auto">Как в системе</option><option value="light">Светлая</option><option value="dark">Тёмная</option></select></label>
 <label>Обновлять, пока сайт открыт<select data-set="every"><option value="0">Только вручную</option><option value="15">Каждые 15 минут</option><option value="30">Каждые 30 минут</option><option value="60">Каждый час</option></select></label>
+${notifyBlock()}
 <h2>Мои слова</h2>${inp('words','Через запятую: записи с этими словами подсвечиваются (скидка, тираж, издательство)')}
 <h2>Автоматизация: Telegram</h2>${inp('tgToken','Токен бота','password','autocomplete="off"')}${inp('tgChat','ID чата')}
 <label><select data-set="tgOn"><option value="false">Не отправлять</option><option value="true">Отправлять новые записи (с «моими словами», если они заданы)</option></select></label>
@@ -371,7 +374,7 @@ document.addEventListener('submit', async e => {
 document.addEventListener('change', async e => {
   const t = e.target, d = t.dataset;
   if (d.set) {
-    set[d.set] = d.set === 'every' ? +t.value : d.set === 'tgOn' ? t.value === 'true' : t.value.trim(); save('set', set); theme(); return;
+    set[d.set] = d.set === 'every' ? +t.value : d.set === 'tgOn' ? t.value === 'true' : t.value.trim(); save('set', set); theme(); window.syncNotify?.().catch(() => {}); return;
   }
   if (d.mine) { mine[d.mine] = t.value.trim(); save('mine', mine); return; }
   if (d.chg === 'cat') { feeds[t.closest('[data-f]').dataset.f].cat = t.value; save('feeds', feeds); return; }

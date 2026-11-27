@@ -1,0 +1,35 @@
+name: Lenta push
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lenta-push
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HAS_CONFIG: ${{ secrets.LENTA_PUSH != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.HAS_CONFIG == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_CONFIG == 'true'
+        with:
+          node-version: 22
+      - run: npm install --prefix .github/lenta-push --no-save --ignore-scripts web-push@3.6.7
+        if: env.HAS_CONFIG == 'true'
+      - uses: actions/cache@v4
+        if: env.HAS_CONFIG == 'true'
+        with:
+          path: lenta-state.json
+          key: lenta-state-${{ github.run_id }}
+          restore-keys: lenta-state-
+      - run: node .github/lenta-push/send.js
+        if: env.HAS_CONFIG == 'true'
+        env:
+          LENTA_PUSH: ${{ secrets.LENTA_PUSH }}
+          TEST_PUSH: ${{ github.event_name == 'workflow_dispatch' }}
