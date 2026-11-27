@@ -1,18 +1,18 @@
 {
  "app": "Мое_город",
- "version": "1.14.0",
+ "version": "1.15.0",
  "date": "27 ноября 2026",
  "shellMin": "1.0.0",
  "shell": "1.0.0",
  "notes": [
-  "🏠 Новый многоквартирный дом по 3D-модели из нейросети; растягивается, делается угловым, 2–8 этажей. Старая модель удалена.",
-  "🥖 Улицы — на манер Парижа Прекрасной эпохи.",
-  "🇫🇷 Казахское убрано: Ратуша и мэр, Дворец правосудия, французские компании, флаги-триколоры."
+  "🧱 Мостовая в клетку вокруг дома: тянется вместе с ним и повторяет угол, дорога подходит к краю.",
+  "🏮 Фонари, скамейки, деревья и кусты по моделям из нейросети (Hunyuan3D).",
+  "🪴 Балкончики на всех этажах."
  ],
  "game_zip": {
-  "url": "https://github.com/Drakkkkon/maymani/raw/archives/gorod/Moe_gorod_game_v1.14.0.zip",
-  "size": 2471892,
-  "sha256": "d88665da4376872d999a883015cd803fc43a4ae6907ef6c74aec94db1e0acbe6"
+  "url": "https://github.com/Drakkkkon/maymani/raw/archives/gorod/Moe_gorod_game_v1.15.0.zip",
+  "size": 2517573,
+  "sha256": "c0e8e512f0124c3901999e382fc4c4369711b2ad8b9167e058f94562c30c2262"
  },
  "setup": {
   "url": "https://github.com/Drakkkkon/maymani/raw/archives/gorod/Moe_gorod_Setup_1.7.0.exe",
