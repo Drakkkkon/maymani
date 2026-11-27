@@ -6,9 +6,9 @@ OUT=$(realpath -m "$1")
 cd "$(dirname "$0")"
 T=$(mktemp -d)
 "$SDK_BT/aapt2" compile --dir res -o "$T/res.zip"
-"$SDK_BT/aapt2" link -o "$T/base.apk" -I "$SDK_JAR" --manifest AndroidManifest.xml "$T/res.zip"
+"$SDK_BT/aapt2" link -o "$T/base.apk" -I "$SDK_JAR" --manifest AndroidManifest.xml --java "$T/gen" "$T/res.zip"
 mkdir "$T/classes" "$T/dex"
-javac -encoding utf-8 --release 11 -classpath "$SDK_JAR" -d "$T/classes" src/kz/drakkkkon/moelenta/*.java
+javac -encoding utf-8 --release 11 -classpath "$SDK_JAR" -d "$T/classes" src/kz/drakkkkon/moelenta/*.java "$T/gen/kz/drakkkkon/moelenta/R.java"
 "$SDK_BT/d8" --release --min-api 26 --lib "$SDK_JAR" --output "$T/dex" $(find "$T/classes" -name '*.class')
 (cd "$T/dex" && zip -q "$T/base.apk" classes.dex)
 "$SDK_BT/zipalign" -f -p 4 "$T/base.apk" "$T/aligned.apk"

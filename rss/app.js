@@ -1,5 +1,5 @@
 'use strict';
-const VERSION = '1.4.0';
+const VERSION = '1.4.1';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const gnews = q => 'https://news.google.com/rss/search?q=' + encodeURIComponent(q) + '&hl=ru&gl=KZ&ceid=KZ:ru';
@@ -294,7 +294,7 @@ ${notifyBlock()}
 <p>На телефоне: меню браузера → «Добавить на главный экран».</p></details>
 <details id="help-tg"><summary>Telegram: где взять токен и ID чата</summary><ol><li>Откройте <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>, отправьте /newbot и скопируйте токен.</li><li>Напишите своему новому боту любое сообщение.</li><li>Откройте <a href="https://t.me/userinfobot" target="_blank" rel="noopener">@userinfobot</a> — он покажет ваш ID.</li></ol><p>Токен хранится только в этом браузере и не попадает в резервную копию.</p></details>
 <details id="help-tts"><summary>Если не слышно озвучку</summary><ol><li>Прибавьте громкость мультимедиа.</li><li>Откройте сайт в Chrome, а не во встроенном браузере мессенджера.</li><li>В настройках Android найдите «Синтез речи», выберите «Речевые службы Google» и скачайте русский голос.</li></ol><p>Читается заголовок и тот текст, который есть в ленте. У Google Новостей — только заголовок.</p></details>
-<details><summary>Приложение для Android</summary><ol><li><a href="https://drakkkkon.github.io/maymani/lenta.html" target="_blank" rel="noopener">Откройте страницу «Мое_лента»</a> и скачайте архив с пометкой Android.</li><li>Распакуйте и откройте файл .apk, разрешите установку из этого источника.</li></ol><p>Подписки переносятся через общий аккаунт. Уведомления в приложении не работают: для них оставьте сайт, установленный на главный экран.</p></details>
+<details><summary>Приложение для Android</summary><ol><li><a href="https://drakkkkon.github.io/maymani/lenta.html" target="_blank" rel="noopener">Откройте страницу «Мое_лента»</a> и скачайте архив с пометкой Android.</li><li>Распакуйте и откройте файл .apk, разрешите установку из этого источника.</li></ol><p>Подписки переносятся через общий аккаунт. Уведомления в приложении включаются в «Настройках» → «Уведомления на телефоне».</p></details>
 <details id="help-proxy"><summary>Если ленты не загружаются</summary><p>Многие сайты не дают браузеру читать ленту напрямую, поэтому сайт использует бесплатных посредников (r.jina.ai, allorigins, codetabs). Они видят адреса ваших лент и иногда не работают. Не добавляйте сюда личные ссылки с ключами.</p><p>Надёжнее свой посредник, например на <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a>. Впишите его адрес в виде https://…workers.dev/?url={url}</p></details>
 <p class="meta">Мое_лента ${VERSION}. Данные хранятся только в этом браузере.</p>`;
 }

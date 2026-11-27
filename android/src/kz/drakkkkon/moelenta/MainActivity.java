@@ -3,8 +3,11 @@ package kz.drakkkkon.moelenta;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.view.View;
@@ -26,7 +29,7 @@ import java.util.Locale;
 /** Оболочка сайта Мое_лента: новые версии сайта появляются в приложении сами. */
 public class MainActivity extends Activity {
     private static final String HOME = "https://drakkkkon.github.io/maymani/rss/";
-    private static final int PICK = 1, SAVE = 2;
+    private static final int PICK = 1, SAVE = 2, ASK = 3;
     private WebView web;
     private TextToSpeech tts;
     private boolean ttsReady;
@@ -133,6 +136,42 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void notifyConfig(String json) {
+            Notify.configure(getApplicationContext(), json);
+        }
+
+        @JavascriptInterface
+        public String notifyStatus() {
+            return Notify.status(getApplicationContext());
+        }
+
+        @JavascriptInterface
+        public void notifyAllow() {
+            runOnUiThread(() -> {
+                if (Build.VERSION.SDK_INT >= 33
+                        && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, ASK);
+                } else {
+                    allowResult();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void notifyCheck() {
+            new Thread(() -> {
+                Notify.check(getApplicationContext());
+                runOnUiThread(() -> web.evaluateJavascript("window.mlChecked&&mlChecked()", null));
+            }).start();
+        }
+
+        @JavascriptInterface
+        public void notifySettings() {
+            runOnUiThread(() -> startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName())));
+        }
+
+        @JavascriptInterface
         public void share(String title, String url) {
             Intent i = new Intent(Intent.ACTION_SEND).setType("text/plain")
                     .putExtra(Intent.EXTRA_TEXT, (title + "\n" + url).trim());
@@ -152,6 +191,17 @@ public class MainActivity extends Activity {
                 }
             });
         }
+    }
+
+    private void allowResult() {
+        boolean ok = Notify.allowed(this);
+        if (ok) Notify.show(this, "Мое_лента", "Уведомления включены ✅", "");
+        web.evaluateJavascript("window.mlAllowed&&mlAllowed(" + ok + ")", null);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+        if (request == ASK) allowResult();
     }
 
     @Override

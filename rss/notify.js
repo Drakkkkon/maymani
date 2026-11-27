@@ -20,6 +20,7 @@ async function syncNotify() {
     const ids = [...new Set([...items.filter(i => i.feed === f.url).map(i => i.id), ...(old?.seen?.[f.url] || [])])].slice(0, 150);
     if (ids.length) seen[f.url] = ids;
   }
+  window.MLApp?.notifyConfig?.(JSON.stringify({on: ntf.mode === 'app', words: set.words, stop: set.stop, feeds: feeds.map(f => ({url: f.url, title: f.title || ''})), seen}));
   await box.put('config', new Response(JSON.stringify({mode: ntf.mode, words: set.words, stop: set.stop, feeds: feeds.map(f => ({url: f.url, title: f.title})), seen})));
 }
 // Пока сайт открыт, но свёрнут, новые записи показываем сразу.
@@ -64,7 +65,7 @@ async function startPush() {
 const pushConfig = () => JSON.stringify({publicKey: ntf.publicKey, privateKey: ntf.privateKey, sub: ntf.sub, words: set.words, stop: set.stop, feeds: feeds.map(f => ({url: f.url, title: f.title || ''}))});
 
 function notifyBlock() {
-  if (window.MLApp) return '<h2>Уведомления на телефоне</h2><p class="meta">В приложении уведомления не работают. Включите их в Chrome на сайте, установленном на главный экран.</p>';
+  if (window.MLApp) return appNotifyBlock();
   const state = {off: 'выключены', simple: 'простые', push: 'push через GitHub'}[ntf.mode];
   return `<h2>Уведомления на телефоне</h2><div class="card"><div>Сейчас: <b>${state}</b></div>
 <div class="row"><button data-ntf="simple">Включить простые</button><button data-ntf="push">Включить push</button>${ntf.mode === 'off' ? '' : '<button data-ntf="off">Выключить</button>'}</div>
@@ -78,6 +79,31 @@ ${ntf.mode === 'push' ? `<div class="row"><button class="main" data-ntf="copy">�
 <li>Для проверки откройте <a href="${REPO_RUN}" target="_blank" rel="noopener">запуск Lenta push</a>, нажмите «Run workflow» и ещё раз «Run workflow». Через минуту-две придёт проверочное уведомление.</li></ol>
 <p>Дальше ленты проверяются примерно раз в 30 минут, бывают задержки. Если секрет уже есть, обновите его через карандаш рядом с названием. Настройки никому не пересылайте. GitHub отключает расписание, если в репозитории 60 дней нет изменений. Push настраивается на одном устройстве.</p></details>`;
 }
+/* внутри приложения Android ленты проверяет само приложение */
+function appNotifyBlock() {
+  const head = '<h2>Уведомления на телефоне</h2>';
+  if (!MLApp.notifyConfig) return head + '<p class="meta">Для уведомлений установите новое приложение: «Мое_сайты» → «Мое_лента» → «Все версии и скачивание».</p>';
+  const st = JSON.parse(MLApp.notifyStatus()), on = ntf.mode === 'app';
+  return head + `<div class="card"><div>Сейчас: <b>${!on ? 'выключены' : st.allowed ? 'включены' : 'запрещены в настройках телефона'}</b></div>
+<div class="row">${on ? '<button data-app="off">Выключить</button><button data-app="check">Проверить сейчас</button>' : '<button class="main" data-app="on">Включить</button>'}<button data-app="settings">Настройки телефона</button></div>
+<p class="meta" role="status">${esc(ntfStatus || (st.last ? 'Последняя проверка ' + st.last : ''))}</p>
+<p class="meta">Приходят новые записи; если заданы «мои слова», то только с ними. Записи со стоп-словами не приходят.</p></div>
+<details><summary>Если уведомления не приходят</summary><p>Приложение проверяет ленты примерно раз в 30 минут, но Android может откладывать это на часы. В настройках телефона для «Мое_лента» разрешите уведомления, а в разделе «Батарея» выберите «Без ограничений». На Xiaomi, Huawei и некоторых других включите ещё «Автозапуск».</p><p>Не пользуйтесь кнопкой «Остановить» в настройках приложения: после неё проверки не идут, пока вы не откроете приложение.</p></details>`;
+}
+window.mlAllowed = ok => {
+  ntfStatus = ok ? 'Включено. Пробное уведомление отправлено.' : 'Телефон не разрешил уведомления. Нажмите «Настройки телефона» и включите их.';
+  if (page === 'settings') render();
+};
+window.mlChecked = () => { ntfStatus = 'Проверено ' + JSON.parse(MLApp.notifyStatus()).last; if (page === 'settings') render(); };
+document.addEventListener('click', async e => {
+  const act = e.target.closest('[data-app]')?.dataset.app; if (!act) return;
+  if (act === 'settings') return MLApp.notifySettings();
+  if (act === 'check') { ntfStatus = 'Проверяю ленты…'; render(); await syncNotify(); return MLApp.notifyCheck(); }
+  ntf = {mode: act === 'on' ? 'app' : 'off'}; save('notify', ntf); ntfStatus = act === 'on' ? '' : 'Уведомления выключены.';
+  await syncNotify();
+  if (act === 'on') { MLApp.notifyAllow(); MLApp.notifyCheck(); }
+  render();
+});
 document.addEventListener('click', async e => {
   const act = e.target.closest('[data-ntf]')?.dataset.ntf; if (!act) return;
   if (act === 'copy') {
