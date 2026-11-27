@@ -30,11 +30,18 @@
   <select id="speed" aria-label="Скорость"><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
   <button id="pclose" aria-label="Закрыть плеер">✕</button>
 </div>
+<div id="tts" hidden>
+  <div id="ttitle"></div>
+  <button id="tnext">⏭ Следующая</button>
+  <select id="trate" aria-label="Скорость озвучки"><option value="0.8">0.8×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select>
+  <button id="tstop">⏹ Стоп</button>
+</div>
 <div id="toast" role="status" hidden></div>
 <script src="mm-account.js"></script>
 <script src="feedlite.js"></script>
 <script src="app.js"></script>
 <script src="notify.js"></script>
 <script src="extra.js"></script>
+<script src="media.js"></script>
 </body>
 </html>

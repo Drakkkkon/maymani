@@ -1,5 +1,5 @@
 'use strict';
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const gnews = q => 'https://news.google.com/rss/search?q=' + encodeURIComponent(q) + '&hl=ru&gl=KZ&ceid=KZ:ru';
@@ -8,6 +8,7 @@ const gh = r => 'https://api.github.com/repos/' + r + '/releases?per_page=20';
 const CATS = ['Новости','Блоги','YouTube','Подкасты','Программы','Комиксы','Скидки','Бизнес','Мои сайты','Другое'];
 const PRESETS = [
  ['Новости','Новости Казахстана',gnews('Казахстан')],['Новости','Новости Алматы',gnews('Алматы')],
+ ['Новости','Tengrinews (с фото)','https://tengrinews.kz/news.rss'],['Новости','NUR.KZ (с фото)','https://www.nur.kz/rss/all.rss'],
  ['Новости','BBC — Русская служба','https://feeds.bbci.co.uk/russian/rss.xml'],['Новости','DW — Русский','https://rss.dw.com/rdf/rss-ru-top'],
  ['Блоги','Хабр — лучшее','https://habr.com/ru/rss/articles/top/daily/?fl=ru'],['Блоги','Hacker News','https://news.ycombinator.com/rss'],
  ['Подкасты','NASA: Houston We Have a Podcast','https://www.nasa.gov/feeds/podcasts/houston-we-have-a-podcast'],
@@ -23,10 +24,12 @@ let feeds = load('feeds', []), items = load('items', []), mine = load('mine', {t
 let set = Object.assign({theme:'auto',words:'',proxy:'',every:30,tgToken:'',tgChat:'',tgOn:false}, load('set', {}));
 let page = 'feed', cat = 'Все', mode = 'all', query = '', limit = 50, busy = false;
 const open = new Set();
+// до 1.3.0 пустая картинка или звук подменялись адресом самой ленты
+for (const i of items) for (const k of ['img', 'audio']) if (i[k] && i[k] === i.feed) i[k] = '';
 
 let toastTimer;
 function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => el.hidden = true, 4000); }
-function safeUrl(u, base) { try { const x = new URL(String(u || '').trim(), base); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch { return ''; } }
+function safeUrl(u, base) { try { const s = String(u || '').trim(); if (!s) return ''; const x = new URL(s, base); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch { return ''; } }
 
 /* ---------- загрузка ---------- */
 async function get(url, headers, ms = 15000) {
@@ -61,6 +64,7 @@ async function fetchText(url, valid) {
 }
 const looksFeed = t => /<(rss|feed|rdf:RDF)[\s>]/i.test(t.slice(0, 3000));
 
+const https = u => u.replace(/^http:/, 'https:');
 const kids = (n, name) => [...n.children].filter(c => c.nodeName.toLowerCase() === name);
 const first = (n, ...names) => { for (const nm of names) { const k = kids(n, nm)[0]; if (k) return k.textContent.trim(); } return ''; };
 const plain = h => (new DOMParser().parseFromString(h || '', 'text/html').body.textContent || '').trim();
@@ -83,14 +87,17 @@ function parseFeed(text, url) {
     const group = kids(n, 'media:group')[0] || n;
     const html = first(n, 'content:encoded', 'content', 'description', 'summary') || esc(first(group, 'media:description')).replace(/\n/g, '<br>');
     const enc = [...kids(n, 'enclosure'), ...links.filter(l => l.getAttribute('rel') === 'enclosure'), ...kids(group, 'media:content')];
-    const src = x => safeUrl(x && (x.getAttribute('url') || x.getAttribute('href')), url);
+    // сайт открыт по https, поэтому http-адреса картинок и звука браузер не покажет
+    const src = x => https(safeUrl(x && (x.getAttribute('url') || x.getAttribute('href')), url));
     const audio = src(enc.find(x => /^audio\//.test(x.getAttribute('type') || '')));
-    let img = src(kids(group, 'media:thumbnail')[0]) || src(enc.find(x => /^image\//.test(x.getAttribute('type') || '')));
-    if (!img) { const m = new DOMParser().parseFromString(html, 'text/html').querySelector('img[src]'); if (m) img = safeUrl(m.getAttribute('src'), link || url); }
+    const isImg = x => /^image/.test(x.getAttribute('type') || x.getAttribute('medium') || '') || /\.(jpe?g|png|webp|gif)(\?|$)/i.test(x.getAttribute('url') || '');
+    let img = src(kids(group, 'media:thumbnail')[0] || kids(n, 'media:thumbnail')[0]) || src([...enc, ...kids(n, 'media:content')].find(isImg));
+    if (!img) { const m = new DOMParser().parseFromString(html, 'text/html').querySelector('img[src]'); if (m) img = https(safeUrl(m.getAttribute('src'), link || url)); }
+    const from = safeUrl(kids(n, 'source')[0]?.getAttribute('url'));
     const title = plain(first(n, 'title')) || plain(html).slice(0, 90) || 'Без названия';
     return {id: first(n, 'guid', 'id') || link || title, link, title,
       date: Date.parse(first(n, 'pubdate', 'published', 'updated', 'dc:date') || first(n, 'pubDate')) || 0,
-      html: html.slice(0, 6000), img, audio};
+      html: html.slice(0, 6000), img, audio, from};
   })};
 }
 
@@ -224,18 +231,17 @@ function pageFeed() {
   let h = '<div class="chips">' + chip('mode','all',mode,'Все') + chip('mode','new',mode,'Непрочитанные') + chip('mode','fav',mode,'★ Избранное') + chip('mode','hit',mode,'🔔 Мои слова') + '</div>';
   h += '<div class="chips">' + ['Все', ...CATS.filter(c => feeds.some(f => f.cat === c))].map(c => chip('cat', c, cat, c)).join('') + '</div>';
   if (!feeds.some(f => f.url !== HUB_FEED) && cat === 'Все' && mode !== 'fav') h += '<div class="card"><b>Лента пока пустая.</b><p>Добавьте свои сайты или начните с готового набора.</p><div class="row"><button class="main" data-act="starter">Добавить стартовый набор</button><button data-page="subs">Выбрать самому</button></div></div>';
-  if (shown.length) h += '<div class="row acts"><button data-act="readall">✓ Прочитать всё показанное</button></div>';
+  if (shown.length) h += '<div class="row acts"><button data-act="readall">✓ Прочитать всё показанное</button><button data-act="speakall">🔊 Озвучить подряд</button></div>';
   h += shown.slice(0, limit).map((i, n) => {
     const f = byUrl.get(i.feed), isOpen = open.has(i), yt = i.link.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/);
-    const showImg = i.img && !isOpen && (yt || f?.cat === 'Комиксы');
+    const cover = isOpen ? '' : coverHtml(i, yt, f);
     return `<article class="card ${i.read ? 'read' : ''} ${isHit(i) ? 'hit' : ''}" data-n="${n}">
 <div class="meta">${esc(f?.title || hostOf(i.feed))} · ${new Date(i.date).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
-<button class="title" data-act="open" aria-expanded="${isOpen}">${mark(i.title)}</button>
-${showImg ? `<img class="thumb" src="${esc(i.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+${cover}<button class="title" data-act="open" aria-expanded="${isOpen}">${mark(i.title)}</button>
 ${isOpen ? `<div class="body">${i.img && !/<img/i.test(i.html) ? `<img src="${esc(i.img)}" alt="" referrerpolicy="no-referrer">` : ''}${clean(i.html, i.link || i.feed)}</div>` : ''}
 <div class="row acts">${i.audio ? '<button class="main" data-act="play">▶ Слушать</button>' : ''}
 ${i.link ? `<a class="btn" data-act="visit" href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">${yt ? 'Смотреть' : 'Открыть'} ↗</a>` : ''}
-<button data-act="fav" aria-label="В избранное">${i.fav ? '★' : '☆'}</button><button data-act="share">Поделиться</button></div></article>`;
+<button data-act="speak">🔊 Озвучить</button><button data-act="fav" aria-label="В избранное">${i.fav ? '★' : '☆'}</button><button data-act="share">Поделиться</button></div></article>`;
   }).join('');
   if (!shown.length && feeds.length) h += '<p class="meta">' + (busy ? 'Загружаю…' : mode === 'hit' && !words().length ? 'Впишите слова для отслеживания в «Настройках».' : 'Здесь пока ничего нет.') + '</p>';
   if (shown.length > limit) h += '<button data-act="more">Показать ещё</button>';
@@ -274,10 +280,11 @@ ${notifyBlock()}
 <h2>Резервная копия</h2><div class="row"><button data-act="backup">Сохранить</button><label class="btn">Восстановить<input type="file" id="restore" accept=".json" hidden></label></div>
 <h2>Инструкции</h2>
 <details><summary>Как пользоваться: 10 идей</summary><ol>
-<li><b>Личная газета:</b> «Лента» — всё по времени, разделы сверху.</li><li><b>Блоги:</b> вставьте адрес сайта в «Подписках».</li><li><b>YouTube:</b> вставьте ссылку на канал.</li><li><b>Подкасты:</b> кнопка «Слушать», место прослушивания запоминается.</li><li><b>Программы:</b> вставьте ссылку на репозиторий GitHub.</li><li><b>Комиксы:</b> раздел «Комиксы» показывает картинки сразу.</li><li><b>Скидки:</b> впишите «мои слова».</li><li><b>Бизнес:</b> введите слова вместо адреса — получится лента новостей по запросу.</li><li><b>Автоматизация:</b> отправка в Telegram.</li><li><b>Своя лента:</b> вкладка «Своя RSS».</li></ol>
+<li><b>Личная газета:</b> «Лента» — всё по времени, разделы сверху.</li><li><b>Блоги:</b> вставьте адрес сайта в «Подписках».</li><li><b>YouTube:</b> вставьте ссылку на канал.</li><li><b>Подкасты:</b> кнопка «Слушать», место прослушивания запоминается.</li><li><b>Программы:</b> вставьте ссылку на репозиторий GitHub.</li><li><b>Комиксы:</b> раздел «Комиксы» показывает картинки сразу.</li><li><b>Озвучка:</b> «🔊 Озвучить» под записью или «Озвучить подряд» сверху.</li><li><b>Скидки:</b> впишите «мои слова».</li><li><b>Бизнес:</b> введите слова вместо адреса — получится лента новостей по запросу.</li><li><b>Автоматизация:</b> отправка в Telegram.</li><li><b>Своя лента:</b> вкладка «Своя RSS».</li></ol>
 <p><b>Поиск источников:</b> «Подписки» → «Найти источник». <b>Мои сайты:</b> версии и список изменений на отдельной вкладке. <b>Аккаунт:</b> вверху «Настроек», переносит подписки и избранное между устройствами.</p>
 <p>На телефоне: меню браузера → «Добавить на главный экран».</p></details>
 <details id="help-tg"><summary>Telegram: где взять токен и ID чата</summary><ol><li>Откройте <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>, отправьте /newbot и скопируйте токен.</li><li>Напишите своему новому боту любое сообщение.</li><li>Откройте <a href="https://t.me/userinfobot" target="_blank" rel="noopener">@userinfobot</a> — он покажет ваш ID.</li></ol><p>Токен хранится только в этом браузере и не попадает в резервную копию.</p></details>
+<details id="help-tts"><summary>Если не слышно озвучку</summary><ol><li>Прибавьте громкость мультимедиа.</li><li>Откройте сайт в Chrome, а не во встроенном браузере мессенджера.</li><li>В настройках Android найдите «Синтез речи», выберите «Речевые службы Google» и скачайте русский голос.</li></ol><p>Читается заголовок и тот текст, который есть в ленте. У Google Новостей — только заголовок.</p></details>
 <details id="help-proxy"><summary>Если ленты не загружаются</summary><p>Многие сайты не дают браузеру читать ленту напрямую, поэтому сайт использует бесплатных посредников (r.jina.ai, allorigins, codetabs). Они видят адреса ваших лент и иногда не работают. Не добавляйте сюда личные ссылки с ключами.</p><p>Надёжнее свой посредник, например на <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a>. Впишите его адрес в виде https://…workers.dev/?url={url}</p></details>
 <p class="meta">Мое_лента ${VERSION}. Данные хранятся только в этом браузере.</p>`;
 }
@@ -288,6 +295,7 @@ function render() {
   document.querySelectorAll('select[data-set]').forEach(s => s.value = String(set[s.dataset.set]));
   if (page === 'settings') window.MMAccount?.mount('#account');
   scrollTo(0, y);
+  window.watchCovers?.();
 }
 function theme() {
   const dark = set.theme === 'dark' || (set.theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -320,7 +328,7 @@ document.addEventListener('click', async e => {
   const card = t.closest('[data-n]'), it = card && shown[card.dataset.n];
   const fcard = t.closest('[data-f]'), f = fcard && feeds[fcard.dataset.f];
   switch (d.act) {
-    case 'starter': PRESETS.filter((p, n) => [0,1,5,7,8].includes(n)).forEach(p => addFeed(p[2], p[0], p[1])); render(); refresh(); break;
+    case 'starter': PRESETS.filter((p, n) => [0,1,2,7,9,10].includes(n)).forEach(p => addFeed(p[2], p[0], p[1])); render(); refresh(); break;
     case 'open': open.has(it) ? open.delete(it) : (open.add(it), it.read = true); store(); render(); break;
     case 'visit': it.read = true; card.classList.add('read'); store(); break;
     case 'fav': it.fav = !it.fav; store(); window.MMAccount?.changed(); render(); break;
@@ -330,7 +338,7 @@ document.addEventListener('click', async e => {
       break;
     case 'play': {
       const a = $('#audio'); $('#player').hidden = false; $('#ptitle').textContent = it.title; a.src = it.audio;
-      a.dataset.key = it.audio; const pos = load('pos', {})[it.audio]; if (pos) a.addEventListener('loadedmetadata', () => a.currentTime = pos, {once: true});
+      window.stopSpeak?.(); a.dataset.key = it.audio; const pos = load('pos', {})[it.audio]; if (pos) a.addEventListener('loadedmetadata', () => a.currentTime = pos, {once: true});
       a.playbackRate = a.defaultPlaybackRate = +$('#speed').value; a.play().catch(() => toast('Нажмите ▶ в плеере'));
       it.read = true; store(); break;
     }

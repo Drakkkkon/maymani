@@ -36,3 +36,14 @@ details{background:var(--card);border:1px solid var(--line);border-radius:12px;p
  #player{left:200px;bottom:0}
 }
 .badge{background:var(--acc);color:#fff;border-radius:8px;padding:1px 7px;font-size:12px}.card details{margin:8px 0}.card ul{padding-left:20px}
+.cover{position:relative;display:block;width:100%;aspect-ratio:16/9;margin:6px 0;border:0;padding:0;border-radius:10px;overflow:hidden;background:var(--line);cursor:pointer}
+.cover img{width:100%;height:100%;object-fit:cover;display:block}
+.cover.comic{aspect-ratio:auto;background:none}.cover.comic img{height:auto}
+.cover.video::after{content:"▶";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#000a;color:#fff;border-radius:12px;padding:6px 18px;font-size:20px}
+.cover.logo{float:right;width:48px;height:48px;aspect-ratio:1;margin:4px 0 4px 10px}
+.cover[data-og]:empty{display:none}
+.cover[data-og]:empty.wait{display:block;height:1px;aspect-ratio:auto;background:none;margin:0}
+.card .acts{clear:both}
+#tts{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));z-index:4;background:var(--card);border-top:1px solid var(--line);padding:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+#ttitle{flex-basis:100%;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#trate{width:auto}
+@media(min-width:900px){#tts{left:200px;bottom:0}}

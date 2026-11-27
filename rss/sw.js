@@ -1,7 +1,7 @@
 // Оболочка сайта открывается без интернета; сначала всегда пробуем свежую версию.
 importScripts('feedlite.js');
-const CACHE = 'moe-lenta-1.2.0';
-const FILES = ['./', 'index.html', 'style.css', 'app.js', 'extra.js', 'notify.js', 'feedlite.js', 'mm-account.js', 'icon.svg', 'icon-192.png', 'manifest.webmanifest'];
+const CACHE = 'moe-lenta-1.3.0';
+const FILES = ['./', 'index.html', 'style.css', 'app.js', 'extra.js', 'media.js', 'notify.js', 'feedlite.js', 'mm-account.js', 'icon.svg', 'icon-192.png', 'manifest.webmanifest'];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(k => Promise.all(k.filter(n => n.startsWith('moe-lenta-') && n !== CACHE).map(n => caches.delete(n)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {
