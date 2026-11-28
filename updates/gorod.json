@@ -1,19 +1,21 @@
 {
  "app": "Мое_город",
- "version": "1.32.0",
+ "version": "1.33.0",
  "date": "28 ноября 2026",
  "shellMin": "1.0.0",
  "shell": "1.0.0",
  "notes": [
-  "🌙 Ночь по кнопке в нижней панели (клавиша N); сама она не наступает.",
-  "🪟 Горят окна домов, Ратуши и машиностроительного цеха.",
-  "🏮 Горят фонари на мостовых, на площади Ратуши и в парке.",
-  "🚗 У машин светят фары и задние огни."
+  "🧍 Пять новых 3D-людей; новые модели лесорубов и строителей.",
+  "🌳 Посаженные деревья растут по стадиям.",
+  "🌿 Объёмная трава.",
+  "🐎 Новые модели экипажа, лесопилки и дома лесника; в окнах свет.",
+  "🎨 Раскраска моделей ровнее.",
+  "🔴 Печать «Построено» — внизу справа."
  ],
  "game_zip": {
-  "url": "https://github.com/Drakkkkon/maymani/raw/archives/gorod/Moe_gorod_game_v1.32.0.zip",
-  "size": 19815998,
-  "sha256": "eafffea865aebd41acdb42d6e8acea92af92dc77f119596d02263e93f7bc4a49"
+  "url": "https://github.com/Drakkkkon/maymani/raw/archives/gorod/Moe_gorod_game_v1.33.0.zip",
+  "size": 24585597,
+  "sha256": "58ae0886b56a9cb87f1cd16aa3402eb4470b340806bf191a93e76aa90e04de2c"
  },
  "setup": {
   "url": "https://github.com/Drakkkkon/maymani/raw/archives/gorod/Moe_gorod_Setup_1.7.0.exe",
